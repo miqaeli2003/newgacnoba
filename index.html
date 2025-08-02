@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Chatting Site</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="top-bar">
+    <div class="left-side">
+      <div class="site-name">GAICANI.GE</div>
+      <div id="onlineCount">Users Online: 30</div>
+    </div>
+    <div class="right-side">
+      <button class="change-name-btn" id="changeNameBtn">Change Name</button>
+      <button class="next-button" id="nextBtn">NEXT</button>
+    </div>
+  </div>
+
+  <div class="chat-container" id="chat"></div>
+
+  <div class="chat-input">
+    <input type="text" id="messageInput" placeholder="Type your message..." autocomplete="off" disabled />
+    <button id="sendBtn" disabled>SEND</button>
+  </div>
+
+  <div id="nameModal" class="modal">
+    <div class="modal-content">
+      <input type="text" id="nameInput" placeholder="Enter your name..." autocomplete="off" />
+      <button id="saveNameBtn">Start Chatting</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
