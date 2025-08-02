@@ -1,97 +1,85 @@
-const http = require('http');
-const express = require('express');
-const { Server } = require('socket.io');
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+const path = require("path");
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-const PORT = process.env.PORT || 3000;
 
-app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, "public")));
 
-let waitingUser = null;
-const pairs = new Map();
+let users = [];
+let waitingQueue = [];
 
-function emitOnlineCount() {
-  io.emit('onlineCount', 30 + io.engine.clientsCount);
-}
+io.on("connection", (socket) => {
+  console.log("User connected", socket.id);
 
-io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
-  socket.userName = null;
-  socket.isReadyForPartner = false; // Track if user is ready
+  socket.userName = "";
+  socket.partner = null;
 
-  emitOnlineCount();
-
-  socket.on('setName', (name) => {
-    socket.userName = name;
-    socket.isReadyForPartner = true;
-    console.log(`User ${socket.id} set name: ${name}`);
-  });
-
-  socket.on('findPartner', () => {
-    // Only proceed if user has a name and is ready
-    if (!socket.userName || !socket.isReadyForPartner) {
-      socket.emit('waitingForPartner');
-      return;
-    }
-
-    if (waitingUser && waitingUser.id === socket.id) {
-      socket.emit('waitingForPartner');
-      return;
-    }
-
-    if (waitingUser && waitingUser !== socket) {
-      // Pair users
-      pairs.set(socket.id, waitingUser);
-      pairs.set(waitingUser.id, socket);
-
-      socket.emit('partnerFound', { id: waitingUser.id, name: waitingUser.userName });
-      waitingUser.emit('partnerFound', { id: socket.id, name: socket.userName });
-
-      waitingUser = null;
-    } else {
-      waitingUser = socket;
-      socket.emit('waitingForPartner');
-    }
-  });
-
-  socket.on('message', (msg) => {
-    const partner = pairs.get(socket.id);
-    if (partner) {
-      partner.emit('message', { from: socket.userName, text: msg });
-    }
-  });
-
-  function cleanup() {
-    const partner = pairs.get(socket.id);
-    if (partner) {
-      pairs.delete(partner.id);
-      partner.emit('partnerDisconnected');
-    }
-    pairs.delete(socket.id);
-
-    if (waitingUser && waitingUser.id === socket.id) {
-      waitingUser = null;
-    }
-
-    // Mark user as not ready after cleanup; must press Next or set name again
-    socket.isReadyForPartner = false;
+  // Update online count helper
+  function updateOnlineCount() {
+    io.emit("onlineCount", io.engine.clientsCount);
   }
+  updateOnlineCount();
 
-  socket.on('next', () => {
-    cleanup();
-    socket.emit('clearedPartner');
-    socket.emit('readyForNewPartner');
+  socket.on("setName", (name) => {
+    socket.userName = name;
   });
 
-  socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-    cleanup();
-    emitOnlineCount();
+  socket.on("findPartner", () => {
+    if (socket.partner) return; // already connected
+
+    // If waitingQueue has someone, pair them
+    if (waitingQueue.length > 0) {
+      const partnerSocket = waitingQueue.shift();
+      if (partnerSocket.id === socket.id) return;
+
+      // Pair both
+      socket.partner = partnerSocket;
+      partnerSocket.partner = socket;
+
+      socket.emit("partnerFound", { name: partnerSocket.userName });
+      partnerSocket.emit("partnerFound", { name: socket.userName });
+    } else {
+      // Add this socket to waiting queue
+      waitingQueue.push(socket);
+      socket.emit("waitingForPartner");
+    }
+  });
+
+  socket.on("message", (msg) => {
+    if (socket.partner) {
+      socket.partner.emit("message", { text: msg });
+    }
+  });
+
+  socket.on("next", () => {
+    if (socket.partner) {
+      socket.partner.emit("partnerDisconnected");
+      socket.partner.partner = null;
+      socket.partner = null;
+    }
+    // Remove from queue if waiting
+    waitingQueue = waitingQueue.filter((s) => s.id !== socket.id);
+    socket.emit("readyForNewPartner");
+  });
+
+  socket.on("disconnect", () => {
+    console.log("User disconnected", socket.id);
+    // Inform partner
+    if (socket.partner) {
+      socket.partner.emit("partnerDisconnected");
+      socket.partner.partner = null;
+    }
+    // Remove from waiting queue if exists
+    waitingQueue = waitingQueue.filter((s) => s.id !== socket.id);
+    updateOnlineCount();
   });
 });
 
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`Server listening on http://localhost:${PORT}`);
 });

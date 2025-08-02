@@ -68,7 +68,6 @@ function saveName() {
   const name = nameInput.value.trim();
   if (name === "") return;
   userName = name;
-  // Removed localStorage saving
   nameModal.style.display = "none";
 
   messageInput.disabled = false;
@@ -76,6 +75,7 @@ function saveName() {
 
   socket.emit("setName", userName);
   socket.emit("findPartner");
+  clearChat();
 }
 
 function startNewPartner() {
@@ -117,18 +117,6 @@ socket.on("partnerDisconnected", () => {
   sendBtn.disabled = true;
 });
 
-socket.on("clearedPartner", () => {
-  clearChat();
-  addSystemMessage("Partner cleared.");
-  partnerConnected = false;
-  messageInput.disabled = true;
-  sendBtn.disabled = true;
-});
-
-socket.on("readyForNewPartner", () => {
-  startNewPartner();
-});
-
 sendBtn.addEventListener("click", sendMessage);
 messageInput.addEventListener("keypress", (e) => {
   if (e.key === "Enter") sendMessage();
@@ -148,7 +136,6 @@ changeNameBtn.addEventListener("click", () => {
 saveNameBtn.addEventListener("click", saveName);
 
 window.onload = () => {
-  // No username preloaded, always ask for name on load
   userName = "";
   nameModal.style.display = "flex";
   messageInput.disabled = true;

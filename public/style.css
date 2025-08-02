@@ -247,7 +247,7 @@ body {
   font-size: 0.95em;
 }
 
-/* === Mobile Responsive Optimized === */
+/* === Mobile Responsive === */
 @media (max-width: 600px) {
   .top-bar {
     padding: 0 10px;
@@ -264,24 +264,22 @@ body {
   }
 
   #onlineCount {
-    display: none; /* hide on mobile */
+    display: none;
   }
 
   .left-side > *:not(.site-name) {
-    display: none; /* hide everything except site-name */
+    display: none;
   }
 
-  /* Change here: make right-side horizontal */
   .right-side {
     display: flex;
-    flex-direction: row;   /* horizontal */
+    flex-direction: row;
     gap: 8px;
     padding: 0;
-    margin-left: auto; /* push to right */
-    align-items: center; /* vertically center buttons */
+    margin-left: auto;
+    align-items: center;
   }
 
-  /* Hide any children of right-side except the buttons */
   .right-side > *:not(.change-name-btn):not(.next-button) {
     display: none;
   }
