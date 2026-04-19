@@ -14,6 +14,7 @@
     </div>
     <div class="right-side">
       <button class="change-name-btn" id="changeNameBtn">Change Name</button>
+      <button class="block-button" id="blockBtn" disabled>BLOCK</button>
       <button class="next-button" id="nextBtn">NEXT</button>
     </div>
   </div>
@@ -27,7 +28,10 @@
 
   <div id="nameModal" class="modal">
     <div class="modal-content">
-      <input type="text" id="nameInput" placeholder="Enter your name..." autocomplete="off" />
+      <h2 class="modal-title">Welcome to GAICANI</h2>
+      <p class="modal-subtitle">Choose a unique username to start chatting</p>
+      <input type="text" id="nameInput" placeholder="Enter your username..." autocomplete="off" maxlength="20" />
+      <div id="nameError" class="name-error"></div>
       <button id="saveNameBtn">Start Chatting</button>
     </div>
   </div>
