@@ -13,7 +13,42 @@ html, body {
   flex-direction: column;
   overflow: hidden;
 }
+.message-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
 
+/* RIGHT SIDE ICONS */
+.message-actions {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 5px;
+  opacity: 0;
+  transition: 0.2s;
+}
+
+.message-wrapper:hover .message-actions {
+  opacity: 1;
+}
+
+.msg-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: none;
+  background: #2a2d35;
+  color: white;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.msg-icon:hover {
+  background: #3a3d45;
+}
 /* ── TOP BAR ───────────────────────────────────────────────────────────── */
 
 .top-bar {
