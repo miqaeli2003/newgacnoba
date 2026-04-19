@@ -1,51 +1,64 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ka">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Chatting Site</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"/>
+  <title>GAICANI | Anonymous Chat</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
 </head>
 <body>
-  <div class="top-bar">
-    <div class="left-side">
-      <a href="/" class="site-name">GAICANI</a>
-      <div id="onlineCount">Users Online: 0</div>
-    </div>
-    <div class="right-side">
-      <button class="change-name-btn" id="changeNameBtn">სახელის შეცვლა</button>
-      <button class="block-button" id="blockBtn" disabled>ბლოკი</button>
-      <button class="next-button" id="nextBtn">ძებნა</button>
+  <div class="app-container">
+    <header class="top-bar">
+      <div class="brand">
+        <h1>GAICANI</h1>
+        <span id="onlineCount" class="badge">0 Online</span>
+      </div>
+      <div class="actions">
+        <button id="changeNameBtn" class="icon-btn" title="სახელის შეცვლა"><i class="fas fa-user-edit"></i></button>
+        <button id="blockBtn" class="icon-btn danger" disabled title="ბლოკი"><i class="fas fa-ban"></i></button>
+        <button id="nextBtn" class="primary-btn">ძებნა</button>
+      </div>
+    </header>
+
+    <main class="chat-container" id="chat"></main>
+
+    <div class="bottom-area">
+      <div id="replyIndicator" class="reply-bar">
+        <div class="reply-content">
+          <i class="fas fa-reply"></i>
+          <span id="replyText">...</span>
+        </div>
+        <i id="cancelReply" class="fas fa-times"></i>
+      </div>
+
+      <div class="input-panel">
+        <button id="gifBtn" class="tool-btn" disabled><i class="fas fa-sticky-note"></i></button>
+        <div class="input-group">
+          <input type="text" id="messageInput" placeholder="დაწერე შეტყობინება..." autocomplete="off" disabled />
+          <button id="sendBtn" class="send-btn" disabled><i class="fas fa-paper-plane"></i></button>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="chat-container" id="chat"></div>
-
-  <div class="input-wrapper">
-    <div id="replyIndicator" class="reply-indicator">
-      <span id="replyText">Replying to...</span>
-      <span id="cancelReply">&times;</span>
-    </div>
-    <div class="chat-input">
-      <button id="gifBtn" disabled>GIF</button>
-      <input type="text" id="messageInput" placeholder="Type your message..." autocomplete="off" disabled />
-      <button id="sendBtn" disabled>SEND</button>
+  <div id="nameModal" class="modal active">
+    <div class="modal-card">
+      <h2>მოგესალმებით</h2>
+      <p>შეიყვანეთ სახელი დასაწყებად</p>
+      <input type="text" id="nameInput" placeholder="თქვენი სახელი..." maxlength="15" />
+      <div id="nameError" class="error-msg"></div>
+      <button id="saveNameBtn" class="confirm-btn">დაწყება</button>
     </div>
   </div>
 
-  <div id="nameModal" class="modal">
-    <div class="modal-content">
-      <input type="text" id="nameInput" placeholder="Enter your username..." autocomplete="off" maxlength="20" />
-      <div id="nameError" class="name-error"></div>
-      <button id="saveNameBtn">Start Chatting</button>
-    </div>
-  </div>
-
-  <div id="gifModal" class="modal" style="display: none;">
-    <div class="modal-content gif-modal-content">
-      <h3 style="margin-top: 0;">Select a GIF</h3>
+  <div id="gifModal" class="modal">
+    <div class="modal-card gif-card">
+      <div class="gif-header">
+        <input type="text" id="gifSearchInput" placeholder="მოძებნე GIF (მაგ: Funny, Cat)..." />
+      </div>
       <div id="gifGrid" class="gif-grid"></div>
-      <button id="closeGifBtn" style="background: #ed4245; margin-top: 15px;">Close</button>
+      <button id="closeGifBtn" class="close-btn">დახურვა</button>
     </div>
   </div>
 
