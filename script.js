@@ -3,21 +3,28 @@ const socket = io();
 let userName = "";
 let partnerConnected = false;
 let partnerName = "";
-let isFirstLogin = true;
-let replyingTo = null; // Stores {id, text, name}
+let isFirstLogin = true; 
+
+// Replace this with your own Giphy API Key if this one hits limits
+const GIPHY_API_KEY = "dc6zaTOxFJmzC"; 
 
 const chat = document.getElementById("chat");
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
 const nextBtn = document.getElementById("nextBtn");
 const blockBtn = document.getElementById("blockBtn");
+const changeNameBtn = document.getElementById("changeNameBtn");
+const nameModal = document.getElementById("nameModal");
+const nameInput = document.getElementById("nameInput");
+const saveNameBtn = document.getElementById("saveNameBtn");
+const nameError = document.getElementById("nameError");
+const onlineCountElem = document.getElementById("onlineCount");
+
+// GIF Elements
 const gifBtn = document.getElementById("gifBtn");
 const gifPicker = document.getElementById("gifPicker");
-const gifSearch = document.getElementById("gifSearch");
+const gifSearchInput = document.getElementById("gifSearchInput");
 const gifResults = document.getElementById("gifResults");
-const replyPreview = document.getElementById("replyPreview");
-const replyText = document.getElementById("replyText");
-const cancelReply = document.getElementById("cancelReply");
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -25,95 +32,111 @@ function formatTimestamp(date) {
   const h = date.getHours();
   const m = date.getMinutes();
   const ampm = h >= 12 ? "PM" : "AM";
-  return `${h % 12 || 12}:${m.toString().padStart(2, "0")} ${ampm}`;
+  const hour12 = h % 12 || 12;
+  return `${hour12}:${m.toString().padStart(2, "0")} ${ampm}`;
 }
 
-function addMessage(data, isYou) {
-  const { text, id, replyData, isGif, reactions } = data;
-
+function addMessage(contentData, isYou) {
   const wrapper = document.createElement("div");
   wrapper.className = "message-wrapper " + (isYou ? "you" : "partner");
-  wrapper.id = `msg-${id}`;
-
-  // Action Menu (Reply & Reactions)
-  const actions = document.createElement("div");
-  actions.className = "msg-actions";
-  
-  // Reaction Emojis
-  ["❤️", "😂", "😢"].forEach(emoji => {
-    const span = document.createElement("span");
-    span.className = "reaction-trigger";
-    span.textContent = emoji;
-    span.onclick = () => socket.emit("addReaction", { msgId: id, emoji });
-    actions.appendChild(span);
-  });
-
-  // Reply Icon
-  const replyIcon = document.createElement("span");
-  replyIcon.className = "reply-trigger";
-  replyIcon.innerHTML = '<i class="fas fa-reply"></i>';
-  replyIcon.onclick = () => initiateReply(id, text, isYou ? "You" : partnerName);
-  actions.appendChild(replyIcon);
 
   const content = document.createElement("div");
   content.className = "message-content" + (isYou ? " you" : "");
 
-  // Render Reply Context if exists
-  if (replyData) {
-    const context = document.createElement("div");
-    context.className = "replied-context";
-    context.textContent = `${replyData.name}: ${replyData.text.substring(0, 40)}...`;
-    content.appendChild(context);
-  }
-
-  // Text or GIF
-  if (isGif) {
+  // Check if message is a GIF or text
+  if (typeof contentData === 'string' && contentData.startsWith('http') && contentData.includes('giphy.com')) {
     const img = document.createElement("img");
-    img.src = text;
-    img.className = "gif-img";
+    img.src = contentData;
+    img.className = "chat-gif";
     content.appendChild(img);
   } else {
-    const p = document.createElement("span");
-    p.textContent = text;
-    content.appendChild(p);
+    content.textContent = contentData;
   }
 
-  const reactDisplay = document.createElement("div");
-  reactDisplay.className = "reaction-display";
-  reactDisplay.id = `reacts-${id}`;
+  const timestamp = document.createElement("div");
+  timestamp.className = "timestamp";
+  timestamp.textContent = formatTimestamp(new Date());
 
-  wrapper.appendChild(actions);
   wrapper.appendChild(content);
-  wrapper.appendChild(reactDisplay);
+  wrapper.appendChild(timestamp);
   chat.appendChild(wrapper);
   chat.scrollTop = chat.scrollHeight;
 }
 
-function initiateReply(id, text, name) {
-  replyingTo = { id, text, name };
-  replyText.textContent = `Replying to ${name}...`;
-  replyPreview.style.display = "flex";
-  messageInput.focus();
+function addSystemMessage(text) {
+  const sysMsg = document.createElement("div");
+  sysMsg.className = "system-message";
+  sysMsg.textContent = text;
+  chat.appendChild(sysMsg);
+  chat.scrollTop = chat.scrollHeight;
 }
 
-cancelReply.onclick = () => {
-  replyingTo = null;
-  replyPreview.style.display = "none";
-};
+function addDisconnectMessage(text) {
+  const sysMsg = document.createElement("div");
+  sysMsg.className = "system-message-disconnect";
+  sysMsg.textContent = text;
+  chat.appendChild(sysMsg);
+  chat.scrollTop = chat.scrollHeight;
+}
 
-// ── GIF Search ───────────────────────────────────────────────────────────────
+function clearChat() {
+  chat.innerHTML = "";
+}
 
-gifBtn.onclick = () => {
-  gifPicker.style.display = gifPicker.style.display === "flex" ? "none" : "flex";
-  gifSearch.focus();
-};
+function updateOnlineCount(count) {
+  onlineCountElem.textContent = `Users Online: ${count}`;
+}
 
-gifSearch.addEventListener("input", async (e) => {
-  const query = e.target.value;
-  if (query.length < 2) return;
-  
-  // Public Beta Key for demo
-  const url = `https://api.giphy.com/v1/gifs/search?api_key=dc6zaTOxFJmzC&q=${encodeURIComponent(query)}&limit=10`;
+function setInputsEnabled(enabled) {
+  messageInput.disabled = !enabled;
+  sendBtn.disabled = !enabled;
+  blockBtn.disabled = !enabled;
+  gifBtn.disabled = !enabled;
+  if(!enabled) gifPicker.style.display = "none";
+}
+
+function showNameError(msg) {
+  nameError.textContent = msg;
+  nameError.style.display = "block";
+  nameInput.classList.add("error");
+}
+
+function clearNameError() {
+  nameError.textContent = "";
+  nameError.style.display = "none";
+  nameInput.classList.remove("error");
+}
+
+function sendMessage() {
+  const message = messageInput.value.trim();
+  if (message === "" || !partnerConnected || userName === "") return;
+  addMessage(message, true);
+  socket.emit("message", message);
+  messageInput.value = "";
+}
+
+// ── GIF Logic ────────────────────────────────────────────────────────────────
+
+gifBtn.addEventListener("click", () => {
+  const isShowing = gifPicker.style.display === "flex";
+  gifPicker.style.display = isShowing ? "none" : "flex";
+  if (!isShowing) {
+    gifSearchInput.focus();
+    if (gifResults.innerHTML === "") fetchGifs("trending");
+  }
+});
+
+gifSearchInput.addEventListener("input", (e) => {
+  const query = e.target.value.trim();
+  if (query.length > 2) fetchGifs(query);
+  else if (query.length === 0) fetchGifs("trending");
+});
+
+async function fetchGifs(query) {
+  const url = query === "trending" 
+    ? `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=20`
+    : `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${query}&limit=20`;
+
   try {
     const res = await fetch(url);
     const { data } = await res.json();
@@ -123,100 +146,151 @@ gifSearch.addEventListener("input", async (e) => {
       img.src = gif.images.fixed_height_small.url;
       img.onclick = () => {
         const gifUrl = gif.images.fixed_height.url;
-        const msgData = { text: gifUrl, id: Date.now(), isGif: true, replyData: replyingTo };
-        socket.emit("message", msgData);
-        addMessage(msgData, true);
+        addMessage(gifUrl, true);
+        socket.emit("message", gifUrl);
         gifPicker.style.display = "none";
-        cancelReply.onclick();
       };
       gifResults.appendChild(img);
     });
-  } catch (err) { console.error(err); }
-});
-
-// ── Standard Chat Functions ──────────────────────────────────────────────────
-
-function sendMessage() {
-  const text = messageInput.value.trim();
-  if (!text || !partnerConnected) return;
-
-  const msgData = { text, id: Date.now(), replyData: replyingTo, isGif: false };
-  addMessage(msgData, true);
-  socket.emit("message", msgData);
-  
-  messageInput.value = "";
-  cancelReply.onclick();
+  } catch (err) {
+    console.error("Giphy error", err);
+  }
 }
 
-function setInputsEnabled(enabled) {
-  messageInput.disabled = !enabled;
-  sendBtn.disabled = !enabled;
-  blockBtn.disabled = !enabled;
-  gifBtn.disabled = !enabled;
+// ── Name Modal ────────────────────────────────────────────────────────────────
+
+function saveName() {
+  const name = nameInput.value.trim();
+  if (name === "") {
+    showNameError("Please enter a username.");
+    return;
+  }
+  if (name.length < 2) {
+    showNameError("Username must be at least 2 characters.");
+    return;
+  }
+  if (name.length > 20) {
+    showNameError("Username must be 20 characters or less.");
+    return;
+  }
+  clearNameError();
+  saveNameBtn.disabled = true;
+  saveNameBtn.textContent = "Checking...";
+  socket.emit("setName", name);
 }
 
 // ── Socket Events ─────────────────────────────────────────────────────────────
 
-socket.on("message", (data) => addMessage(data, false));
+socket.on("nameAccepted", (acceptedName) => {
+  userName = acceptedName;
+  nameModal.style.display = "none";
+  saveNameBtn.disabled = false;
+  saveNameBtn.textContent = "Start Chatting";
+  clearNameError();
 
-socket.on("reactionAdded", ({ msgId, emoji }) => {
-  const container = document.getElementById(`reacts-${msgId}`);
-  if (container) {
-    const pill = document.createElement("div");
-    pill.className = "reaction-pill";
-    pill.textContent = emoji;
-    container.appendChild(pill);
+  if (isFirstLogin) {
+    isFirstLogin = false;
+    clearChat();
+    socket.emit("findPartner");
   }
 });
 
+socket.on("nameTaken", () => {
+  saveNameBtn.disabled = false;
+  saveNameBtn.textContent = isFirstLogin ? "Start Chatting" : "Save Name";
+  showNameError("ეს სახელი დაკავებულია. სხვა აირჩიეთ.");
+  nameInput.focus();
+  nameInput.select();
+});
+
+socket.on("onlineCount", (count) => {
+  updateOnlineCount(count);
+});
+
 socket.on("partnerFound", (partner) => {
-  chat.innerHTML = "";
+  clearChat();
   partnerName = partner.name || "Anonymous";
-  const sys = document.createElement("div");
-  sys.className = "system-message";
-  sys.textContent = `Connected to ${partnerName}`;
-  chat.appendChild(sys);
+  addSystemMessage(`Now connected to ${partnerName}`);
   partnerConnected = true;
   setInputsEnabled(true);
 });
 
 socket.on("waitingForPartner", () => {
-  chat.innerHTML = '<div class="system-message">ვეძებთ ახალ პარტნიორს...</div>';
+  clearChat();
+  addSystemMessage("ვეძებთ ახალ პარტნიორს...");
   partnerConnected = false;
+  partnerName = "";
   setInputsEnabled(false);
+});
+
+socket.on("message", (msg) => {
+  addMessage(msg.text, false);
 });
 
 socket.on("partnerDisconnected", (data) => {
-  const sys = document.createElement("div");
-  sys.className = "system-message-disconnect";
-  sys.textContent = `${data.name || "Partner"} has left.`;
-  chat.appendChild(sys);
+  addDisconnectMessage(`${data.name || "Anonymous"} has left the chat`);
   partnerConnected = false;
+  partnerName = "";
   setInputsEnabled(false);
 });
 
-// (Rest of the socket events from your original script follow here...)
-socket.on("nameAccepted", (name) => {
-  userName = name;
-  document.getElementById("nameModal").style.display = "none";
-  if (isFirstLogin) { isFirstLogin = false; socket.emit("findPartner"); }
+socket.on("userBlocked", (data) => {
+  clearChat();
+  addSystemMessage(`You blocked ${data.name}. Searching for a new partner...`);
+  partnerConnected = false;
+  partnerName = "";
+  setInputsEnabled(false);
 });
 
-socket.on("nameTaken", () => alert("ეს სახელი დაკავებულია."));
+// ── Button Handlers ───────────────────────────────────────────────────────────
 
-socket.on("onlineCount", (count) => {
-  document.getElementById("onlineCount").textContent = `Users Online: ${count}`;
+nextBtn.addEventListener("click", () => {
+  nextBtn.disabled = true;
+  setTimeout(() => { nextBtn.disabled = false; }, 1000);
+
+  clearChat();
+  addSystemMessage("ვეძებთ ახალ პარტნიორს...");
+  partnerConnected = false;
+  partnerName = "";
+  setInputsEnabled(false);
+
+  socket.emit("next");
 });
 
-// ── Event Listeners ──────────────────────────────────────────────────────────
-sendBtn.onclick = sendMessage;
-messageInput.onkeypress = (e) => { if (e.key === "Enter") sendMessage(); };
-nextBtn.onclick = () => socket.emit("next");
-blockBtn.onclick = () => { if (confirm("ბლოკი?")) socket.emit("blockUser"); };
-document.getElementById("saveNameBtn").onclick = () => {
-  const n = document.getElementById("nameInput").value.trim();
-  if (n) socket.emit("setName", n);
-};
-document.getElementById("changeNameBtn").onclick = () => {
-  document.getElementById("nameModal").style.display = "flex";
+blockBtn.addEventListener("click", () => {
+  if (!partnerConnected || !partnerName) return;
+  const confirmed = confirm(`Block "${partnerName}"? თქვენ ვეღარ შეხვდებით ამ იუზერს ბლოკის შემდეგ.`);
+  if (confirmed) {
+    socket.emit("blockUser");
+  }
+});
+
+sendBtn.addEventListener("click", sendMessage);
+messageInput.addEventListener("keypress", (e) => {
+  if (e.key === "Enter") sendMessage();
+});
+
+changeNameBtn.addEventListener("click", () => {
+  nameInput.value = userName;
+  saveNameBtn.textContent = "Save Name";
+  clearNameError();
+  nameModal.style.display = "flex";
+  setTimeout(() => nameInput.focus(), 50);
+});
+
+saveNameBtn.addEventListener("click", saveName);
+nameInput.addEventListener("keypress", (e) => {
+  if (e.key === "Enter") saveName();
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+window.onload = () => {
+  userName = "";
+  isFirstLogin = true;
+  nameModal.style.display = "flex";
+  setInputsEnabled(false);
+  blockBtn.disabled = true;
+  saveNameBtn.textContent = "Start Chatting";
+  setTimeout(() => nameInput.focus(), 100);
 };
