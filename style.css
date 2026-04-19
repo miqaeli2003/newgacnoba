@@ -1,310 +1,79 @@
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 html, body {
-  margin: 0;
-  padding: 0;
-  height: 100%;
+  margin: 0; padding: 0; height: 100%;
   font-family: "Segoe UI", Arial, sans-serif;
-  background: #1e1f22;
-  color: #fff;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  background: #1e1f22; color: #fff;
+  display: flex; flex-direction: column; overflow: hidden;
 }
-
-/* ── TOP BAR ───────────────────────────────────────────── */
 
 .top-bar {
-  flex: 0 0 60px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: #2b2d31;
-  padding: 0 18px;
+  flex: 0 0 60px; display: flex; justify-content: space-between;
+  align-items: center; background: #2b2d31; padding: 0 18px;
   border-bottom: 1px solid #1a1b1e;
 }
 
-.site-name {
-  font-weight: 700;
-  font-size: 1.2em;
-  color: #fff;
-  text-decoration: none;
-  letter-spacing: 0.5px;
+.site-name { font-weight: 700; font-size: 1.2em; color: #fff; text-decoration: none; }
+#onlineCount { font-size: 0.9em; color: #b5bac1; }
+
+.right-side { display: flex; gap: 10px; align-items: center; }
+
+.change-name-btn, .block-button, .next-button {
+  border: none; padding: 8px 16px; border-radius: 8px;
+  font-weight: 600; font-size: 0.9em; cursor: pointer; transition: 0.2s ease;
 }
 
-#onlineCount {
-  font-size: 0.9em;
-  color: #b5bac1;
-}
+.next-button { background: #5865f2; color: white; }
+.change-name-btn { background: #f2d36b; color: #000; }
+.block-button { background: #e53935; color: #000; }
 
-/* ── BUTTONS ─────────────────────────────────────── */
-
-.right-side {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.change-name-btn,
-.block-button,
-.next-button {
-  border: none;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.9em;
-  cursor: pointer;
-  transition: 0.2s ease;
-}
-
-.next-button {
-  background: #5865f2;
-  color: white;
-}
-.next-button:hover {
-  background: #4752c4;
-}
-
-.change-name-btn {
-  background: #f2d36b; 
-  color: #000;
-}
-.change-name-btn:hover {
-  background: #e0bc3c;
-}
-
-.block-button {
-  background: #e53935;
-  color: #000;
-}
-
-.block-button:hover:not(:disabled) {
-  background: #d32f2f;
-}
-
-.block-button:disabled,
-.next-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ── CHAT AREA ─────────────────────────────────────────────────────────── */
+.block-button:disabled, .next-button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .chat-container {
-  flex: 1;
-  overflow-y: auto;
-  padding: 15px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  background: #313338;
+  flex: 1; overflow-y: auto; padding: 15px;
+  display: flex; flex-direction: column; gap: 10px; background: #313338;
 }
 
-.chat-container::-webkit-scrollbar {
-  width: 8px;
-}
-
-.chat-container::-webkit-scrollbar-thumb {
-  background: #1a1b1e;
-  border-radius: 10px;
-}
-
-.message-wrapper {
-  display: flex;
-  max-width: 100%;
-}
-
-.message-wrapper.you {
-  justify-content: flex-end;
-}
-
+.message-wrapper { display: flex; max-width: 100%; }
+.message-wrapper.you { justify-content: flex-end; }
 .message-content {
-  max-width: 70%;
-  padding: 10px 14px;
-  border-radius: 12px;
-  font-size: 0.95em;
-  line-height: 1.3;
-  background: #2b2d31;
-  color: #dcddde;
+  max-width: 70%; padding: 10px 14px; border-radius: 12px;
+  background: #2b2d31; color: #dcddde; font-size: 0.95em;
 }
+.message-content.you { background: #5865f2; color: white; }
 
-.message-content.you {
-  background: #5865f2;
-  color: white;
-}
+.chat-gif { max-width: 100%; border-radius: 8px; display: block; margin-top: 5px; }
 
-.chat-gif {
-  max-width: 100%;
-  border-radius: 8px;
-  display: block;
-}
+.timestamp { font-size: 0.7em; color: #949ba4; margin-left: 6px; align-self: flex-end; }
+.system-message { text-align: center; color: #949ba4; font-size: 0.85em; }
+.system-message-disconnect { text-align: center; color: #f23f42; font-size: 0.85em; }
 
-.timestamp {
-  font-size: 0.7em;
-  color: #949ba4;
-  margin-left: 6px;
-  align-self: flex-end;
-}
-
-.system-message {
-  text-align: center;
-  color: #949ba4;
-  font-size: 0.85em;
-}
-
-.system-message-disconnect {
-  text-align: center;
-  color: #f23f42;
-  font-size: 0.85em;
-}
-
-/* ── GIF PICKER ─────────────────────────────────────────────────────────── */
-
+/* GIF PICKER UI */
 .gif-picker {
-  display: none;
-  flex-direction: column;
-  position: absolute;
-  bottom: 70px;
-  left: 10px;
-  width: 300px;
-  height: 400px;
-  background: #2b2d31;
-  border: 1px solid #1a1b1e;
-  border-radius: 12px;
-  box-shadow: 0 5px 20px rgba(0,0,0,0.4);
-  z-index: 100;
+  display: none; flex-direction: column; position: absolute;
+  bottom: 70px; left: 10px; width: 300px; height: 400px;
+  background: #2b2d31; border: 1px solid #1a1b1e; border-radius: 12px;
+  box-shadow: 0 5px 20px rgba(0,0,0,0.4); z-index: 100;
 }
-
-.gif-search-container {
-  padding: 10px;
-  border-bottom: 1px solid #1a1b1e;
-}
-
+.gif-search-container { padding: 10px; border-bottom: 1px solid #1a1b1e; }
 .gif-search-container input {
-  width: 100%;
-  padding: 8px;
-  border-radius: 5px;
-  border: none;
-  background: #1e1f22;
-  color: white;
+  width: 100%; padding: 8px; border-radius: 5px; border: none;
+  background: #1e1f22; color: white;
 }
-
-.gif-results {
-  flex: 1;
-  overflow-y: auto;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 5px;
-  padding: 5px;
-}
-
-.gif-results img {
-  width: 100%;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: transform 0.1s;
-}
-
-.gif-results img:hover {
-  transform: scale(1.02);
-}
-
-/* ── INPUT BAR ─────────────────────────────────────────────────────────── */
+.gif-results { flex: 1; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 5px; }
+.gif-results img { width: 100%; cursor: pointer; border-radius: 4px; }
 
 .chat-input {
-  flex: 0 0 60px;
-  display: flex;
-  padding: 10px;
-  background: #2b2d31;
-  border-top: 1px solid #1a1b1e;
-  gap: 10px;
-  position: relative;
+  flex: 0 0 60px; display: flex; padding: 10px; background: #2b2d31;
+  border-top: 1px solid #1a1b1e; gap: 10px; position: relative;
 }
+.gif-toggle-btn { background: #4e5058; border: none; color: white; padding: 0 12px; border-radius: 10px; cursor: pointer; }
+.chat-input input { flex: 1; border: none; background: #1e1f22; color: white; padding: 12px; border-radius: 10px; }
+.chat-input button#sendBtn { background: #5865f2; border: none; color: white; padding: 0 18px; border-radius: 10px; cursor: pointer; }
 
-.gif-toggle-btn {
-  background: #4e5058;
-  border: none;
-  color: white;
-  padding: 0 12px;
-  border-radius: 10px;
-  font-weight: bold;
-  cursor: pointer;
-}
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+.modal-content { background: #2b2d31; padding: 30px; border-radius: 12px; text-align: center; width: 380px; }
+.modal-content input { width: 100%; padding: 12px; margin-top: 10px; background: #1e1f22; color: #fff; border: none; border-radius: 8px; }
+.modal-content button { margin-top: 15px; width: 100%; padding: 12px; background: #5865f2; color: white; border: none; border-radius: 8px; cursor: pointer; }
 
-.gif-toggle-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.chat-input input {
-  flex: 1;
-  border: none;
-  outline: none;
-  background: #1e1f22;
-  color: white;
-  padding: 12px 14px;
-  border-radius: 10px;
-  font-size: 0.95em;
-}
-
-.chat-input button#sendBtn {
-  background: #5865f2;
-  border: none;
-  color: white;
-  padding: 0 18px;
-  border-radius: 10px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-/* ── MODAL ───────────────────────────────────────── */
-
-.modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.7);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: #2b2d31;
-  padding: 30px;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 380px;
-  text-align: center;
-}
-
-.modal-content input {
-  width: 100%;
-  padding: 12px;
-  margin-top: 10px;
-  border-radius: 8px;
-  border: none;
-  background: #1e1f22;
-  color: white;
-}
-
-.modal-content button {
-  margin-top: 15px;
-  width: 100%;
-  padding: 12px;
-  border-radius: 8px;
-  border: none;
-  background: #5865f2;
-  color: white;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-@media (max-width: 600px) {
-  .gif-picker {
-    width: 250px;
-    height: 300px;
-  }
-}
+@media (max-width: 600px) { .gif-picker { width: 250px; height: 300px; } }
