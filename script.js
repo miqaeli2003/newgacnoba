@@ -5,7 +5,7 @@ let partnerConnected = false;
 let partnerName = "";
 let isFirstLogin = true; 
 
-// Replace this with your own Giphy API Key if this one hits limits
+// Public Giphy Beta Key (replace with your own if needed)
 const GIPHY_API_KEY = "dc6zaTOxFJmzC"; 
 
 const chat = document.getElementById("chat");
@@ -43,7 +43,7 @@ function addMessage(contentData, isYou) {
   const content = document.createElement("div");
   content.className = "message-content" + (isYou ? " you" : "");
 
-  // Check if message is a GIF or text
+  // Check if content is a GIF URL
   if (typeof contentData === 'string' && contentData.startsWith('http') && contentData.includes('giphy.com')) {
     const img = document.createElement("img");
     img.src = contentData;
@@ -223,6 +223,7 @@ socket.on("waitingForPartner", () => {
   setInputsEnabled(false);
 });
 
+// FIXED: Listen for the text property from the server object
 socket.on("message", (msg) => {
   addMessage(msg.text, false);
 });
@@ -247,13 +248,11 @@ socket.on("userBlocked", (data) => {
 nextBtn.addEventListener("click", () => {
   nextBtn.disabled = true;
   setTimeout(() => { nextBtn.disabled = false; }, 1000);
-
   clearChat();
   addSystemMessage("ვეძებთ ახალ პარტნიორს...");
   partnerConnected = false;
   partnerName = "";
   setInputsEnabled(false);
-
   socket.emit("next");
 });
 
@@ -282,8 +281,6 @@ saveNameBtn.addEventListener("click", saveName);
 nameInput.addEventListener("keypress", (e) => {
   if (e.key === "Enter") saveName();
 });
-
-// ── Init ──────────────────────────────────────────────────────────────────────
 
 window.onload = () => {
   userName = "";
