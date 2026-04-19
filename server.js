@@ -17,66 +17,72 @@ io.on("connection", (socket) => {
   socket.partner = null;
   socket.blockedNames = [];
 
-  const updateCount = () => io.emit("onlineCount", io.engine.clientsCount);
-  updateCount();
+  const updateOnlineCount = () => io.emit("onlineCount", io.engine.clientsCount);
+  updateOnlineCount();
 
   socket.on("setName", (name) => {
-    const n = (name || "").trim();
-    if (!n || activeUsernames.has(n.toLowerCase())) return socket.emit("nameTaken");
+    const trimmed = (name || "").trim();
+    if (!trimmed) return;
+    if (socket.userName.toLowerCase() === trimmed.toLowerCase()) {
+      socket.emit("nameAccepted", socket.userName);
+      return;
+    }
+    if (activeUsernames.has(trimmed.toLowerCase())) {
+      socket.emit("nameTaken");
+      return;
+    }
     if (socket.userName) activeUsernames.delete(socket.userName.toLowerCase());
-    socket.userName = n;
-    activeUsernames.add(n.toLowerCase());
-    socket.emit("nameAccepted", n);
+    socket.userName = trimmed;
+    activeUsernames.add(trimmed.toLowerCase());
+    socket.emit("nameAccepted", trimmed);
   });
 
-  const tryMatch = () => {
+  const tryFindPartner = () => {
     waitingQueue = waitingQueue.filter(s => s.connected && !s.partner && s.userName);
     const idx = waitingQueue.findIndex(s => 
-      s.id !== socket.id && 
-      !socket.blockedNames.includes(s.userName.toLowerCase()) &&
+      s.id !== socket.id && !socket.blockedNames.includes(s.userName.toLowerCase()) && 
       !s.blockedNames.includes(socket.userName.toLowerCase())
     );
 
     if (idx !== -1) {
-      const p = waitingQueue.splice(idx, 1)[0];
-      socket.partner = p; p.partner = socket;
-      socket.emit("partnerFound", { name: p.userName });
-      p.emit("partnerFound", { name: socket.userName });
+      const partnerSocket = waitingQueue.splice(idx, 1)[0];
+      waitingQueue = waitingQueue.filter(s => s.id !== socket.id);
+      socket.partner = partnerSocket;
+      partnerSocket.partner = socket;
+      socket.emit("partnerFound", { name: partnerSocket.userName });
+      partnerSocket.emit("partnerFound", { name: socket.userName });
     } else {
-      if (!waitingQueue.includes(socket)) waitingQueue.push(socket);
+      if (!waitingQueue.find(s => s.id === socket.id)) waitingQueue.push(socket);
       socket.emit("waitingForPartner");
     }
   };
 
-  socket.on("findPartner", tryMatch);
-
-  socket.on("message", (data) => {
-    if (socket.partner) socket.partner.emit("message", data);
-  });
-
-  socket.on("addReaction", (data) => {
-    if (socket.partner) {
-      socket.partner.emit("reactionAdded", data);
-      socket.emit("reactionAdded", data);
-    }
+  socket.on("findPartner", tryFindPartner);
+  socket.on("message", (msg) => {
+    if (socket.partner) socket.partner.emit("message", { text: msg });
   });
 
   socket.on("next", () => {
     if (socket.partner) {
-      socket.partner.emit("partnerDisconnected", { name: socket.userName });
-      socket.partner.partner = null;
+      const oldPartner = socket.partner;
       socket.partner = null;
+      oldPartner.partner = null;
+      oldPartner.emit("partnerDisconnected", { name: socket.userName });
     }
-    tryMatch();
+    waitingQueue = waitingQueue.filter(s => s.id !== socket.id);
+    tryFindPartner();
   });
 
   socket.on("blockUser", () => {
     if (!socket.partner) return;
-    socket.blockedNames.push(socket.partner.userName.toLowerCase());
-    const p = socket.partner;
-    socket.partner = null; p.partner = null;
-    p.emit("partnerDisconnected", { name: socket.userName });
-    tryMatch();
+    const blockedName = socket.partner.userName.toLowerCase();
+    if (!socket.blockedNames.includes(blockedName)) socket.blockedNames.push(blockedName);
+    const oldPartner = socket.partner;
+    socket.partner = null;
+    oldPartner.partner = null;
+    oldPartner.emit("partnerDisconnected", { name: socket.userName });
+    socket.emit("userBlocked", { name: oldPartner.userName });
+    tryFindPartner();
   });
 
   socket.on("disconnect", () => {
@@ -86,9 +92,8 @@ io.on("connection", (socket) => {
       socket.partner.partner = null;
     }
     waitingQueue = waitingQueue.filter(s => s.id !== socket.id);
-    updateCount();
+    updateOnlineCount();
   });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));
+server.listen(3000, () => console.log("Server running on http://localhost:3000"));
