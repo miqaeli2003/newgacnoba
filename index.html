@@ -21,28 +21,13 @@
 
   <div class="chat-container" id="chat"></div>
 
-  <!-- GIF Panel (slides up above input) -->
-  <div class="gif-panel" id="gifPanel">
-    <div class="gif-panel-header">
-      <input type="text" id="gifSearch" placeholder="Search GIFs..." autocomplete="off" />
-      <button id="gifPanelClose" title="Close">✕</button>
+  <div class="input-wrapper">
+    <div id="replyIndicator" class="reply-indicator">
+      <span id="replyText">Replying to...</span>
+      <span id="cancelReply">&times;</span>
     </div>
-    <div class="gif-grid" id="gifGrid">
-      <div class="gif-loading">Press the GIF button to search 🎬</div>
-    </div>
-  </div>
-
-  <!-- Input Area -->
-  <div class="chat-input">
-    <div class="reply-bar" id="replyBar">
-      <div class="reply-bar-content">
-        <span class="reply-bar-label">↩ Replying to:</span>
-        <span class="reply-bar-text" id="replyBarText"></span>
-      </div>
-      <button class="reply-bar-cancel" id="cancelReply" title="Cancel reply">✕</button>
-    </div>
-    <div class="input-row">
-      <button class="gif-btn" id="gifBtn" disabled title="Send a GIF">GIF</button>
+    <div class="chat-input">
+      <button id="gifBtn" disabled>GIF</button>
       <input type="text" id="messageInput" placeholder="Type your message..." autocomplete="off" disabled />
       <button id="sendBtn" disabled>SEND</button>
     </div>
@@ -53,6 +38,14 @@
       <input type="text" id="nameInput" placeholder="Enter your username..." autocomplete="off" maxlength="20" />
       <div id="nameError" class="name-error"></div>
       <button id="saveNameBtn">Start Chatting</button>
+    </div>
+  </div>
+
+  <div id="gifModal" class="modal" style="display: none;">
+    <div class="modal-content gif-modal-content">
+      <h3 style="margin-top: 0;">Select a GIF</h3>
+      <div id="gifGrid" class="gif-grid"></div>
+      <button id="closeGifBtn" style="background: #e53935; margin-top: 15px;">Close</button>
     </div>
   </div>
 
