@@ -156,7 +156,7 @@ socket.on("partnerFound", (partner) => {
 
 socket.on("waitingForPartner", () => {
   clearChat();
-  addSystemMessage("Waiting for a partner to connect...");
+  addSystemMessage("ვეძებთ ახალ პარტნიორს...");
   partnerConnected = false;
   partnerName = "";
   setInputsEnabled(false);
