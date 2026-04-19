@@ -87,7 +87,6 @@ io.on("connection", (socket) => {
   });
 
   // ── Messaging ──────────────────────────────────────────────────────────────
-  // Support both old string format and new { text, messageId } format
   socket.on("message", (msg) => {
     if (!socket.partner) return;
     if (typeof msg === "string") {
@@ -97,23 +96,17 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ── Reactions ──────────────────────────────────────────────────────────────
-  // Partner A reacts to a message sent by Partner B.
-  // We forward to Partner B so they can display the reaction under their own message.
-  socket.on("react", ({ messageId, emoji }) => {
+  // ── GIF ────────────────────────────────────────────────────────────────────
+  socket.on("gif", (data) => {
     if (socket.partner) {
-      socket.partner.emit("reacted", { messageId, emoji });
+      socket.partner.emit("gif", { url: data.url, preview: data.preview });
     }
   });
 
-  // ── Gifts ──────────────────────────────────────────────────────────────────
-  socket.on("gift", (data) => {
+  // ── Reactions ──────────────────────────────────────────────────────────────
+  socket.on("react", ({ messageId, emoji }) => {
     if (socket.partner) {
-      socket.partner.emit("gift", {
-        id: data.id,
-        emoji: data.emoji,
-        name: data.name,
-      });
+      socket.partner.emit("reacted", { messageId, emoji });
     }
   });
 
