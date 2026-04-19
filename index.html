@@ -21,18 +21,21 @@
 
   <div class="chat-container" id="chat"></div>
 
-  <!-- Gift Picker Panel -->
-  <div id="giftPicker" class="gift-picker" style="display:none">
-    <div class="gift-picker-header">
-      <span>🎁 Send a Gift</span>
-      <button class="gift-picker-close" id="giftPickerClose">✕</button>
+  <!-- GIF Picker Panel -->
+  <div id="gifPicker" class="gif-picker" style="display:none">
+    <div class="gif-picker-header">
+      <input type="text" id="gifSearch" placeholder="🔍 Search GIFs..." autocomplete="off" />
+      <button class="gif-picker-close" id="gifPickerClose">✕</button>
     </div>
-    <div class="gift-grid" id="giftGrid"></div>
+    <div class="gif-results" id="gifResults">
+      <div class="gif-placeholder" id="gifLoading">✨ Loading trending GIFs...</div>
+    </div>
+    <div class="gif-powered">Powered by Tenor</div>
   </div>
 
   <div class="chat-input">
     <input type="text" id="messageInput" placeholder="Type your message..." autocomplete="off" disabled />
-    <button id="giftBtn" class="gift-btn" disabled title="Send a Gift">🎁</button>
+    <button id="gifBtn" class="gif-btn" disabled title="Send a GIF">GIF</button>
     <button id="sendBtn" disabled>SEND</button>
   </div>
 
