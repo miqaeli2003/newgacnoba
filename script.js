@@ -17,35 +17,133 @@ const nameInput = document.getElementById("nameInput");
 const saveNameBtn = document.getElementById("saveNameBtn");
 const nameError = document.getElementById("nameError");
 const onlineCountElem = document.getElementById("onlineCount");
-const giftBtn = document.getElementById("giftBtn");
-const giftPicker = document.getElementById("giftPicker");
-const giftGrid = document.getElementById("giftGrid");
-const giftPickerClose = document.getElementById("giftPickerClose");
+const gifBtn = document.getElementById("gifBtn");
+const gifPicker = document.getElementById("gifPicker");
+const gifSearch = document.getElementById("gifSearch");
+const gifResults = document.getElementById("gifResults");
+const gifPickerClose = document.getElementById("gifPickerClose");
+const gifLoading = document.getElementById("gifLoading");
 
-// ── Gifts Config ──────────────────────────────────────────────────────────────
+// ── GIF System (Tenor API) ────────────────────────────────────────────────────
 
-const GIFTS = [
-  { id: "roses",    emoji: "🌹", name: "Roses"    },
-  { id: "fire",     emoji: "🔥", name: "Fire"     },
-  { id: "crown",    emoji: "👑", name: "Crown"    },
-  { id: "diamond",  emoji: "💎", name: "Diamond"  },
-  { id: "heart",    emoji: "💝", name: "Love"     },
-  { id: "cake",     emoji: "🎂", name: "Cake"     },
-  { id: "trophy",   emoji: "🏆", name: "Trophy"   },
-  { id: "music",    emoji: "🎵", name: "Music"    },
-  { id: "star",     emoji: "⭐", name: "Star"     },
-  { id: "unicorn",  emoji: "🦄", name: "Unicorn"  },
-  { id: "rainbow",  emoji: "🌈", name: "Rainbow"  },
-  { id: "balloon",  emoji: "🎈", name: "Balloon"  },
-];
+const TENOR_KEY = "LIVDSRZULELA"; // Tenor demo key
+let gifSearchTimeout = null;
+let gifPickerOpen = false;
 
-// Build gift grid dynamically
-GIFTS.forEach(gift => {
-  const item = document.createElement("div");
-  item.className = "gift-item";
-  item.innerHTML = `<span class="gift-emoji">${gift.emoji}</span><span class="gift-item-label">${gift.name}</span>`;
-  item.addEventListener("click", () => sendGift(gift));
-  giftGrid.appendChild(item);
+async function fetchGifs(query) {
+  gifResults.innerHTML = '<div class="gif-placeholder">Loading...</div>';
+  try {
+    const url = query
+      ? `https://api.tenor.com/v1/search?q=${encodeURIComponent(query)}&key=${TENOR_KEY}&limit=24&media_filter=minimal&contentfilter=medium`
+      : `https://api.tenor.com/v1/trending?key=${TENOR_KEY}&limit=24&media_filter=minimal&contentfilter=medium`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+    renderGifResults(data.results || []);
+  } catch (err) {
+    gifResults.innerHTML = '<div class="gif-placeholder">Failed to load GIFs 😢</div>';
+  }
+}
+
+function renderGifResults(results) {
+  gifResults.innerHTML = "";
+
+  if (!results.length) {
+    gifResults.innerHTML = '<div class="gif-placeholder">No GIFs found</div>';
+    return;
+  }
+
+  // Masonry-style two-column layout
+  const col1 = document.createElement("div");
+  const col2 = document.createElement("div");
+  col1.className = "gif-col";
+  col2.className = "gif-col";
+
+  results.forEach((result, i) => {
+    const media = result.media[0];
+    const previewUrl = media.tinygif?.url || media.gif?.url;
+    const fullUrl = media.gif?.url;
+    if (!previewUrl || !fullUrl) return;
+
+    const img = document.createElement("img");
+    img.src = previewUrl;
+    img.className = "gif-item";
+    img.loading = "lazy";
+    img.dataset.full = fullUrl;
+    img.addEventListener("click", () => sendGif(fullUrl, previewUrl));
+
+    (i % 2 === 0 ? col1 : col2).appendChild(img);
+  });
+
+  gifResults.appendChild(col1);
+  gifResults.appendChild(col2);
+}
+
+function openGifPicker() {
+  gifPicker.style.display = "flex";
+  gifPickerOpen = true;
+  gifSearch.value = "";
+  gifSearch.focus();
+  fetchGifs(""); // load trending
+}
+
+function closeGifPickerPanel() {
+  gifPicker.style.display = "none";
+  gifPickerOpen = false;
+}
+
+gifBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  gifPickerOpen ? closeGifPickerPanel() : openGifPicker();
+});
+
+gifPickerClose.addEventListener("click", (e) => {
+  e.stopPropagation();
+  closeGifPickerPanel();
+});
+
+gifSearch.addEventListener("input", () => {
+  clearTimeout(gifSearchTimeout);
+  gifSearchTimeout = setTimeout(() => fetchGifs(gifSearch.value.trim()), 400);
+});
+
+gifSearch.addEventListener("keydown", (e) => e.stopPropagation()); // prevent chat shortcuts
+
+// Close when clicking outside
+document.addEventListener("click", (e) => {
+  if (gifPickerOpen && !gifPicker.contains(e.target) && e.target !== gifBtn) {
+    closeGifPickerPanel();
+  }
+});
+
+function sendGif(fullUrl, previewUrl) {
+  if (!partnerConnected) return;
+  socket.emit("gif", { url: fullUrl, preview: previewUrl });
+  addGifMessage(fullUrl, true);
+  closeGifPickerPanel();
+}
+
+function addGifMessage(gifUrl, isYou) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "message-wrapper gif-msg-wrapper " + (isYou ? "you" : "partner");
+
+  const img = document.createElement("img");
+  img.src = gifUrl;
+  img.className = "gif-message-img";
+  img.loading = "lazy";
+
+  const timestamp = document.createElement("div");
+  timestamp.className = "timestamp";
+  timestamp.textContent = formatTimestamp(new Date());
+
+  wrapper.appendChild(img);
+  wrapper.appendChild(timestamp);
+  chat.appendChild(wrapper);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+socket.on("gif", (data) => {
+  addGifMessage(data.url, false);
 });
 
 // ── Reaction Config ───────────────────────────────────────────────────────────
@@ -56,7 +154,6 @@ let activeReactionPicker = null;
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function generateMsgId() {
-  // Use socket.id prefix so IDs are unique across both users
   return `${socket.id}_${++msgCounter}_${Date.now()}`;
 }
 
@@ -68,12 +165,6 @@ function formatTimestamp(date) {
   return `${hour12}:${m.toString().padStart(2, "0")} ${ampm}`;
 }
 
-/**
- * addMessage — renders a chat bubble.
- * @param {string} text       Message content
- * @param {boolean} isYou     true = sent by me, false = partner
- * @param {string} [messageId] Unique ID (generated if omitted)
- */
 function addMessage(text, isYou, messageId) {
   const id = messageId || generateMsgId();
 
@@ -81,7 +172,6 @@ function addMessage(text, isYou, messageId) {
   wrapper.className = "message-wrapper " + (isYou ? "you" : "partner");
   wrapper.dataset.messageId = id;
 
-  // ── Row: bubble [+ react button for partner msgs] ──
   const msgRow = document.createElement("div");
   msgRow.className = "message-row";
 
@@ -90,7 +180,7 @@ function addMessage(text, isYou, messageId) {
   content.textContent = text;
   msgRow.appendChild(content);
 
-  // React button — only on partner messages
+  // React button only on partner messages
   if (!isYou) {
     const reactBtn = document.createElement("button");
     reactBtn.className = "react-btn";
@@ -103,12 +193,10 @@ function addMessage(text, isYou, messageId) {
     msgRow.appendChild(reactBtn);
   }
 
-  // ── Timestamp ──
   const timestamp = document.createElement("div");
   timestamp.className = "timestamp";
   timestamp.textContent = formatTimestamp(new Date());
 
-  // ── Reaction area (below bubble) ──
   const reactionArea = document.createElement("div");
   reactionArea.className = "reaction-area";
   reactionArea.id = `reactions_${id}`;
@@ -120,30 +208,6 @@ function addMessage(text, isYou, messageId) {
   chat.scrollTop = chat.scrollHeight;
 
   return id;
-}
-
-function addGiftMessage(gift, isYou) {
-  const wrapper = document.createElement("div");
-  wrapper.className = "message-wrapper gift-wrapper " + (isYou ? "you" : "partner");
-
-  const bubble = document.createElement("div");
-  bubble.className = "gift-bubble" + (isYou ? " you" : "");
-
-  const emojiEl = document.createElement("div");
-  emojiEl.className = "gift-emoji-anim";
-  emojiEl.textContent = gift.emoji;
-
-  const labelEl = document.createElement("div");
-  labelEl.className = "gift-sent-label";
-  labelEl.textContent = isYou
-    ? `You sent ${gift.name}`
-    : `${partnerName || "Partner"} sent ${gift.name}`;
-
-  bubble.appendChild(emojiEl);
-  bubble.appendChild(labelEl);
-  wrapper.appendChild(bubble);
-  chat.appendChild(wrapper);
-  chat.scrollTop = chat.scrollHeight;
 }
 
 function addSystemMessage(text) {
@@ -174,7 +238,7 @@ function setInputsEnabled(enabled) {
   messageInput.disabled = !enabled;
   sendBtn.disabled = !enabled;
   blockBtn.disabled = !enabled;
-  giftBtn.disabled = !enabled;
+  gifBtn.disabled = !enabled;
 }
 
 function showNameError(msg) {
@@ -212,10 +276,8 @@ function showReactionPicker(anchorEl, messageId) {
   document.body.appendChild(picker);
   activeReactionPicker = picker;
 
-  // Position above / near the anchor button
-  const rect = anchorEl.getBoundingClientRect();
-  // Let browser paint so we can measure picker size
   requestAnimationFrame(() => {
+    const rect = anchorEl.getBoundingClientRect();
     const pw = picker.offsetWidth;
     const ph = picker.offsetHeight;
     let left = rect.left;
@@ -240,15 +302,9 @@ document.addEventListener("click", () => closeReactionPicker());
 
 function reactToMessage(messageId, emoji) {
   socket.emit("react", { messageId, emoji });
-  displayReaction(messageId, emoji, true); // Show on my UI immediately
+  displayReaction(messageId, emoji, true);
 }
 
-/**
- * displayReaction — renders or updates a reaction pill on a message.
- * @param {string} messageId
- * @param {string} emoji
- * @param {boolean} isMine  true = I reacted, false = partner reacted
- */
 function displayReaction(messageId, emoji, isMine) {
   const reactionArea = document.getElementById(`reactions_${messageId}`);
   if (!reactionArea) return;
@@ -257,9 +313,8 @@ function displayReaction(messageId, emoji, isMine) {
   let pill = reactionArea.querySelector(`.${cls}`);
 
   if (pill) {
-    // Update existing reaction with pop animation
     pill.classList.remove("reaction-pop");
-    void pill.offsetWidth; // reflow to restart animation
+    void pill.offsetWidth;
     pill.textContent = emoji;
     pill.classList.add("reaction-pop");
   } else {
@@ -269,36 +324,6 @@ function displayReaction(messageId, emoji, isMine) {
     reactionArea.appendChild(pill);
   }
 }
-
-// ── Gift System ───────────────────────────────────────────────────────────────
-
-giftBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  const isVisible = giftPicker.style.display !== "none";
-  giftPicker.style.display = isVisible ? "none" : "flex";
-});
-
-giftPickerClose.addEventListener("click", (e) => {
-  e.stopPropagation();
-  giftPicker.style.display = "none";
-});
-
-document.addEventListener("click", (e) => {
-  if (!giftPicker.contains(e.target) && e.target !== giftBtn) {
-    giftPicker.style.display = "none";
-  }
-});
-
-function sendGift(gift) {
-  if (!partnerConnected) return;
-  socket.emit("gift", { id: gift.id, emoji: gift.emoji, name: gift.name });
-  addGiftMessage(gift, true);
-  giftPicker.style.display = "none";
-}
-
-socket.on("gift", (data) => {
-  addGiftMessage(data, false);
-});
 
 // ── Message Sending ───────────────────────────────────────────────────────────
 
@@ -332,7 +357,6 @@ socket.on("nameAccepted", (acceptedName) => {
   saveNameBtn.disabled = false;
   saveNameBtn.textContent = "Start Chatting";
   clearNameError();
-
   if (isFirstLogin) {
     isFirstLogin = false;
     clearChat();
@@ -370,7 +394,6 @@ socket.on("message", (msg) => {
   addMessage(msg.text, false, msg.messageId);
 });
 
-// Partner reacted to one of MY messages
 socket.on("reacted", ({ messageId, emoji }) => {
   displayReaction(messageId, emoji, false);
 });
@@ -380,7 +403,7 @@ socket.on("partnerDisconnected", (data) => {
   partnerConnected = false;
   partnerName = "";
   setInputsEnabled(false);
-  giftPicker.style.display = "none";
+  closeGifPickerPanel();
 });
 
 socket.on("userBlocked", (data) => {
@@ -389,7 +412,7 @@ socket.on("userBlocked", (data) => {
   partnerConnected = false;
   partnerName = "";
   setInputsEnabled(false);
-  giftPicker.style.display = "none";
+  closeGifPickerPanel();
 });
 
 // ── Button Handlers ───────────────────────────────────────────────────────────
@@ -397,14 +420,12 @@ socket.on("userBlocked", (data) => {
 nextBtn.addEventListener("click", () => {
   nextBtn.disabled = true;
   setTimeout(() => { nextBtn.disabled = false; }, 1000);
-
   clearChat();
   addSystemMessage("ვეძებთ ახალ პარტნიორს...");
   partnerConnected = false;
   partnerName = "";
   setInputsEnabled(false);
-  giftPicker.style.display = "none";
-
+  closeGifPickerPanel();
   socket.emit("next");
 });
 
