@@ -70,7 +70,7 @@ html, body {
 
 /* CHANGE NAME (red danger) */
 .change-name-btn {
-  background: #ed4245;
+  background: yellow;
   color: white;
 }
 .change-name-btn:hover {
@@ -80,7 +80,7 @@ html, body {
 /* BLOCK (orange warning) */
 .block-button {
   background: #faa81a;
-  color: #111;
+  color: red;
 }
 .block-button:hover:not(:disabled) {
   background: #d18b12;
