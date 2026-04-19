@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>GAICANI | Chat</title>
+  <title>Chatting Site</title>
   <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 </head>
 <body>
   <div class="top-bar">
@@ -23,22 +22,14 @@
   <div class="chat-container" id="chat"></div>
 
   <div id="gifPicker" class="gif-picker">
-    <input type="text" id="gifSearch" placeholder="Search GIPHY..." autocomplete="off" />
+    <div class="gif-search-container">
+      <input type="text" id="gifSearchInput" placeholder="Search Giphy..." />
+    </div>
     <div id="gifResults" class="gif-results"></div>
   </div>
 
-  <div id="replyPreview" class="reply-preview-bar">
-    <div class="reply-info">
-      <i class="fas fa-reply"></i>
-      <span id="replyText">Replying to...</span>
-    </div>
-    <button id="cancelReply"><i class="fas fa-times"></i></button>
-  </div>
-
   <div class="chat-input">
-    <button id="gifBtn" class="icon-btn" title="Send GIF" disabled>
-        <i class="fas fa-gift"></i>
-    </button>
+    <button id="gifBtn" class="gif-toggle-btn" disabled>GIF</button>
     <input type="text" id="messageInput" placeholder="Type your message..." autocomplete="off" disabled />
     <button id="sendBtn" disabled>SEND</button>
   </div>
