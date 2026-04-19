@@ -14,7 +14,7 @@ html, body {
   overflow: hidden;
 }
 
-/* ── TOP BAR (Discord style) ───────────────────────────────────────────── */
+/* ── TOP BAR ───────────────────────────────────────────────────────────── */
 
 .top-bar {
   flex: 0 0 60px;
@@ -24,6 +24,7 @@ html, body {
   background: #2b2d31;
   padding: 0 18px;
   border-bottom: 1px solid #1a1b1e;
+  z-index: 10;
 }
 
 .site-name {
@@ -34,12 +35,18 @@ html, body {
   letter-spacing: 0.5px;
 }
 
+.left-side {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
 #onlineCount {
   font-size: 0.9em;
   color: #b5bac1;
 }
 
-/* ── BUTTONS (Discord style pills) ─────────────────────────────────────── */
+/* ── BUTTONS ─────────────────────────────────────────────────────────── */
 
 .right-side {
   display: flex;
@@ -59,7 +66,6 @@ html, body {
   transition: 0.2s ease;
 }
 
-/* NEXT (blurple like Discord primary) */
 .next-button {
   background: #5865f2;
   color: white;
@@ -68,21 +74,18 @@ html, body {
   background: #4752c4;
 }
 
-/* CHANGE NAME (red danger) */
 .change-name-btn {
-  background: #f2d36b; /* soft yellow */
-  color: #000;        /* black text */
+  background: #f2d36b;
+  color: #000;
 }
 .change-name-btn:hover {
   background: #c03537;
 }
 
-/* BLOCK (red button, black text) */
 .block-button {
-  background: #e53935; /* red */
-  color: #000;        /* black text */
+  background: #e53935;
+  color: #000;
 }
-
 .block-button:hover:not(:disabled) {
   background: #d18b12;
 }
@@ -105,34 +108,105 @@ html, body {
   background: #313338;
 }
 
-/* scrollbar like discord */
 .chat-container::-webkit-scrollbar {
   width: 8px;
 }
-
 .chat-container::-webkit-scrollbar-thumb {
   background: #1a1b1e;
   border-radius: 10px;
 }
 
-/* messages */
+/* ── MESSAGE WRAPPER ───────────────────────────────────────────────────── */
+
 .message-wrapper {
   display: flex;
+  flex-direction: column;
   max-width: 100%;
+  position: relative; /* needed for emoji picker absolute positioning */
 }
 
 .message-wrapper.you {
-  justify-content: flex-end;
+  align-items: flex-end;
 }
+
+.message-wrapper.partner {
+  align-items: flex-start;
+}
+
+/* ── EMOJI PICKER (appears on hover / long-press) ──────────────────────── */
+
+.emoji-picker {
+  position: absolute;
+  top: -48px;
+  background: #1e1f22;
+  border: 1px solid #3a3d45;
+  border-radius: 24px;
+  padding: 4px 6px;
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  transform: translateY(6px);
+  z-index: 20;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+
+.message-wrapper:hover .emoji-picker,
+.emoji-picker.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.message-wrapper.you .emoji-picker {
+  right: 0;
+}
+
+.message-wrapper.partner .emoji-picker {
+  left: 0;
+}
+
+.emoji-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.15em;
+  padding: 0;
+  border-radius: 50%;
+  line-height: 1;
+  transition: background 0.12s, transform 0.1s;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.emoji-btn:hover {
+  background: #3a3d45;
+  transform: scale(1.25);
+}
+
+.emoji-btn.reply-trigger {
+  font-size: 1em;
+  color: #b5bac1;
+}
+
+/* ── MESSAGE BUBBLES ───────────────────────────────────────────────────── */
 
 .message-content {
   max-width: 70%;
   padding: 10px 14px;
   border-radius: 12px;
   font-size: 0.95em;
-  line-height: 1.3;
+  line-height: 1.4;
   background: #2b2d31;
   color: #dcddde;
+  word-break: break-word;
 }
 
 .message-content.you {
@@ -140,36 +214,304 @@ html, body {
   color: white;
 }
 
-/* timestamp */
+/* ── REPLY PREVIEW inside bubble ───────────────────────────────────────── */
+
+.reply-preview {
+  background: rgba(0, 0, 0, 0.22);
+  border-left: 3px solid rgba(255, 255, 255, 0.4);
+  padding: 4px 8px;
+  margin-bottom: 6px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  color: rgba(255, 255, 255, 0.65);
+  max-height: 36px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-content:not(.you) .reply-preview {
+  border-left-color: #5865f2;
+  color: #949ba4;
+}
+
+/* ── GIF inside message ─────────────────────────────────────────────────── */
+
+.gif-message {
+  max-width: 220px;
+  max-height: 180px;
+  width: auto;
+  height: auto;
+  border-radius: 8px;
+  display: block;
+}
+
+/* Naked GIF bubble (no padding needed for image) */
+.message-content.gif-bubble {
+  padding: 4px;
+  background: transparent;
+}
+
+.message-content.you.gif-bubble {
+  background: transparent;
+}
+
+/* ── TIMESTAMP ─────────────────────────────────────────────────────────── */
+
 .timestamp {
   font-size: 0.7em;
   color: #949ba4;
-  margin-left: 6px;
-  align-self: flex-end;
+  margin-top: 3px;
+  padding: 0 2px;
 }
 
-/* system messages */
+/* ── REACTION PILLS ────────────────────────────────────────────────────── */
+
+.message-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 0 2px;
+}
+
+.message-wrapper.you .message-reactions {
+  justify-content: flex-end;
+}
+
+.reaction-pill {
+  background: #3a3d45;
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 0.82em;
+  cursor: pointer;
+  color: white;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  line-height: 1.4;
+}
+
+.reaction-pill.mine {
+  background: #3d4270;
+  border-color: #5865f2;
+}
+
+.reaction-pill:hover {
+  background: #4a4d5a;
+  transform: scale(1.08);
+}
+
+/* ── SYSTEM MESSAGES ───────────────────────────────────────────────────── */
+
 .system-message {
   text-align: center;
   color: #949ba4;
   font-size: 0.85em;
+  padding: 2px 0;
 }
 
 .system-message-disconnect {
   text-align: center;
   color: #f23f42;
   font-size: 0.85em;
+  padding: 2px 0;
 }
 
-/* ── INPUT BAR ─────────────────────────────────────────────────────────── */
+/* ── GIF PANEL ─────────────────────────────────────────────────────────── */
+
+.gif-panel {
+  flex: 0 0 260px;
+  display: none;
+  flex-direction: column;
+  background: #2b2d31;
+  border-top: 1px solid #3a3d45;
+  overflow: hidden;
+  animation: slideUp 0.2s ease;
+}
+
+.gif-panel.open {
+  display: flex;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.gif-panel-header {
+  display: flex;
+  padding: 8px 10px;
+  gap: 8px;
+  border-bottom: 1px solid #1a1b1e;
+  align-items: center;
+}
+
+.gif-panel-header input {
+  flex: 1;
+  background: #1e1f22;
+  border: none;
+  outline: none;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.9em;
+  font-family: inherit;
+}
+
+.gif-panel-header input::placeholder {
+  color: #5a5d68;
+}
+
+#gifPanelClose {
+  background: none;
+  border: none;
+  color: #949ba4;
+  cursor: pointer;
+  font-size: 1em;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+#gifPanelClose:hover {
+  background: #3a3d45;
+  color: white;
+}
+
+.gif-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.gif-grid::-webkit-scrollbar { width: 6px; }
+.gif-grid::-webkit-scrollbar-thumb { background: #1a1b1e; border-radius: 6px; }
+
+.gif-thumb {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.15s;
+  background: #1e1f22;
+}
+
+.gif-thumb:hover {
+  transform: scale(1.05);
+  opacity: 0.85;
+}
+
+.gif-loading {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: #5a5d68;
+  padding: 30px 10px;
+  font-size: 0.88em;
+}
+
+/* ── CHAT INPUT ─────────────────────────────────────────────────────────── */
 
 .chat-input {
-  flex: 0 0 60px;
+  flex: 0 0 auto;
   display: flex;
-  padding: 10px;
+  flex-direction: column;
   background: #2b2d31;
   border-top: 1px solid #1a1b1e;
+}
+
+/* Reply bar (shown when replying) */
+.reply-bar {
+  display: none; /* shown via JS */
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 14px;
+  background: #232428;
+  border-bottom: 1px solid #1a1b1e;
+  animation: fadeIn 0.15s ease;
+}
+
+.reply-bar.visible {
+  display: flex;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.reply-bar-content {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.reply-bar-label {
+  color: #5865f2;
+  font-weight: 600;
+  font-size: 0.82em;
+  white-space: nowrap;
+}
+
+.reply-bar-text {
+  color: #b5bac1;
+  font-size: 0.82em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reply-bar-cancel {
+  background: none;
+  border: none;
+  color: #949ba4;
+  cursor: pointer;
+  font-size: 0.95em;
+  padding: 4px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+.reply-bar-cancel:hover { color: #fff; }
+
+/* Input row */
+.input-row {
+  display: flex;
+  padding: 10px;
   gap: 10px;
+  align-items: center;
+}
+
+/* GIF button */
+.gif-btn {
+  background: #3a3d45;
+  border: none;
+  color: #b5bac1;
+  padding: 0 13px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.82em;
+  cursor: pointer;
+  height: 44px;
+  transition: background 0.2s, color 0.2s;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+.gif-btn:hover:not(:disabled) {
+  background: #5865f2;
+  color: white;
+}
+.gif-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+.gif-btn.active {
+  background: #5865f2;
+  color: white;
 }
 
 .chat-input input {
@@ -181,9 +523,14 @@ html, body {
   padding: 12px 14px;
   border-radius: 10px;
   font-size: 0.95em;
+  font-family: inherit;
 }
 
-.chat-input button {
+.chat-input input::placeholder {
+  color: #4a4d58;
+}
+
+.chat-input button#sendBtn {
   background: #5865f2;
   border: none;
   color: white;
@@ -192,26 +539,26 @@ html, body {
   font-weight: 600;
   cursor: pointer;
   transition: 0.2s ease;
+  height: 44px;
+  flex-shrink: 0;
+  font-family: inherit;
 }
-
-.chat-input button:hover:not(:disabled) {
-  background: #4752c4;
-}
-
-.chat-input button:disabled {
+.chat-input button#sendBtn:hover:not(:disabled) { background: #4752c4; }
+.chat-input button#sendBtn:disabled {
   background: #3a3d45;
   cursor: not-allowed;
 }
 
-/* ── MODAL (Discord dark popup) ───────────────────────────────────────── */
+/* ── NAME MODAL ─────────────────────────────────────────────────────────── */
 
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.7);
+  background: rgba(0, 0, 0, 0.7);
   display: flex;
   justify-content: center;
   align-items: center;
+  z-index: 100;
 }
 
 .modal-content {
@@ -221,7 +568,7 @@ html, body {
   width: 100%;
   max-width: 380px;
   text-align: center;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
 
 .modal-content input {
@@ -229,9 +576,17 @@ html, body {
   padding: 12px;
   margin-top: 10px;
   border-radius: 8px;
-  border: none;
+  border: 1px solid transparent;
   background: #1e1f22;
   color: white;
+  font-family: inherit;
+  font-size: 0.95em;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.modal-content input.error {
+  border-color: #f23f42;
 }
 
 .modal-content button {
@@ -243,14 +598,21 @@ html, body {
   background: #5865f2;
   color: white;
   font-weight: 600;
+  font-family: inherit;
+  font-size: 0.95em;
   cursor: pointer;
+  transition: background 0.2s;
+}
+.modal-content button:hover { background: #4752c4; }
+
+.name-error {
+  color: #f23f42;
+  font-size: 0.82em;
+  margin-top: 8px;
+  display: none;
 }
 
-.modal-content button:hover {
-  background: #4752c4;
-}
-
-/* ── MOBILE ───────────────────────────────────────────────────────────── */
+/* ── MOBILE ─────────────────────────────────────────────────────────────── */
 
 @media (max-width: 600px) {
   .top-bar {
@@ -263,5 +625,32 @@ html, body {
   .next-button {
     padding: 6px 10px;
     font-size: 0.75em;
+  }
+
+  .gif-panel {
+    flex: 0 0 220px;
+  }
+
+  .gif-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .message-content {
+    max-width: 85%;
+  }
+
+  .gif-message {
+    max-width: 160px;
+  }
+
+  /* On mobile, emoji picker always needs .visible (CSS hover doesn't work on touch) */
+  .message-wrapper:hover .emoji-picker {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .emoji-picker.visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
   }
 }
