@@ -184,7 +184,7 @@ function addMessage(text, isYou, messageId) {
   if (!isYou) {
     const reactBtn = document.createElement("button");
     reactBtn.className = "react-btn";
-    reactBtn.innerHTML = "😊";
+    reactBtn.innerHTML = "📋";
     reactBtn.title = "React";
     reactBtn.addEventListener("click", (e) => {
       e.stopPropagation();
