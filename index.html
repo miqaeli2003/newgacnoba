@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Chatting Site</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -22,12 +22,18 @@
   <div class="chat-container" id="chat"></div>
 
   <div class="chat-input">
-    <input type="text" id="messageInput" placeholder="Type your message..." autocomplete="off" disabled />
-    <button id="sendBtn" disabled>SEND</button>
+    <textarea id="messageInput" placeholder="Message..." autocomplete="off" disabled rows="1"></textarea>
+    <button id="sendBtn" disabled>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" width="20" height="20">
+        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+      </svg>
+    </button>
   </div>
 
   <div id="nameModal" class="modal">
     <div class="modal-content">
+      <h2 class="modal-title">Welcome to GAICANI</h2>
+      <p class="modal-subtitle">Choose a unique username to start chatting</p>
       <input type="text" id="nameInput" placeholder="Enter your username..." autocomplete="off" maxlength="20" />
       <div id="nameError" class="name-error"></div>
       <button id="saveNameBtn">Start Chatting</button>
