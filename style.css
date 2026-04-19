@@ -92,7 +92,7 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: #FAF0CA;
+  background: #1a1b1e;
 }
 
 .chat-container::-webkit-scrollbar { width: 8px; }
@@ -135,7 +135,7 @@ html, body {
   border-radius: 12px;
   font-size: 0.95em;
   line-height: 1.4;
-  background: #0D3B66;
+  background:#5865f2;
   color: #dcddde;
   word-break: break-word;
 }
