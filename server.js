@@ -10,62 +10,79 @@ const io = new Server(server);
 app.use(express.static(path.join(__dirname)));
 
 let waitingQueue = [];
-const activeNames = new Set();
+const activeUsernames = new Set();
 
 io.on("connection", (socket) => {
   socket.userName = "";
   socket.partner = null;
-  socket.blocked = [];
+  socket.blockedNames = [];
 
   const updateCount = () => io.emit("onlineCount", io.engine.clientsCount);
   updateCount();
 
   socket.on("setName", (name) => {
-    const n = (name || "").trim().substring(0, 15);
-    if (!n || activeNames.has(n.toLowerCase())) return socket.emit("nameTaken");
-    if (socket.userName) activeNames.delete(socket.userName.toLowerCase());
+    const n = (name || "").trim();
+    if (!n || activeUsernames.has(n.toLowerCase())) return socket.emit("nameTaken");
+    if (socket.userName) activeUsernames.delete(socket.userName.toLowerCase());
     socket.userName = n;
-    activeNames.add(n.toLowerCase());
+    activeUsernames.add(n.toLowerCase());
     socket.emit("nameAccepted", n);
   });
 
-  socket.on("findPartner", () => {
-    for (let i = 0; i < waitingQueue.length; i++) {
-      const p = waitingQueue[i];
-      if (p.id !== socket.id && !socket.blocked.includes(p.userName.toLowerCase())) {
-        socket.partner = p; p.partner = socket;
-        waitingQueue.splice(i, 1);
-        socket.emit("partnerFound", { name: p.userName });
-        p.emit("partnerFound", { name: socket.userName });
-        return;
-      }
+  const tryMatch = () => {
+    waitingQueue = waitingQueue.filter(s => s.connected && !s.partner && s.userName);
+    const idx = waitingQueue.findIndex(s => 
+      s.id !== socket.id && 
+      !socket.blockedNames.includes(s.userName.toLowerCase()) &&
+      !s.blockedNames.includes(socket.userName.toLowerCase())
+    );
+
+    if (idx !== -1) {
+      const p = waitingQueue.splice(idx, 1)[0];
+      socket.partner = p; p.partner = socket;
+      socket.emit("partnerFound", { name: p.userName });
+      p.emit("partnerFound", { name: socket.userName });
+    } else {
+      if (!waitingQueue.includes(socket)) waitingQueue.push(socket);
+      socket.emit("waitingForPartner");
     }
-    if (!waitingQueue.includes(socket)) waitingQueue.push(socket);
-    socket.emit("waiting");
-  });
+  };
+
+  socket.on("findPartner", tryMatch);
 
   socket.on("message", (data) => {
     if (socket.partner) socket.partner.emit("message", data);
   });
 
-  socket.on("react", (data) => {
-    if (socket.partner) socket.partner.emit("react", data);
+  socket.on("addReaction", (data) => {
+    if (socket.partner) {
+      socket.partner.emit("reactionAdded", data);
+      socket.emit("reactionAdded", data);
+    }
   });
 
   socket.on("next", () => {
     if (socket.partner) {
-      socket.partner.emit("partnerLeft");
+      socket.partner.emit("partnerDisconnected", { name: socket.userName });
       socket.partner.partner = null;
       socket.partner = null;
     }
-    waitingQueue = waitingQueue.filter(s => s.id !== socket.id);
-    socket.emit("findPartner");
+    tryMatch();
+  });
+
+  socket.on("blockUser", () => {
+    if (!socket.partner) return;
+    socket.blockedNames.push(socket.partner.userName.toLowerCase());
+    const p = socket.partner;
+    socket.partner = null; p.partner = null;
+    p.emit("partnerDisconnected", { name: socket.userName });
+    tryMatch();
   });
 
   socket.on("disconnect", () => {
-    if (socket.userName) activeNames.delete(socket.userName.toLowerCase());
+    if (socket.userName) activeUsernames.delete(socket.userName.toLowerCase());
     if (socket.partner) {
-      socket.partner.emit("partnerLeft");
+      socket.partner.emit("partnerDisconnected", { name: socket.userName });
       socket.partner.partner = null;
     }
     waitingQueue = waitingQueue.filter(s => s.id !== socket.id);
@@ -73,4 +90,5 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(3000, () => console.log("Server running on port 3000"));
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`Running on http://localhost:${PORT}`));
