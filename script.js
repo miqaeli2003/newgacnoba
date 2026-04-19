@@ -3,7 +3,8 @@ const socket = io();
 let userName = "";
 let partnerConnected = false;
 let partnerName = "";
-let isFirstLogin = true; // true until first successful name registration
+let isFirstLogin = true;
+let lastSender = null; // track consecutive bubbles
 
 const chat = document.getElementById("chat");
 const messageInput = document.getElementById("messageInput");
@@ -17,7 +18,14 @@ const saveNameBtn = document.getElementById("saveNameBtn");
 const nameError = document.getElementById("nameError");
 const onlineCountElem = document.getElementById("onlineCount");
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Auto-grow textarea ────────────────────────────────────────────────────────
+
+messageInput.addEventListener("input", () => {
+  messageInput.style.height = "auto";
+  messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + "px";
+});
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatTimestamp(date) {
   const h = date.getHours();
@@ -28,24 +36,44 @@ function formatTimestamp(date) {
 }
 
 function addMessage(text, isYou) {
+  const sender = isYou ? "you" : "partner";
+  const isConsecutive = lastSender === sender;
+
+  // Mark the previous last bubble in this group as "last-in-group" no longer
+  if (isConsecutive) {
+    const prev = chat.querySelector(".message-wrapper.last-in-group." + sender);
+    if (prev) prev.classList.remove("last-in-group");
+  }
+
   const wrapper = document.createElement("div");
-  wrapper.className = "message-wrapper " + (isYou ? "you" : "partner");
+  wrapper.className = "message-wrapper " + sender;
+  if (isConsecutive) wrapper.classList.add("consecutive");
+  if (!isConsecutive) wrapper.classList.add("group-start");
+  wrapper.classList.add("last-in-group");
 
   const content = document.createElement("div");
-  content.className = "message-content" + (isYou ? " you" : "");
+  content.className = "message-content";
   content.textContent = text;
 
   const timestamp = document.createElement("div");
   timestamp.className = "timestamp";
   timestamp.textContent = formatTimestamp(new Date());
 
+  // Tap bubble to toggle timestamp
+  content.addEventListener("click", () => {
+    wrapper.classList.toggle("show-time");
+  });
+
   wrapper.appendChild(content);
   wrapper.appendChild(timestamp);
   chat.appendChild(wrapper);
   chat.scrollTop = chat.scrollHeight;
+
+  lastSender = sender;
 }
 
 function addSystemMessage(text) {
+  lastSender = null;
   const sysMsg = document.createElement("div");
   sysMsg.className = "system-message";
   sysMsg.textContent = text;
@@ -54,6 +82,7 @@ function addSystemMessage(text) {
 }
 
 function addDisconnectMessage(text) {
+  lastSender = null;
   const sysMsg = document.createElement("div");
   sysMsg.className = "system-message-disconnect";
   sysMsg.textContent = text;
@@ -63,6 +92,7 @@ function addDisconnectMessage(text) {
 
 function clearChat() {
   chat.innerHTML = "";
+  lastSender = null;
 }
 
 function updateOnlineCount(count) {
@@ -73,6 +103,9 @@ function setInputsEnabled(enabled) {
   messageInput.disabled = !enabled;
   sendBtn.disabled = !enabled;
   blockBtn.disabled = !enabled;
+  if (!enabled) {
+    messageInput.style.height = "auto";
+  }
 }
 
 function showNameError(msg) {
@@ -93,24 +126,16 @@ function sendMessage() {
   addMessage(message, true);
   socket.emit("message", message);
   messageInput.value = "";
+  messageInput.style.height = "auto";
 }
 
 // ── Name Modal ────────────────────────────────────────────────────────────────
 
 function saveName() {
   const name = nameInput.value.trim();
-  if (name === "") {
-    showNameError("Please enter a username.");
-    return;
-  }
-  if (name.length < 2) {
-    showNameError("Username must be at least 2 characters.");
-    return;
-  }
-  if (name.length > 20) {
-    showNameError("Username must be 20 characters or less.");
-    return;
-  }
+  if (name === "") { showNameError("Please enter a username."); return; }
+  if (name.length < 2) { showNameError("Username must be at least 2 characters."); return; }
+  if (name.length > 20) { showNameError("Username must be 20 characters or less."); return; }
   clearNameError();
   saveNameBtn.disabled = true;
   saveNameBtn.textContent = "Checking...";
@@ -131,7 +156,6 @@ socket.on("nameAccepted", (acceptedName) => {
     clearChat();
     socket.emit("findPartner");
   }
-  // If changing name mid-session, just close modal — no new search needed
 });
 
 socket.on("nameTaken", () => {
@@ -149,14 +173,15 @@ socket.on("onlineCount", (count) => {
 socket.on("partnerFound", (partner) => {
   clearChat();
   partnerName = partner.name || "Anonymous";
-  addSystemMessage(`Now connected to ${partnerName}`);
+  addSystemMessage(`Connected with ${partnerName}`);
   partnerConnected = true;
   setInputsEnabled(true);
+  messageInput.focus();
 });
 
 socket.on("waitingForPartner", () => {
   clearChat();
-  addSystemMessage("Waiting for a partner to connect...");
+  addSystemMessage("Looking for someone to chat with...");
   partnerConnected = false;
   partnerName = "";
   setInputsEnabled(false);
@@ -175,7 +200,7 @@ socket.on("partnerDisconnected", (data) => {
 
 socket.on("userBlocked", (data) => {
   clearChat();
-  addSystemMessage(`You blocked ${data.name}. Searching for a new partner...`);
+  addSystemMessage(`You blocked ${data.name}. Looking for a new partner...`);
   partnerConnected = false;
   partnerName = "";
   setInputsEnabled(false);
@@ -188,7 +213,7 @@ nextBtn.addEventListener("click", () => {
   setTimeout(() => { nextBtn.disabled = false; }, 1000);
 
   clearChat();
-  addSystemMessage("ვეძებთ ახალ პარტნიორს...");
+  addSystemMessage("Looking for a new partner...");
   partnerConnected = false;
   partnerName = "";
   setInputsEnabled(false);
@@ -198,15 +223,55 @@ nextBtn.addEventListener("click", () => {
 
 blockBtn.addEventListener("click", () => {
   if (!partnerConnected || !partnerName) return;
-  const confirmed = confirm(`Block "${partnerName}"? თქვენ ვეღარ შეხვდებით ამ იუზერს ბლოკის შემდეგ.`);
-  if (confirmed) {
-    socket.emit("blockUser");
+
+  const rightSide = blockBtn.parentElement;
+  blockBtn.style.display = "none";
+
+  const confirmWrapper = document.createElement("div");
+  confirmWrapper.id = "blockConfirm";
+  confirmWrapper.style.cssText = "display:flex;align-items:center;gap:6px;";
+
+  const label = document.createElement("span");
+  label.textContent = "Block?";
+  label.style.cssText = "color:white;font-weight:600;font-size:0.9em;white-space:nowrap;";
+
+  const yesBtn = document.createElement("button");
+  yesBtn.textContent = "YES";
+  yesBtn.style.cssText = "background:#b8460b;border:none;color:white;padding:5px 12px;border-radius:9999px;cursor:pointer;font-weight:700;font-size:0.85em;height:30px;";
+
+  const noBtn = document.createElement("button");
+  noBtn.textContent = "NO";
+  noBtn.style.cssText = "background:#555;border:none;color:white;padding:5px 12px;border-radius:9999px;cursor:pointer;font-weight:700;font-size:0.85em;height:30px;";
+
+  confirmWrapper.appendChild(label);
+  confirmWrapper.appendChild(yesBtn);
+  confirmWrapper.appendChild(noBtn);
+  rightSide.insertBefore(confirmWrapper, blockBtn);
+
+  function restoreBlockBtn() {
+    confirmWrapper.remove();
+    blockBtn.style.display = "";
   }
+
+  yesBtn.addEventListener("click", () => {
+    restoreBlockBtn();
+    socket.emit("blockUser");
+  });
+
+  noBtn.addEventListener("click", restoreBlockBtn);
 });
 
 sendBtn.addEventListener("click", sendMessage);
+
 messageInput.addEventListener("keypress", (e) => {
-  if (e.key === "Enter") sendMessage();
+  // On desktop Enter sends; on mobile (virtual keyboard) Enter = new line
+  if (e.key === "Enter" && !e.shiftKey) {
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    if (!isMobile) {
+      e.preventDefault();
+      sendMessage();
+    }
+  }
 });
 
 changeNameBtn.addEventListener("click", () => {
