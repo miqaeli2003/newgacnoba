@@ -377,7 +377,7 @@ socket.on("onlineCount", (count) => updateOnlineCount(count));
 socket.on("partnerFound", (partner) => {
   clearChat();
   partnerName = partner.name || "Anonymous";
-  addSystemMessage(`Now connected to ${partnerName}`);
+  addSystemMessage(`გილოცავთ პარტნიორი ნაპოვნია : ${partnerName}`);
   partnerConnected = true;
   setInputsEnabled(true);
 });
@@ -399,7 +399,7 @@ socket.on("reacted", ({ messageId, emoji }) => {
 });
 
 socket.on("partnerDisconnected", (data) => {
-  addDisconnectMessage(`${data.name || "Anonymous"} has left the chat`);
+  addDisconnectMessage(`${data.name || "Anonymous"} -მ სამწუხაროდ დაგტოვათt`);
   partnerConnected = false;
   partnerName = "";
   setInputsEnabled(false);
