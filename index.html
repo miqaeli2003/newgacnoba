@@ -21,16 +21,18 @@
 
   <div class="chat-container" id="chat"></div>
 
-  <div id="gifPicker" class="gif-picker">
-    <div class="gif-search-container">
-      <input type="text" id="gifSearchInput" placeholder="Search Giphy..." />
+  <!-- Gift Picker Panel -->
+  <div id="giftPicker" class="gift-picker" style="display:none">
+    <div class="gift-picker-header">
+      <span>🎁 Send a Gift</span>
+      <button class="gift-picker-close" id="giftPickerClose">✕</button>
     </div>
-    <div id="gifResults" class="gif-results"></div>
+    <div class="gift-grid" id="giftGrid"></div>
   </div>
 
   <div class="chat-input">
-    <button id="gifBtn" class="gif-toggle-btn" disabled>GIF</button>
     <input type="text" id="messageInput" placeholder="Type your message..." autocomplete="off" disabled />
+    <button id="giftBtn" class="gift-btn" disabled title="Send a Gift">🎁</button>
     <button id="sendBtn" disabled>SEND</button>
   </div>
 
