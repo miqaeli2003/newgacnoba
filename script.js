@@ -1,146 +1,222 @@
 const socket = io();
-let userName = "", partnerConnected = false, replyingTo = null;
 
-// Elements
+let userName = "";
+let partnerConnected = false;
+let partnerName = "";
+let isFirstLogin = true;
+let replyingTo = null; // Stores {id, text, name}
+
 const chat = document.getElementById("chat");
 const messageInput = document.getElementById("messageInput");
-const gifModal = document.getElementById("gifModal");
-const gifSearch = document.getElementById("gifSearchInput");
-const gifGrid = document.getElementById("gifGrid");
+const sendBtn = document.getElementById("sendBtn");
+const nextBtn = document.getElementById("nextBtn");
+const blockBtn = document.getElementById("blockBtn");
+const gifBtn = document.getElementById("gifBtn");
+const gifPicker = document.getElementById("gifPicker");
+const gifSearch = document.getElementById("gifSearch");
+const gifResults = document.getElementById("gifResults");
+const replyPreview = document.getElementById("replyPreview");
+const replyText = document.getElementById("replyText");
+const cancelReply = document.getElementById("cancelReply");
 
-const genId = () => Math.random().toString(36).substr(2, 9);
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-// Add Message to UI
-function appendMessage(data, isYou) {
+function formatTimestamp(date) {
+  const h = date.getHours();
+  const m = date.getMinutes();
+  const ampm = h >= 12 ? "PM" : "AM";
+  return `${h % 12 || 12}:${m.toString().padStart(2, "0")} ${ampm}`;
+}
+
+function addMessage(data, isYou) {
+  const { text, id, replyData, isGif, reactions } = data;
+
   const wrapper = document.createElement("div");
-  wrapper.className = `message-wrapper ${isYou ? 'you' : 'partner'}`;
-  wrapper.id = `msg-${data.id}`;
+  wrapper.className = "message-wrapper " + (isYou ? "you" : "partner");
+  wrapper.id = `msg-${id}`;
 
-  let replyHTML = data.reply ? `<div class="reply-preview">${data.reply}</div>` : '';
+  // Action Menu (Reply & Reactions)
+  const actions = document.createElement("div");
+  actions.className = "msg-actions";
   
-  let contentHTML = data.type === 'gif' 
-    ? `<img src="${data.text}" style="max-width:100%; border-radius:10px;" />`
-    : `<span>${data.text}</span>`;
+  // Reaction Emojis
+  ["❤️", "😂", "😢"].forEach(emoji => {
+    const span = document.createElement("span");
+    span.className = "reaction-trigger";
+    span.textContent = emoji;
+    span.onclick = () => socket.emit("addReaction", { msgId: id, emoji });
+    actions.appendChild(span);
+  });
 
-  wrapper.innerHTML = `
-    <div class="message-content">
-      ${replyHTML}
-      ${contentHTML}
-      <div class="reaction-pills" id="reacts-${data.id}"></div>
-    </div>
-    ${!isYou ? `
-      <div class="msg-options">
-        <button class="opt-btn" onclick="handleReply('${data.text}')"><i class="fas fa-reply"></i></button>
-        <button class="opt-btn" onclick="sendReact('${data.id}', '😂')">😂</button>
-        <button class="opt-btn" onclick="sendReact('${data.id}', '😭')">😭</button>
-      </div>
-    ` : ''}
-  `;
+  // Reply Icon
+  const replyIcon = document.createElement("span");
+  replyIcon.className = "reply-trigger";
+  replyIcon.innerHTML = '<i class="fas fa-reply"></i>';
+  replyIcon.onclick = () => initiateReply(id, text, isYou ? "You" : partnerName);
+  actions.appendChild(replyIcon);
 
+  const content = document.createElement("div");
+  content.className = "message-content" + (isYou ? " you" : "");
+
+  // Render Reply Context if exists
+  if (replyData) {
+    const context = document.createElement("div");
+    context.className = "replied-context";
+    context.textContent = `${replyData.name}: ${replyData.text.substring(0, 40)}...`;
+    content.appendChild(context);
+  }
+
+  // Text or GIF
+  if (isGif) {
+    const img = document.createElement("img");
+    img.src = text;
+    img.className = "gif-img";
+    content.appendChild(img);
+  } else {
+    const p = document.createElement("span");
+    p.textContent = text;
+    content.appendChild(p);
+  }
+
+  const reactDisplay = document.createElement("div");
+  reactDisplay.className = "reaction-display";
+  reactDisplay.id = `reacts-${id}`;
+
+  wrapper.appendChild(actions);
+  wrapper.appendChild(content);
+  wrapper.appendChild(reactDisplay);
   chat.appendChild(wrapper);
   chat.scrollTop = chat.scrollHeight;
 }
 
-// Logic Functions
-window.handleReply = (text) => {
-  replyingTo = text;
-  document.getElementById("replyBar").style.display = "flex";
-  document.getElementById("replyText").textContent = text;
+function initiateReply(id, text, name) {
+  replyingTo = { id, text, name };
+  replyText.textContent = `Replying to ${name}...`;
+  replyPreview.style.display = "flex";
   messageInput.focus();
-};
-
-window.sendReact = (id, emoji) => {
-  socket.emit("react", { id, emoji });
-  addReactionUI(id, emoji);
-};
-
-function addReactionUI(id, emoji) {
-  const container = document.getElementById(`reacts-${id}`);
-  if (container) container.innerHTML = `<span class="pill">${emoji}</span>`;
 }
 
-// GIF SEARCH (Using Giphy Public API - You can replace the Key)
-async function searchGifs(query = "trending") {
-  gifGrid.innerHTML = "Searching...";
-  const apiKey = "dc6zaTOxFJmzC"; // Public Beta Key
-  const response = await fetch(`https://api.giphy.com/v1/gifs/search?q=${query}&api_key=${apiKey}&limit=10`);
-  const { data } = await response.json();
-  
-  gifGrid.innerHTML = "";
-  data.forEach(img => {
-    const el = document.createElement("img");
-    el.src = img.images.fixed_height.url;
-    el.onclick = () => {
-      sendData('gif', el.src);
-      gifModal.classList.remove("active");
-    };
-    gifGrid.appendChild(el);
-  });
-}
-
-function sendData(type, text) {
-  if (!partnerConnected) return;
-  const data = { id: genId(), type, text, reply: replyingTo };
-  socket.emit("message", data);
-  appendMessage(data, true);
-  clearReply();
-}
-
-function clearReply() {
+cancelReply.onclick = () => {
   replyingTo = null;
-  document.getElementById("replyIndicator").style.display = "none";
-}
-
-// Listeners
-document.getElementById("sendBtn").onclick = () => {
-  const val = messageInput.value.trim();
-  if (val) { sendData('text', val); messageInput.value = ""; }
+  replyPreview.style.display = "none";
 };
 
-document.getElementById("nextBtn").onclick = () => {
-  chat.innerHTML = '<div class="system-msg">ვეძებთ პარტნიორს...</div>';
-  socket.emit("next");
+// ── GIF Search ───────────────────────────────────────────────────────────────
+
+gifBtn.onclick = () => {
+  gifPicker.style.display = gifPicker.style.display === "flex" ? "none" : "flex";
+  gifSearch.focus();
 };
 
-document.getElementById("gifBtn").onclick = () => {
-  gifModal.classList.add("active");
-  searchGifs();
-};
-
-gifSearch.oninput = (e) => searchGifs(e.target.value);
-
-document.getElementById("saveNameBtn").onclick = () => {
-  const n = document.getElementById("nameInput").value;
-  socket.emit("setName", n);
-};
-
-socket.on("nameAccepted", () => {
-  document.getElementById("nameModal").classList.remove("active");
-  socket.emit("findPartner");
+gifSearch.addEventListener("input", async (e) => {
+  const query = e.target.value;
+  if (query.length < 2) return;
+  
+  // Public Beta Key for demo
+  const url = `https://api.giphy.com/v1/gifs/search?api_key=dc6zaTOxFJmzC&q=${encodeURIComponent(query)}&limit=10`;
+  try {
+    const res = await fetch(url);
+    const { data } = await res.json();
+    gifResults.innerHTML = "";
+    data.forEach(gif => {
+      const img = document.createElement("img");
+      img.src = gif.images.fixed_height_small.url;
+      img.onclick = () => {
+        const gifUrl = gif.images.fixed_height.url;
+        const msgData = { text: gifUrl, id: Date.now(), isGif: true, replyData: replyingTo };
+        socket.emit("message", msgData);
+        addMessage(msgData, true);
+        gifPicker.style.display = "none";
+        cancelReply.onclick();
+      };
+      gifResults.appendChild(img);
+    });
+  } catch (err) { console.error(err); }
 });
 
-socket.on("partnerFound", (p) => {
+// ── Standard Chat Functions ──────────────────────────────────────────────────
+
+function sendMessage() {
+  const text = messageInput.value.trim();
+  if (!text || !partnerConnected) return;
+
+  const msgData = { text, id: Date.now(), replyData: replyingTo, isGif: false };
+  addMessage(msgData, true);
+  socket.emit("message", msgData);
+  
+  messageInput.value = "";
+  cancelReply.onclick();
+}
+
+function setInputsEnabled(enabled) {
+  messageInput.disabled = !enabled;
+  sendBtn.disabled = !enabled;
+  blockBtn.disabled = !enabled;
+  gifBtn.disabled = !enabled;
+}
+
+// ── Socket Events ─────────────────────────────────────────────────────────────
+
+socket.on("message", (data) => addMessage(data, false));
+
+socket.on("reactionAdded", ({ msgId, emoji }) => {
+  const container = document.getElementById(`reacts-${msgId}`);
+  if (container) {
+    const pill = document.createElement("div");
+    pill.className = "reaction-pill";
+    pill.textContent = emoji;
+    container.appendChild(pill);
+  }
+});
+
+socket.on("partnerFound", (partner) => {
+  chat.innerHTML = "";
+  partnerName = partner.name || "Anonymous";
+  const sys = document.createElement("div");
+  sys.className = "system-message";
+  sys.textContent = `Connected to ${partnerName}`;
+  chat.appendChild(sys);
   partnerConnected = true;
-  chat.innerHTML = `<div class="system-msg">დაკავშირებული ხართ: ${p.name}</div>`;
-  toggleInputs(false);
+  setInputsEnabled(true);
 });
 
-socket.on("partnerLeft", () => {
+socket.on("waitingForPartner", () => {
+  chat.innerHTML = '<div class="system-message">ვეძებთ ახალ პარტნიორს...</div>';
   partnerConnected = false;
-  chat.innerHTML += `<div class="system-msg">პარტნიორი გავიდა.</div>`;
-  toggleInputs(true);
+  setInputsEnabled(false);
 });
 
-socket.on("message", d => appendMessage(d, false));
-socket.on("react", d => addReactionUI(d.id, d.emoji));
-socket.on("onlineCount", c => document.getElementById("onlineCount").textContent = `${c} Online`);
+socket.on("partnerDisconnected", (data) => {
+  const sys = document.createElement("div");
+  sys.className = "system-message-disconnect";
+  sys.textContent = `${data.name || "Partner"} has left.`;
+  chat.appendChild(sys);
+  partnerConnected = false;
+  setInputsEnabled(false);
+});
 
-function toggleInputs(disabled) {
-  messageInput.disabled = disabled;
-  document.getElementById("sendBtn").disabled = disabled;
-  document.getElementById("gifBtn").disabled = disabled;
-  document.getElementById("blockBtn").disabled = disabled;
-}
+// (Rest of the socket events from your original script follow here...)
+socket.on("nameAccepted", (name) => {
+  userName = name;
+  document.getElementById("nameModal").style.display = "none";
+  if (isFirstLogin) { isFirstLogin = false; socket.emit("findPartner"); }
+});
 
-document.getElementById("closeGifBtn").onclick = () => gifModal.classList.remove("active");
-document.getElementById("cancelReply").onclick = clearReply;
+socket.on("nameTaken", () => alert("ეს სახელი დაკავებულია."));
+
+socket.on("onlineCount", (count) => {
+  document.getElementById("onlineCount").textContent = `Users Online: ${count}`;
+});
+
+// ── Event Listeners ──────────────────────────────────────────────────────────
+sendBtn.onclick = sendMessage;
+messageInput.onkeypress = (e) => { if (e.key === "Enter") sendMessage(); };
+nextBtn.onclick = () => socket.emit("next");
+blockBtn.onclick = () => { if (confirm("ბლოკი?")) socket.emit("blockUser"); };
+document.getElementById("saveNameBtn").onclick = () => {
+  const n = document.getElementById("nameInput").value.trim();
+  if (n) socket.emit("setName", n);
+};
+document.getElementById("changeNameBtn").onclick = () => {
+  document.getElementById("nameModal").style.display = "flex";
+};
