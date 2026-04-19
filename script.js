@@ -137,7 +137,7 @@ socket.on("nameAccepted", (acceptedName) => {
 socket.on("nameTaken", () => {
   saveNameBtn.disabled = false;
   saveNameBtn.textContent = isFirstLogin ? "Start Chatting" : "Save Name";
-  showNameError("This username is already taken. Try another.");
+  showNameError("ეს სახელი დაკავებულია. სხვა აირჩიეთ.");
   nameInput.focus();
   nameInput.select();
 });
