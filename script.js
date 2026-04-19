@@ -188,7 +188,7 @@ nextBtn.addEventListener("click", () => {
   setTimeout(() => { nextBtn.disabled = false; }, 1000);
 
   clearChat();
-  addSystemMessage("Waiting for a new partner...");
+  addSystemMessage("ვეძებთ ახალ პარტნიორს...");
   partnerConnected = false;
   partnerName = "";
   setInputsEnabled(false);
@@ -198,7 +198,7 @@ nextBtn.addEventListener("click", () => {
 
 blockBtn.addEventListener("click", () => {
   if (!partnerConnected || !partnerName) return;
-  const confirmed = confirm(`Block "${partnerName}"? You won't be matched with them again this session.`);
+  const confirmed = confirm(`Block "${partnerName}"? თქვენ ვეღარ შეხვდებით ამ იუზერს ბლოკის შემდეგ.`);
   if (confirmed) {
     socket.emit("blockUser");
   }
