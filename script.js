@@ -37,6 +37,27 @@ const gifResults     = document.getElementById("gifResults");
 const gifPickerClose = document.getElementById("gifPickerClose");
 const charCount      = document.getElementById("charCount");
 const questionBtn    = document.getElementById("questionBtn");
+const safetyModal    = document.getElementById("safetyModal");
+const safetyConfirmBtn = document.getElementById("safetyConfirmBtn");
+
+// ── Age / Safety gate ──────────────────────────────────────────────────────
+const AGE_KEY = "gaicani_age_ok";
+
+function isAgeVerified() {
+  try { return localStorage.getItem(AGE_KEY) === "1"; } catch { return false; }
+}
+
+function markAgeVerified() {
+  try { localStorage.setItem(AGE_KEY, "1"); } catch { /* private mode */ }
+}
+
+safetyConfirmBtn.addEventListener("click", () => {
+  markAgeVerified();
+  safetyModal.style.display = "none";
+  // Now show the name modal
+  nameModal.style.display   = "flex";
+  setTimeout(() => nameInput.focus(), 100);
+});
 
 // ── Sound ─────────────────────────────────────────────────────────────────────
 let _audioCtx = null;
@@ -877,10 +898,19 @@ document.addEventListener("DOMContentLoaded", () => {
   isReconnecting = false;
   wasAutoKicked  = false;
   stopSearchRetry();
-  nameModal.style.display = "flex";
   setInputsEnabled(false);
   blockBtn.disabled        = true;
   saveNameBtn.textContent  = "Start Chatting";
   charCount.textContent    = "";
-  setTimeout(() => nameInput.focus(), 100);
+
+  if (isAgeVerified()) {
+    // Already confirmed — go straight to the name modal
+    safetyModal.style.display = "none";
+    nameModal.style.display   = "flex";
+    setTimeout(() => nameInput.focus(), 100);
+  } else {
+    // First visit — show safety / age gate first
+    nameModal.style.display   = "none";
+    safetyModal.style.display = "flex";
+  }
 });
