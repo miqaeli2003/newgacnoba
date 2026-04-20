@@ -454,9 +454,9 @@ function sendMessage() {
 // ── Name modal ────────────────────────────────────────────────────────────────
 function saveName() {
   const name = nameInput.value.trim();
-  if (!name)            { showNameError("Please enter a username."); return; }
-  if (name.length < 2)  { showNameError("Username must be at least 2 characters."); return; }
-  if (name.length > 20) { showNameError("Username must be 20 characters or less."); return; }
+  if (!name)            { showNameError("შეიყვანეთ სახელი ..."); return; }
+  if (name.length < 2)  { showNameError("სახელი უნდა შედგებოდეს მინიმუ ორი სიმბოლოსგან!"); return; }
+  if (name.length > 20) { showNameError("20 სიმბოლოზე მეტი ვერ იქნება სახელი ! "); return; }
   clearNameError();
   saveNameBtn.disabled    = true;
   saveNameBtn.textContent = "Checking...";
