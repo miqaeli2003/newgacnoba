@@ -2,6 +2,7 @@ const express    = require("express");
 const http       = require("http");
 const { Server } = require("socket.io");
 const path       = require("path");
+const fs         = require("fs");
 const compression   = require("compression");
 const rateLimit     = require("express-rate-limit");
 
@@ -32,6 +33,27 @@ const VALID_EMOJIS = new Set(["❤️","😂","😢"]);
 // Add words to this Set to enable the profanity filter.
 const BANNED_WORDS = new Set([]);
 
+// ── Load facts & questions from txt files ─────────────────────────────────────
+function loadLines(filename) {
+  try {
+    const filePath = path.join(__dirname, filename);
+    return fs.readFileSync(filePath, "utf8")
+      .split("\n")
+      .map(l => l.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+let FACTS     = loadLines("facts.txt");
+let QUESTIONS = loadLines("questions.txt");
+
+function randomItem(arr) {
+  if (!arr.length) return null;
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(compression());
 app.use(express.static(path.join(__dirname)));
@@ -59,6 +81,23 @@ app.get("/api/gifs", gifHttpLimiter, async (req, res) => {
   } catch {
     res.status(502).json({ error: "Failed to fetch GIFs" });
   }
+});
+
+// ── Random Fact API ───────────────────────────────────────────────────────────
+app.get("/api/random-fact", (req, res) => {
+  // Reload file on each request so you can update facts.txt without restart
+  FACTS = loadLines("facts.txt");
+  const fact = randomItem(FACTS);
+  if (!fact) return res.status(404).json({ error: "No facts available" });
+  res.json({ fact });
+});
+
+// ── Random Question API ───────────────────────────────────────────────────────
+app.get("/api/random-question", (req, res) => {
+  QUESTIONS = loadLines("questions.txt");
+  const question = randomItem(QUESTIONS);
+  if (!question) return res.status(404).json({ error: "No questions available" });
+  res.json({ question });
 });
 
 // ── In-memory state ───────────────────────────────────────────────────────────
@@ -244,6 +283,15 @@ io.on("connection", (socket) => {
     if (hasProfanity(text)) { socket.emit("messageFlagged"); return; }
 
     socket.partner.emit("message", { text, messageId });
+  });
+
+  // ── Question card ─────────────────────────────────────────────────────────
+  socket.on("sendQuestion", ({ text }) => {
+    if (!socket.partner || typeof text !== "string") return;
+    const safeText = text.slice(0, 300).replace(/<[^>]*>/g, "").trim();
+    if (!safeText) return;
+    // Relay the question card to the partner (sender already displayed it)
+    socket.partner.emit("partnerQuestion", { text: safeText, senderName: socket.userName });
   });
 
   // ── Seen indicator ───────────────────────────────────────────────────────
