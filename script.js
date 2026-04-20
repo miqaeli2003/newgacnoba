@@ -130,7 +130,7 @@ function addDisconnectMessage(text)        { _appendInfoMessage(text, "system-me
 function addReconnectingMessage(name)      {
   document.getElementById("reconnectingMsg")?.remove();
   _appendInfoMessage(
-    `${name} lost connection — waiting up to 4s for them to return...`,
+    `${name} - გავიდა საიტიდან  ... `,
     "system-message-reconnecting",
     "reconnectingMsg"
   );
