@@ -5,6 +5,8 @@ let partnerConnected = false;
 let partnerName = "";
 let isFirstLogin = true;
 let msgCounter = 0;
+let typingTimeout = null;
+let isTyping = false;
 
 const chat = document.getElementById("chat");
 const messageInput = document.getElementById("messageInput");
@@ -226,6 +228,21 @@ function addDisconnectMessage(text) {
   chat.scrollTop = chat.scrollHeight;
 }
 
+function showTypingIndicator() {
+  if (document.getElementById("typingIndicator")) return;
+  const el = document.createElement("div");
+  el.id = "typingIndicator";
+  el.className = "typing-indicator";
+  el.innerHTML = `<span></span><span></span><span></span>`;
+  chat.appendChild(el);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function hideTypingIndicator() {
+  const el = document.getElementById("typingIndicator");
+  if (el) el.remove();
+}
+
 function clearChat() {
   chat.innerHTML = "";
 }
@@ -390,7 +407,12 @@ socket.on("waitingForPartner", () => {
   setInputsEnabled(false);
 });
 
+socket.on("partnerTyping", (typing) => {
+  typing ? showTypingIndicator() : hideTypingIndicator();
+});
+
 socket.on("message", (msg) => {
+  hideTypingIndicator();
   addMessage(msg.text, false, msg.messageId);
 });
 
@@ -399,6 +421,7 @@ socket.on("reacted", ({ messageId, emoji }) => {
 });
 
 socket.on("partnerDisconnected", (data) => {
+  hideTypingIndicator();
   addDisconnectMessage(`${data.name || "Anonymous"} -მ სამწუხაროდ დაგტოვათt`);
   partnerConnected = false;
   partnerName = "";
@@ -420,6 +443,7 @@ socket.on("userBlocked", (data) => {
 nextBtn.addEventListener("click", () => {
   nextBtn.disabled = true;
   setTimeout(() => { nextBtn.disabled = false; }, 1000);
+  hideTypingIndicator();
   clearChat();
   addSystemMessage("ვეძებთ ახალ პარტნიორს...");
   partnerConnected = false;
@@ -438,6 +462,19 @@ blockBtn.addEventListener("click", () => {
 sendBtn.addEventListener("click", sendMessage);
 messageInput.addEventListener("keypress", (e) => {
   if (e.key === "Enter") sendMessage();
+});
+
+messageInput.addEventListener("input", () => {
+  if (!partnerConnected) return;
+  if (!isTyping) {
+    isTyping = true;
+    socket.emit("typing", true);
+  }
+  clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(() => {
+    isTyping = false;
+    socket.emit("typing", false);
+  }, 1500);
 });
 
 changeNameBtn.addEventListener("click", () => {
