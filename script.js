@@ -487,12 +487,6 @@ socket.on("nameAccepted", (acceptedName) => {
     displayEl.style.display = "block";
   }
 
-  // Show username in mobile second-row (under "user:" label)
-  const userNameMobile = document.getElementById("userNameMobile");
-  const userNameRow    = document.getElementById("userNameRow");
-  if (userNameMobile) userNameMobile.textContent = `👤 ${acceptedName}`;
-  if (userNameRow)    userNameRow.style.display   = "flex";
-
   if (isFirstLogin) {
     isFirstLogin = false;
     clearChat();
