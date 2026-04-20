@@ -29,7 +29,9 @@ html, body {
 .left-side {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .site-name {
@@ -38,11 +40,27 @@ html, body {
   color: #fff;
   text-decoration: none;
   letter-spacing: 0.5px;
+  flex-shrink: 0;
 }
 
 #onlineCount {
   font-size: 0.9em;
   color: #b5bac1;
+  flex-shrink: 0;
+}
+
+.user-name-display {
+  font-size: 0.82em;
+  font-weight: 600;
+  color: #5865f2;
+  background: rgba(88, 101, 242, 0.12);
+  border: 1px solid rgba(88, 101, 242, 0.35);
+  border-radius: 20px;
+  padding: 3px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
 }
 
 /* ── BUTTONS ─────────────────────────────────────────────────────────────── */
@@ -51,11 +69,11 @@ html, body {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .change-name-btn,
 .block-button,
-.report-button,
 .next-button {
   border: none;
   padding: 8px 14px;
@@ -85,16 +103,8 @@ html, body {
 }
 .block-button:hover:not(:disabled) { background: #d18b12; }
 
-.report-button {
-  background: #3d2b2b;
-  color: #f23f42;
-  font-size: 0.85em;
-}
-.report-button:hover:not(:disabled) { background: #5a3535; }
-
 .block-button:disabled,
-.next-button:disabled,
-.report-button:disabled {
+.next-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -107,6 +117,7 @@ html, body {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   padding: 15px;
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -176,25 +187,6 @@ html, body {
 
 .seen-status.seen {
   color: #5865f2;
-}
-
-/* ── SHARED TAGS ROW ─────────────────────────────────────────────────────── */
-
-.shared-tags-row {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-  justify-content: center;
-  margin: 2px 0 6px;
-}
-
-.shared-tag-pill {
-  background: rgba(88, 101, 242, 0.15);
-  border: 1px solid rgba(88, 101, 242, 0.5);
-  border-radius: 12px;
-  font-size: 0.75em;
-  padding: 3px 9px;
-  color: #b5bac1;
 }
 
 /* ── GIF MESSAGE ─────────────────────────────────────────────────────────── */
@@ -454,10 +446,13 @@ html, body {
 /* ── INPUT BAR ─────────────────────────────────────────────────────────── */
 
 .chat-input {
-  flex: 0 0 auto;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
   display: flex;
-  padding: 10px;
-  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px));
   background: #2b2d31;
   border-top: 1px solid #1a1b1e;
   gap: 8px;
@@ -466,6 +461,7 @@ html, body {
 
 .chat-input input {
   flex: 1;
+  min-width: 0;
   border: none;
   outline: none;
   background: #1e1f22;
@@ -541,44 +537,11 @@ html, body {
   font-size: 0.95em;
 }
 
-/* ── INTEREST TAGS ───────────────────────────────────────────────────────── */
-
-.tags-label {
+.name-error {
+  color: #f23f42;
   font-size: 0.82em;
-  color: #b5bac1;
-  margin: 16px 0 8px;
-  text-align: left;
-}
-
-.tags-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: center;
-  margin-bottom: 6px;
-}
-
-.tag-btn {
-  background: #1e1f22;
-  border: 1.5px solid #404249;
-  border-radius: 20px;
-  color: #b5bac1;
-  font-size: 0.8em;
-  padding: 5px 11px;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-  touch-action: manipulation;
-}
-
-.tag-btn.selected {
-  background: rgba(88, 101, 242, 0.2);
-  border-color: #5865f2;
-  color: #fff;
-}
-
-.tag-btn:hover:not(.selected) {
-  background: #404249;
-  color: #fff;
+  margin-top: 6px;
+  display: none;
 }
 
 .modal-content button#saveNameBtn {
@@ -638,15 +601,25 @@ html, body {
 
   .change-name-btn,
   .block-button,
-  .report-button,
   .next-button {
     padding: 6px 8px;
     font-size: 0.72em;
   }
 
+  /* Hide online count on small screens to save space */
+  #onlineCount {
+    display: none;
+  }
+
+  .user-name-display {
+    max-width: 80px;
+    font-size: 0.75em;
+  }
+
   .gif-picker {
     width: calc(100vw - 24px);
     right: 12px;
+    left: 12px;
     height: 380px;
   }
 
@@ -654,4 +627,21 @@ html, body {
   .message-wrapper.gif-msg-wrapper { max-width: 200px; }
 
   .modal-content { padding: 20px 16px 18px; }
+
+  /* Hide char counter on mobile to keep input row compact */
+  .char-count { display: none; }
+
+  .chat-input input {
+    padding: 10px 12px;
+    font-size: 1em; /* prevents iOS auto-zoom */
+  }
+
+  #sendBtn {
+    padding: 0 14px;
+    font-size: 0.9em;
+  }
+
+  .gif-btn {
+    padding: 0 10px;
+  }
 }
