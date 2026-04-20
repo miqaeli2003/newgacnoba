@@ -1,23 +1,31 @@
 const socket = io();
 
-let userName              = "";
-let partnerConnected      = false;
-let partnerName           = "";
-let isFirstLogin          = true;
-let isReconnecting        = false;
-let msgCounter            = 0;
-let typingTimeout         = null;
-let isTyping              = false;
-let searchRetryInterval   = null;
-let pendingScrollRaf      = false; // batch scroll-to-bottom via rAF
-let activeFetchController = null;  // AbortController for in-flight GIF requests
+// ── State ─────────────────────────────────────────────────────────────────────
+let userName            = "";
+let partnerConnected    = false;
+let partnerName         = "";
+let isFirstLogin        = true;
+let isReconnecting      = false;
+let wasAutoKicked       = false;
+let msgCounter          = 0;
+let typingTimeout       = null;
+let isTyping            = false;
+let searchRetryInterval = null;
+let pendingScrollRaf    = false;
+let gifFetchController  = null;
+let gifSearchTimer      = null;
+let gifPickerOpen       = false;
+let unreadCount         = 0;
+const selectedTags      = new Set();
+const originalTitle     = document.title;
 
-// ── DOM refs (cached once) ────────────────────────────────────────────────────
+// ── DOM refs ──────────────────────────────────────────────────────────────────
 const chat           = document.getElementById("chat");
 const messageInput   = document.getElementById("messageInput");
 const sendBtn        = document.getElementById("sendBtn");
 const nextBtn        = document.getElementById("nextBtn");
 const blockBtn       = document.getElementById("blockBtn");
+const reportBtn      = document.getElementById("reportBtn");
 const changeNameBtn  = document.getElementById("changeNameBtn");
 const nameModal      = document.getElementById("nameModal");
 const nameInput      = document.getElementById("nameInput");
@@ -29,169 +37,73 @@ const gifPicker      = document.getElementById("gifPicker");
 const gifSearch      = document.getElementById("gifSearch");
 const gifResults     = document.getElementById("gifResults");
 const gifPickerClose = document.getElementById("gifPickerClose");
+const charCount      = document.getElementById("charCount");
 
-// ── GIF System (Tenor API) ────────────────────────────────────────────────────
+// ── Tag label map ─────────────────────────────────────────────────────────────
+const TAG_LABELS = {
+  gaming: "🎮 Gaming", music: "🎵 Music", movies: "🎬 Movies",
+  books:  "📚 Books",  sports: "🏋️ Sports", tech: "💻 Tech",
+  art:    "🎨 Art",    food:   "🍕 Food",   travel: "🌍 Travel",
+  memes:  "😂 Memes",
+};
 
-const TENOR_KEY    = "LIVDSRZULELA"; // Tenor demo key
-let gifSearchTimer = null;
-let gifPickerOpen  = false;
+// ── Sound ─────────────────────────────────────────────────────────────────────
+let _audioCtx = null;
 
-async function fetchGifs(query) {
-  // Cancel any in-flight request so stale results don't overwrite fresh ones
-  if (activeFetchController) activeFetchController.abort();
-  activeFetchController = new AbortController();
+function getAudioCtx() {
+  if (!_audioCtx) {
+    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return _audioCtx;
+}
 
-  gifResults.innerHTML = '<div class="gif-placeholder">Loading...</div>';
+function ensureAudioReady() {
+  if (_audioCtx && _audioCtx.state === "suspended") _audioCtx.resume().catch(() => {});
+}
 
+document.addEventListener("click",   ensureAudioReady, { passive: true });
+document.addEventListener("keydown", ensureAudioReady, { passive: true });
+
+function playTone(freq, duration = 0.2, volume = 0.07) {
   try {
-    const endpoint = query
-      ? `https://api.tenor.com/v1/search?q=${encodeURIComponent(query)}&key=${TENOR_KEY}&limit=24&media_filter=minimal&contentfilter=medium`
-      : `https://api.tenor.com/v1/trending?key=${TENOR_KEY}&limit=24&media_filter=minimal&contentfilter=medium`;
+    const ctx  = getAudioCtx();
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(volume, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + duration);
+  } catch (_) { /* audio not supported */ }
+}
 
-    const res  = await fetch(endpoint, { signal: activeFetchController.signal });
-    const data = await res.json();
-    renderGifResults(data.results || []);
-  } catch (err) {
-    if (err.name !== "AbortError") {
-      gifResults.innerHTML = '<div class="gif-placeholder">Failed to load GIFs 😢</div>';
-    }
-  } finally {
-    activeFetchController = null;
+function playNotification(type) {
+  if (type === "partnerFound") {
+    playTone(880, 0.12); setTimeout(() => playTone(1100, 0.18), 110);
+  } else if (type === "message") {
+    playTone(660, 0.1, 0.04);
   }
 }
 
-function renderGifResults(results) {
-  // Build off-DOM fragment to avoid repeated reflows
-  const fragment = document.createDocumentFragment();
-
-  if (!results.length) {
-    const ph = document.createElement("div");
-    ph.className = "gif-placeholder";
-    ph.textContent = "No GIFs found";
-    gifResults.innerHTML = "";
-    gifResults.appendChild(ph);
-    return;
+// ── Tab unread badge ──────────────────────────────────────────────────────────
+function incrementUnread() {
+  if (document.hidden) {
+    unreadCount++;
+    document.title = `(${unreadCount}) ${originalTitle}`;
   }
-
-  const col1 = document.createElement("div");
-  const col2 = document.createElement("div");
-  col1.className = "gif-col";
-  col2.className = "gif-col";
-
-  results.forEach((result, i) => {
-    const media      = result.media[0];
-    const previewUrl = media.tinygif?.url || media.gif?.url;
-    const fullUrl    = media.gif?.url;
-    if (!previewUrl || !fullUrl) return;
-
-    const img        = document.createElement("img");
-    img.src          = previewUrl;
-    img.className    = "gif-item";
-    img.loading      = "lazy";
-    img.decoding     = "async";
-    img.dataset.full = fullUrl;
-    img.addEventListener("click", () => sendGif(fullUrl, previewUrl));
-
-    (i % 2 === 0 ? col1 : col2).appendChild(img);
-  });
-
-  fragment.appendChild(col1);
-  fragment.appendChild(col2);
-
-  gifResults.innerHTML = "";
-  gifResults.appendChild(fragment);
 }
 
-function openGifPicker() {
-  gifPicker.style.display = "flex";
-  gifPickerOpen = true;
-  gifSearch.value = "";
-  gifSearch.focus();
-  fetchGifs(""); // load trending
-}
-
-function closeGifPickerPanel() {
-  gifPicker.style.display = "none";
-  gifPickerOpen = false;
-}
-
-gifBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  gifPickerOpen ? closeGifPickerPanel() : openGifPicker();
-});
-
-gifPickerClose.addEventListener("click", (e) => {
-  e.stopPropagation();
-  closeGifPickerPanel();
-});
-
-gifSearch.addEventListener("input", () => {
-  clearTimeout(gifSearchTimer);
-  // 400 ms debounce — avoids a network request on every keystroke
-  gifSearchTimer = setTimeout(() => fetchGifs(gifSearch.value.trim()), 400);
-});
-
-gifSearch.addEventListener("keydown", (e) => e.stopPropagation()); // prevent chat shortcuts
-
-// Close when clicking outside
-document.addEventListener("click", (e) => {
-  if (gifPickerOpen && !gifPicker.contains(e.target) && e.target !== gifBtn) {
-    closeGifPickerPanel();
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    unreadCount    = 0;
+    document.title = originalTitle;
   }
 });
 
-function sendGif(fullUrl, previewUrl) {
-  if (!partnerConnected) return;
-  socket.emit("gif", { url: fullUrl, preview: previewUrl });
-  addGifMessage(fullUrl, true);
-  closeGifPickerPanel();
-}
-
-function addGifMessage(gifUrl, isYou) {
-  const wrapper = document.createElement("div");
-  wrapper.className = `message-wrapper gif-msg-wrapper ${isYou ? "you" : "partner"}`;
-
-  const img      = document.createElement("img");
-  img.src        = gifUrl;
-  img.className  = "gif-message-img";
-  img.loading    = "lazy";
-  img.decoding   = "async";
-
-  const timestamp       = document.createElement("div");
-  timestamp.className   = "timestamp";
-  timestamp.textContent = formatTimestamp(new Date());
-
-  wrapper.appendChild(img);
-  wrapper.appendChild(timestamp);
-  chat.appendChild(wrapper);
-  scheduleScroll();
-}
-
-socket.on("gif", (data) => addGifMessage(data.url, false));
-
-// ── Reaction Config ───────────────────────────────────────────────────────────
-
-const REACTIONS           = ["❤️", "😂", "😢"];
-let activeReactionPicker  = null;
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function generateMsgId() {
-  return `${socket.id}_${++msgCounter}_${Date.now()}`;
-}
-
-function formatTimestamp(date) {
-  const h     = date.getHours();
-  const m     = date.getMinutes();
-  const ampm  = h >= 12 ? "PM" : "AM";
-  const h12   = h % 12 || 12;
-  return `${h12}:${m.toString().padStart(2, "0")} ${ampm}`;
-}
-
-/**
- * Batch scroll-to-bottom updates via requestAnimationFrame so that multiple
- * messages appended in the same tick only trigger one layout read.
- */
+// ── Scroll ────────────────────────────────────────────────────────────────────
 function scheduleScroll() {
   if (pendingScrollRaf) return;
   pendingScrollRaf = true;
@@ -199,6 +111,55 @@ function scheduleScroll() {
     chat.scrollTop   = chat.scrollHeight;
     pendingScrollRaf = false;
   });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function generateMsgId() {
+  return `${socket.id}_${++msgCounter}_${Date.now()}`;
+}
+
+function formatTimestamp(date) {
+  const h    = date.getHours();
+  const m    = date.getMinutes();
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12  = h % 12 || 12;
+  return `${h12}:${m.toString().padStart(2, "0")} ${ampm}`;
+}
+
+function _appendInfoMessage(text, className, id) {
+  const el       = document.createElement("div");
+  el.className   = className;
+  el.textContent = text;
+  if (id) el.id  = id;
+  chat.appendChild(el);
+  scheduleScroll();
+}
+
+function addSystemMessage(text)            { _appendInfoMessage(text, "system-message"); }
+function addDisconnectMessage(text)        { _appendInfoMessage(text, "system-message-disconnect"); }
+function addReconnectingMessage(name)      {
+  document.getElementById("reconnectingMsg")?.remove();
+  _appendInfoMessage(
+    `${name} lost connection — waiting up to 4s for them to return...`,
+    "system-message-reconnecting",
+    "reconnectingMsg"
+  );
+}
+function removeReconnectingMessage()       { document.getElementById("reconnectingMsg")?.remove(); }
+function addSearchingMessage()             { _appendInfoMessage("ვეძებთ ახალ პარტნიორს...", "system-message", "searchingMsg"); }
+
+function addSharedTagsMessage(tags) {
+  if (!tags || !tags.length) return;
+  const row = document.createElement("div");
+  row.className = "shared-tags-row";
+  tags.forEach(tag => {
+    const pill       = document.createElement("span");
+    pill.className   = "shared-tag-pill";
+    pill.textContent = TAG_LABELS[tag] || tag;
+    row.appendChild(pill);
+  });
+  chat.appendChild(row);
+  scheduleScroll();
 }
 
 function addMessage(text, isYou, messageId) {
@@ -217,10 +178,10 @@ function addMessage(text, isYou, messageId) {
   msgRow.appendChild(content);
 
   if (!isYou) {
-    const reactBtn   = document.createElement("button");
+    const reactBtn     = document.createElement("button");
     reactBtn.className = "react-btn";
     reactBtn.innerHTML = "📋";
-    reactBtn.title   = "React";
+    reactBtn.title     = "React";
     reactBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       showReactionPicker(reactBtn, id);
@@ -236,31 +197,42 @@ function addMessage(text, isYou, messageId) {
   reactionArea.className = "reaction-area";
   reactionArea.id       = `reactions_${id}`;
 
-  // Append all children in one shot to minimize reflows
   wrapper.appendChild(msgRow);
   wrapper.appendChild(timestamp);
   wrapper.appendChild(reactionArea);
+
+  // Seen indicator — only for messages you sent
+  if (isYou) {
+    const seen       = document.createElement("div");
+    seen.className   = "seen-status";
+    seen.id          = `seen_${id}`;
+    seen.textContent = "✓";
+    wrapper.appendChild(seen);
+  }
+
   chat.appendChild(wrapper);
   scheduleScroll();
-
   return id;
 }
 
-/** Shared helper for system / disconnect notices (avoids duplicated logic). */
-function _appendInfoMessage(text, className) {
-  const el      = document.createElement("div");
-  el.className  = className;
-  el.textContent = text;
-  chat.appendChild(el);
+function addGifMessage(gifUrl, isYou) {
+  const wrapper     = document.createElement("div");
+  wrapper.className = `message-wrapper gif-msg-wrapper ${isYou ? "you" : "partner"}`;
+
+  const img       = document.createElement("img");
+  img.src         = gifUrl;
+  img.className   = "gif-message-img";
+  img.loading     = "lazy";
+  img.decoding    = "async";
+
+  const timestamp       = document.createElement("div");
+  timestamp.className   = "timestamp";
+  timestamp.textContent = formatTimestamp(new Date());
+
+  wrapper.appendChild(img);
+  wrapper.appendChild(timestamp);
+  chat.appendChild(wrapper);
   scheduleScroll();
-}
-
-function addSystemMessage(text) {
-  _appendInfoMessage(text, "system-message");
-}
-
-function addDisconnectMessage(text) {
-  _appendInfoMessage(text, "system-message-disconnect");
 }
 
 function showTypingIndicator() {
@@ -277,32 +249,10 @@ function hideTypingIndicator() {
   document.getElementById("typingIndicator")?.remove();
 }
 
-function clearChat() {
-  chat.innerHTML = "";
-}
+function clearChat() { chat.innerHTML = ""; }
 
 function updateOnlineCount(count) {
   onlineCountEl.textContent = `Users Online: ${count}`;
-}
-
-// ── Auto-retry while searching ────────────────────────────────────────────────
-// Re-emits findPartner every 2 s so the user never has to press Search again
-// if they were already in the queue when a previous partner disconnected.
-
-function startSearchRetry() {
-  stopSearchRetry();
-  searchRetryInterval = setInterval(() => {
-    if (!partnerConnected && userName) {
-      socket.emit("findPartner");
-    }
-  }, 2000); // 2 s — prevents hammering the server
-}
-
-function stopSearchRetry() {
-  if (searchRetryInterval !== null) {
-    clearInterval(searchRetryInterval);
-    searchRetryInterval = null;
-  }
 }
 
 function setInputsEnabled(enabled) {
@@ -310,10 +260,11 @@ function setInputsEnabled(enabled) {
   sendBtn.disabled      = !enabled;
   blockBtn.disabled     = !enabled;
   gifBtn.disabled       = !enabled;
+  reportBtn.disabled    = !enabled;
 }
 
 function showNameError(msg) {
-  nameError.textContent = msg;
+  nameError.textContent   = msg;
   nameError.style.display = "block";
   nameInput.classList.add("error");
 }
@@ -324,17 +275,156 @@ function clearNameError() {
   nameInput.classList.remove("error");
 }
 
-// ── Reaction Picker ───────────────────────────────────────────────────────────
+// ── Interest tags ─────────────────────────────────────────────────────────────
+document.querySelectorAll(".tag-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const tag = btn.dataset.tag;
+    if (selectedTags.has(tag)) {
+      selectedTags.delete(tag);
+      btn.classList.remove("selected");
+    } else {
+      selectedTags.add(tag);
+      btn.classList.add("selected");
+    }
+  });
+});
+
+// ── Search retry ──────────────────────────────────────────────────────────────
+function startSearchRetry() {
+  stopSearchRetry();
+  searchRetryInterval = setInterval(() => {
+    if (!partnerConnected && userName) socket.emit("findPartner");
+  }, 2000);
+}
+
+function stopSearchRetry() {
+  if (searchRetryInterval !== null) {
+    clearInterval(searchRetryInterval);
+    searchRetryInterval = null;
+  }
+}
+
+// ── GIF Picker ────────────────────────────────────────────────────────────────
+const TENOR_PROXY = "/api/gifs"; // key stays on the server
+
+async function fetchGifs(query) {
+  if (gifFetchController) gifFetchController.abort();
+  gifFetchController = new AbortController();
+  gifResults.innerHTML = '<div class="gif-placeholder">Loading...</div>';
+
+  try {
+    const url  = query ? `${TENOR_PROXY}?q=${encodeURIComponent(query)}` : TENOR_PROXY;
+    const res  = await fetch(url, { signal: gifFetchController.signal });
+    const data = await res.json();
+    renderGifResults(data.results || []);
+  } catch (err) {
+    if (err.name !== "AbortError") {
+      gifResults.innerHTML = '<div class="gif-placeholder">Failed to load GIFs 😢</div>';
+    }
+  } finally {
+    gifFetchController = null;
+  }
+}
+
+function renderGifResults(results) {
+  const frag = document.createDocumentFragment();
+  if (!results.length) {
+    const ph = document.createElement("div");
+    ph.className = "gif-placeholder";
+    ph.textContent = "No GIFs found";
+    gifResults.innerHTML = "";
+    gifResults.appendChild(ph);
+    return;
+  }
+  const col1 = document.createElement("div");
+  const col2 = document.createElement("div");
+  col1.className = "gif-col";
+  col2.className = "gif-col";
+  results.forEach((result, i) => {
+    const media      = result.media[0];
+    const previewUrl = media.tinygif?.url || media.gif?.url;
+    const fullUrl    = media.gif?.url;
+    if (!previewUrl || !fullUrl) return;
+    const img        = document.createElement("img");
+    img.src          = previewUrl;
+    img.className    = "gif-item";
+    img.loading      = "lazy";
+    img.decoding     = "async";
+    img.addEventListener("click", () => sendGif(fullUrl, previewUrl));
+    (i % 2 === 0 ? col1 : col2).appendChild(img);
+  });
+  frag.appendChild(col1);
+  frag.appendChild(col2);
+  gifResults.innerHTML = "";
+  gifResults.appendChild(frag);
+}
+
+function updateGifPickerPosition() {
+  if (!gifPickerOpen || !window.visualViewport) return;
+  const vv = window.visualViewport;
+  const keyboardH = window.innerHeight - vv.height - vv.offsetTop;
+  gifPicker.style.bottom = (72 + Math.max(0, keyboardH)) + "px";
+}
+
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", updateGifPickerPosition, { passive: true });
+  window.visualViewport.addEventListener("scroll", updateGifPickerPosition, { passive: true });
+}
+
+function openGifPicker() {
+  gifPicker.style.display = "flex";
+  gifPickerOpen = true;
+  gifSearch.value = "";
+  gifSearch.focus();
+  updateGifPickerPosition();
+  fetchGifs("");
+}
+
+function closeGifPickerPanel() {
+  gifPicker.style.display = "none";
+  gifPicker.style.bottom  = ""; // reset Visual Viewport override
+  gifPickerOpen = false;
+}
+
+gifBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  gifPickerOpen ? closeGifPickerPanel() : openGifPicker();
+});
+
+gifPickerClose.addEventListener("click", (e) => { e.stopPropagation(); closeGifPickerPanel(); });
+
+gifSearch.addEventListener("input", () => {
+  clearTimeout(gifSearchTimer);
+  gifSearchTimer = setTimeout(() => fetchGifs(gifSearch.value.trim()), 400);
+});
+
+gifSearch.addEventListener("keydown", (e) => e.stopPropagation());
+
+document.addEventListener("click", (e) => {
+  if (gifPickerOpen && !gifPicker.contains(e.target) && e.target !== gifBtn) {
+    closeGifPickerPanel();
+  }
+});
+
+function sendGif(fullUrl, previewUrl) {
+  if (!partnerConnected) return;
+  socket.emit("gif", { url: fullUrl, preview: previewUrl });
+  addGifMessage(fullUrl, true);
+  closeGifPickerPanel();
+}
+
+socket.on("gif", (data) => addGifMessage(data.url, false));
+
+// ── Reactions ─────────────────────────────────────────────────────────────────
+const REACTIONS          = ["❤️","😂","😢"];
+let activeReactionPicker = null;
 
 function showReactionPicker(anchorEl, messageId) {
   closeReactionPicker();
-
   const picker      = document.createElement("div");
   picker.className  = "reaction-picker";
-
-  // Build all buttons in a fragment to avoid repeated reflows
   const frag = document.createDocumentFragment();
-  REACTIONS.forEach((emoji) => {
+  REACTIONS.forEach(emoji => {
     const btn       = document.createElement("button");
     btn.className   = "reaction-emoji-btn";
     btn.textContent = emoji;
@@ -346,16 +436,12 @@ function showReactionPicker(anchorEl, messageId) {
     frag.appendChild(btn);
   });
   picker.appendChild(frag);
-
   document.body.appendChild(picker);
   activeReactionPicker = picker;
-
   requestAnimationFrame(() => {
     const rect = anchorEl.getBoundingClientRect();
-    const pw   = picker.offsetWidth;
-    const ph   = picker.offsetHeight;
-    let left   = rect.left;
-    let top    = rect.top - ph - 8;
+    const pw = picker.offsetWidth, ph = picker.offsetHeight;
+    let left = rect.left, top = rect.top - ph - 8;
     if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
     if (top < 4) top = rect.bottom + 8;
     picker.style.cssText += `left:${left}px;top:${top}px;opacity:1;transform:scale(1)`;
@@ -363,10 +449,8 @@ function showReactionPicker(anchorEl, messageId) {
 }
 
 function closeReactionPicker() {
-  if (activeReactionPicker) {
-    activeReactionPicker.remove();
-    activeReactionPicker = null;
-  }
+  activeReactionPicker?.remove();
+  activeReactionPicker = null;
 }
 
 document.addEventListener("click", () => closeReactionPicker());
@@ -377,55 +461,51 @@ function reactToMessage(messageId, emoji) {
 }
 
 function displayReaction(messageId, emoji, isMine) {
-  const reactionArea = document.getElementById(`reactions_${messageId}`);
-  if (!reactionArea) return;
-
-  const cls  = isMine ? "reaction-mine" : "reaction-partner";
-  let pill   = reactionArea.querySelector(`.${cls}`);
-
+  const area = document.getElementById(`reactions_${messageId}`);
+  if (!area) return;
+  const cls = isMine ? "reaction-mine" : "reaction-partner";
+  let pill   = area.querySelector(`.${cls}`);
   if (pill) {
-    // Re-trigger animation without cloning the node
     pill.classList.remove("reaction-pop");
-    void pill.offsetWidth; // force reflow to restart animation
+    void pill.offsetWidth;
     pill.textContent = emoji;
     pill.classList.add("reaction-pop");
   } else {
-    pill           = document.createElement("span");
-    pill.className = `reaction-pill ${cls} reaction-pop`;
+    pill = document.createElement("span");
+    pill.className   = `reaction-pill ${cls} reaction-pop`;
     pill.textContent = emoji;
-    reactionArea.appendChild(pill);
+    area.appendChild(pill);
   }
 }
 
-// ── Message Sending ───────────────────────────────────────────────────────────
-
+// ── Message sending ───────────────────────────────────────────────────────────
 function sendMessage() {
   const message = messageInput.value.trim();
   if (!message || !partnerConnected || !userName) return;
-
   const msgId = generateMsgId();
   addMessage(message, true, msgId);
   socket.emit("message", { text: message, messageId: msgId });
   messageInput.value = "";
+  charCount.textContent = "0/2000";
+  charCount.classList.remove("warning");
 }
 
-// ── Name Modal ────────────────────────────────────────────────────────────────
-
+// ── Name modal ────────────────────────────────────────────────────────────────
 function saveName() {
   const name = nameInput.value.trim();
   if (!name)            { showNameError("Please enter a username."); return; }
   if (name.length < 2)  { showNameError("Username must be at least 2 characters."); return; }
   if (name.length > 20) { showNameError("Username must be 20 characters or less."); return; }
   clearNameError();
-  saveNameBtn.disabled   = true;
+  saveNameBtn.disabled    = true;
   saveNameBtn.textContent = "Checking...";
   socket.emit("setName", name);
 }
 
-// ── Socket Events ─────────────────────────────────────────────────────────────
+// ── Socket events ─────────────────────────────────────────────────────────────
 
-// Re-register username after a network blip / socket.io auto-reconnect
 socket.on("connect", () => {
+  if (wasAutoKicked) return;
   if (userName && !isFirstLogin) {
     isReconnecting = true;
     socket.emit("setName", userName);
@@ -439,9 +519,13 @@ socket.on("nameAccepted", (acceptedName) => {
   saveNameBtn.textContent = "Start Chatting";
   clearNameError();
 
+  // Always push interests before searching
+  socket.emit("setInterests", [...selectedTags]);
+
   if (isFirstLogin) {
     isFirstLogin = false;
     clearChat();
+    addSearchingMessage();
     socket.emit("findPartner");
     startSearchRetry();
   } else if (isReconnecting) {
@@ -452,11 +536,11 @@ socket.on("nameAccepted", (acceptedName) => {
     hideTypingIndicator();
     closeGifPickerPanel();
     clearChat();
-    addSystemMessage("ვეძებთ ახალ პარტნიორს...");
+    addSearchingMessage();
     socket.emit("findPartner");
     startSearchRetry();
   }
-  // else: name change mid-session — no extra action needed
+  // else: mid-session name change — no extra action
 });
 
 socket.on("nameTaken", () => {
@@ -468,20 +552,56 @@ socket.on("nameTaken", () => {
   nameInput.select();
 });
 
-socket.on("onlineCount",    (count) => updateOnlineCount(count));
+socket.on("onlineCount", (count) => updateOnlineCount(count));
+
+socket.on("queuePosition", ({ position, total }) => {
+  const msg = document.getElementById("searchingMsg");
+  if (msg) msg.textContent = `ვეძებთ ახალ პარტნიორს... (${position} / ${total} searching)`;
+});
 
 socket.on("partnerFound", (partner) => {
   stopSearchRetry();
   clearChat();
-  partnerName = partner.name || "Anonymous";
+  partnerName      = partner.name || "Anonymous";
+  partnerConnected = true;
   addSystemMessage(`გილოცავთ პარტნიორი ნაპოვნია : ${partnerName}`);
+  addSharedTagsMessage(partner.sharedTags);
+  setInputsEnabled(true);
+  playNotification("partnerFound");
+  incrementUnread(); // flash tab if in background
+});
+
+// Reconnect grace-period events
+socket.on("partnerReconnecting", (data) => {
+  setInputsEnabled(false);
+  hideTypingIndicator();
+  closeGifPickerPanel();
+  addReconnectingMessage(data.name || "Partner");
+});
+
+socket.on("partnerReconnected", (data) => {
+  removeReconnectingMessage();
+  partnerName      = data.name || partnerName;
   partnerConnected = true;
   setInputsEnabled(true);
+  addSystemMessage(`${data.name} reconnected! 🎉`);
+  playNotification("partnerFound");
+});
+
+// Own socket restored to previous partner after reconnecting
+socket.on("partnerRestored", (data) => {
+  stopSearchRetry();
+  clearChat();
+  partnerName      = data.name || "Anonymous";
+  partnerConnected = true;
+  addSystemMessage(`You were reconnected with ${partnerName}!`);
+  setInputsEnabled(true);
+  playNotification("partnerFound");
 });
 
 socket.on("waitingForPartner", () => {
   clearChat();
-  addSystemMessage("ვეძებთ ახალ პარტნიორს...");
+  addSearchingMessage();
   partnerConnected = false;
   partnerName      = "";
   setInputsEnabled(false);
@@ -495,6 +615,15 @@ socket.on("partnerTyping", (typing) => {
 socket.on("message", (msg) => {
   hideTypingIndicator();
   addMessage(msg.text, false, msg.messageId);
+  playNotification("message");
+  incrementUnread();
+  // Tell sender we received/read the message
+  if (msg.messageId) socket.emit("seen", { messageId: msg.messageId });
+});
+
+socket.on("partnerSeen", ({ messageId }) => {
+  const el = document.getElementById(`seen_${messageId}`);
+  if (el) { el.textContent = "✓✓"; el.classList.add("seen"); }
 });
 
 socket.on("reacted", ({ messageId, emoji }) => {
@@ -502,6 +631,7 @@ socket.on("reacted", ({ messageId, emoji }) => {
 });
 
 socket.on("partnerDisconnected", (data) => {
+  removeReconnectingMessage();
   stopSearchRetry();
   hideTypingIndicator();
   addDisconnectMessage(`${data.name || "Anonymous"} -მ სამწუხაროდ დაგტოვათ`);
@@ -519,17 +649,42 @@ socket.on("userBlocked", (data) => {
   partnerName      = "";
   setInputsEnabled(false);
   closeGifPickerPanel();
+  addSearchingMessage();
   startSearchRetry();
 });
 
-// ── Button Handlers ───────────────────────────────────────────────────────────
+socket.on("reportConfirmed", () => {
+  addSystemMessage("Report submitted. Thank you.");
+});
+
+socket.on("messageFlagged", () => {
+  const notice       = document.createElement("div");
+  notice.className   = "system-message";
+  notice.textContent = "Your message was flagged and not sent.";
+  chat.appendChild(notice);
+  scheduleScroll();
+  setTimeout(() => notice.remove(), 3000);
+});
+
+socket.on("autoKicked", () => {
+  wasAutoKicked    = true;
+  partnerConnected = false;
+  partnerName      = "";
+  stopSearchRetry();
+  clearChat();
+  setInputsEnabled(false);
+  addDisconnectMessage("You have been removed due to repeated violations.");
+  socket.disconnect();
+});
+
+// ── Button handlers ───────────────────────────────────────────────────────────
 
 nextBtn.addEventListener("click", () => {
   nextBtn.disabled = true;
   setTimeout(() => { nextBtn.disabled = false; }, 1000);
   hideTypingIndicator();
   clearChat();
-  addSystemMessage("ვეძებთ ახალ პარტნიორს...");
+  addSearchingMessage();
   partnerConnected = false;
   partnerName      = "";
   setInputsEnabled(false);
@@ -540,8 +695,18 @@ nextBtn.addEventListener("click", () => {
 
 blockBtn.addEventListener("click", () => {
   if (!partnerConnected || !partnerName) return;
-  const confirmed = confirm(`Block "${partnerName}"? თქვენ ვეღარ შეხვდებით ამ იუზერს ბლოკის შემდეგ.`);
+  const confirmed = confirm(
+    `Block "${partnerName}"? თქვენ ვეღარ შეხვდებით ამ იუზერს ბლოკის შემდეგ.`
+  );
   if (confirmed) socket.emit("blockUser");
+});
+
+reportBtn.addEventListener("click", () => {
+  if (!partnerConnected || !partnerName) return;
+  const confirmed = confirm(
+    `Report "${partnerName}" for inappropriate behavior?\nThis will be logged for review.`
+  );
+  if (confirmed) socket.emit("reportUser", { reason: "inappropriate behavior" });
 });
 
 sendBtn.addEventListener("click", sendMessage);
@@ -551,11 +716,14 @@ messageInput.addEventListener("keypress", (e) => {
 });
 
 messageInput.addEventListener("input", () => {
+  // Character counter
+  const len = messageInput.value.length;
+  charCount.textContent = `${len}/2000`;
+  charCount.classList.toggle("warning", len > 1800);
+
+  // Typing indicator
   if (!partnerConnected) return;
-  if (!isTyping) {
-    isTyping = true;
-    socket.emit("typing", true);
-  }
+  if (!isTyping) { isTyping = true; socket.emit("typing", true); }
   clearTimeout(typingTimeout);
   typingTimeout = setTimeout(() => {
     isTyping = false;
@@ -572,20 +740,37 @@ changeNameBtn.addEventListener("click", () => {
 });
 
 saveNameBtn.addEventListener("click", saveName);
-nameInput.addEventListener("keypress", (e) => {
-  if (e.key === "Enter") saveName();
-});
+nameInput.addEventListener("keypress", (e) => { if (e.key === "Enter") saveName(); });
+
+// ── Swipe-right gesture → Next (mobile) ──────────────────────────────────────
+let touchStartX = 0, touchStartY = 0;
+
+document.addEventListener("touchstart", (e) => {
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+}, { passive: true });
+
+document.addEventListener("touchend", (e) => {
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const dy = Math.abs(e.changedTouches[0].clientY - touchStartY);
+  // Swipe right > 80 px, mostly horizontal, Next not disabled
+  if (dx > 80 && dy < 50 && !nextBtn.disabled) {
+    nextBtn.click();
+  }
+}, { passive: true });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-
 document.addEventListener("DOMContentLoaded", () => {
-  userName      = "";
-  isFirstLogin  = true;
+  userName       = "";
+  isFirstLogin   = true;
   isReconnecting = false;
+  wasAutoKicked  = false;
   stopSearchRetry();
   nameModal.style.display = "flex";
   setInputsEnabled(false);
   blockBtn.disabled        = true;
+  reportBtn.disabled       = true;
   saveNameBtn.textContent  = "Start Chatting";
+  charCount.textContent    = "0/2000";
   setTimeout(() => nameInput.focus(), 100);
 });
