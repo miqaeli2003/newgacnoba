@@ -395,18 +395,25 @@ function getKeyboardHeight() {
 }
 
 function updateViewportOffsets() {
+  const vv  = window.visualViewport;
   const kbH = getKeyboardHeight();
 
-  // Move the input bar up by the full keyboard height (includes accessory bar)
+  // Clamp body to the visual viewport height so the flex chat area fills
+  // exactly the space above the keyboard — maximum messages visible and
+  // the container stays scrollable (same trick Instagram uses).
+  document.body.style.height = kbH > 0 ? vv.height + "px" : "";
+
+  // Input bar is position:fixed (layout-viewport coords) so still needs
+  // shifting up by the full keyboard height (accessory bar included).
   chatInputBar.style.bottom     = kbH + "px";
   chatInputBar.style.transition = kbH === 0 ? "bottom 0.22s ease" : "none";
 
-  // Keep GIF picker sitting 8 px above the input bar
+  // GIF picker floats 8 px above the input bar
   if (gifPickerOpen) {
     gifPicker.style.bottom = (kbH + chatInputBar.offsetHeight + 8) + "px";
   }
 
-  // Keep chat scroll pinned to bottom when keyboard opens/closes
+  // Pin scroll to bottom whenever the viewport shifts
   scheduleScroll();
 }
 
