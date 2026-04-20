@@ -8,6 +8,7 @@ let isReconnecting = false; // FIX: track reconnect vs first login vs name chang
 let msgCounter = 0;
 let typingTimeout = null;
 let isTyping = false;
+let searchRetryInterval = null; // auto-retry while searching for a partner
 
 const chat = document.getElementById("chat");
 const messageInput = document.getElementById("messageInput");
@@ -252,6 +253,26 @@ function updateOnlineCount(count) {
   onlineCountElem.textContent = `Users Online: ${count}`;
 }
 
+// ── Auto-retry while searching ────────────────────────────────────────────────
+// Silently re-emits findPartner every 2 s so the user never has to press
+// "ძებნა" a second time when already waiting in the queue.
+
+function startSearchRetry() {
+  stopSearchRetry();
+  searchRetryInterval = setInterval(() => {
+    if (!partnerConnected && userName) {
+      socket.emit("findPartner");
+    }
+  }, 2000);
+}
+
+function stopSearchRetry() {
+  if (searchRetryInterval !== null) {
+    clearInterval(searchRetryInterval);
+    searchRetryInterval = null;
+  }
+}
+
 function setInputsEnabled(enabled) {
   messageInput.disabled = !enabled;
   sendBtn.disabled = !enabled;
@@ -391,6 +412,7 @@ socket.on("nameAccepted", (acceptedName) => {
     isFirstLogin = false;
     clearChat();
     socket.emit("findPartner");
+    startSearchRetry();
   } else if (isReconnecting) {
     // FIX: after a reconnect, reset state and search again
     isReconnecting = false;
@@ -402,6 +424,7 @@ socket.on("nameAccepted", (acceptedName) => {
     clearChat();
     addSystemMessage("ვეძებთ ახალ პარტნიორს...");
     socket.emit("findPartner");
+    startSearchRetry();
   }
   // else: user just changed their name mid-session — do nothing extra
 });
@@ -418,6 +441,7 @@ socket.on("nameTaken", () => {
 socket.on("onlineCount", (count) => updateOnlineCount(count));
 
 socket.on("partnerFound", (partner) => {
+  stopSearchRetry();
   clearChat();
   partnerName = partner.name || "Anonymous";
   addSystemMessage(`გილოცავთ პარტნიორი ნაპოვნია : ${partnerName}`);
@@ -431,6 +455,7 @@ socket.on("waitingForPartner", () => {
   partnerConnected = false;
   partnerName = "";
   setInputsEnabled(false);
+  startSearchRetry();
 });
 
 socket.on("partnerTyping", (typing) => {
@@ -447,6 +472,7 @@ socket.on("reacted", ({ messageId, emoji }) => {
 });
 
 socket.on("partnerDisconnected", (data) => {
+  stopSearchRetry();
   hideTypingIndicator();
   // FIX: typo fix — removed stray 't' at end of Georgian text
   addDisconnectMessage(`${data.name || "Anonymous"} -მ სამწუხაროდ დაგტოვათ`);
@@ -457,12 +483,14 @@ socket.on("partnerDisconnected", (data) => {
 });
 
 socket.on("userBlocked", (data) => {
+  stopSearchRetry();
   clearChat();
   addSystemMessage(`You blocked ${data.name}. Searching for a new partner...`);
   partnerConnected = false;
   partnerName = "";
   setInputsEnabled(false);
   closeGifPickerPanel();
+  startSearchRetry();
 });
 
 // ── Button Handlers ───────────────────────────────────────────────────────────
@@ -478,6 +506,7 @@ nextBtn.addEventListener("click", () => {
   setInputsEnabled(false);
   closeGifPickerPanel();
   socket.emit("next");
+  startSearchRetry();
 });
 
 blockBtn.addEventListener("click", () => {
@@ -523,6 +552,7 @@ window.onload = () => {
   userName = "";
   isFirstLogin = true;
   isReconnecting = false;
+  stopSearchRetry();
   nameModal.style.display = "flex";
   setInputsEnabled(false);
   blockBtn.disabled = true;
