@@ -37,7 +37,7 @@
   <div id="gifPicker" class="gif-picker" style="display:none">
     <div class="gif-picker-header">
       <input type="text" id="gifSearch" placeholder="🔍 Search GIFs..."
-             autocomplete="off" inputmode="search" />
+             autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" inputmode="search" />
       <button class="gif-picker-close" id="gifPickerClose">✕</button>
     </div>
     <div class="gif-results" id="gifResults">
@@ -48,7 +48,7 @@
 
   <div class="chat-input">
     <input type="text" id="messageInput" placeholder="Type your message..."
-           autocomplete="off" inputmode="text" disabled />
+           autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" inputmode="text" disabled />
     <span id="charCount" class="char-count">0/2000</span>
     <button id="gifBtn" class="gif-btn" disabled title="Send a GIF">GIF</button>
     <button id="sendBtn" disabled>SEND</button>
@@ -58,7 +58,7 @@
   <div id="nameModal" class="modal">
     <div class="modal-content">
       <input type="text" id="nameInput" placeholder="Enter your username..."
-             autocomplete="off" inputmode="text" maxlength="20" />
+             autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" inputmode="text" maxlength="20" />
       <div id="nameError" class="name-error"></div>
       <button id="saveNameBtn">Start Chatting</button>
     </div>
