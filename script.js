@@ -587,7 +587,7 @@ function sendMessage() {
   addMessage(message, true, msgId);
   socket.emit("message", { text: message, messageId: msgId });
   messageInput.value = "";
-  charCount.textContent = "0/2000";
+  charCount.textContent = "";
   charCount.classList.remove("warning");
   // Keep focus on input so the keyboard stays open on mobile
   messageInput.focus();
@@ -829,7 +829,7 @@ messageInput.addEventListener("keypress", (e) => {
 messageInput.addEventListener("input", () => {
   // Character counter
   const len = messageInput.value.length;
-  charCount.textContent = `${len}/2000`;
+  charCount.textContent = ``;
   charCount.classList.toggle("warning", len > 1800);
 
   // Typing indicator
@@ -881,6 +881,6 @@ document.addEventListener("DOMContentLoaded", () => {
   setInputsEnabled(false);
   blockBtn.disabled        = true;
   saveNameBtn.textContent  = "Start Chatting";
-  charCount.textContent    = "0/2000";
+  charCount.textContent    = "";
   setTimeout(() => nameInput.focus(), 100);
 });
