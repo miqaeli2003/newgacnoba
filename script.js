@@ -187,9 +187,17 @@ function addMessage(text, isYou, messageId) {
   const content     = document.createElement("div");
   content.className = `message-content${isYou ? " you" : ""}`;
   content.textContent = text;
-  msgRow.appendChild(content);
 
-  if (!isYou) {
+  const timestamp       = document.createElement("div");
+  timestamp.className   = "timestamp inline-ts";
+  timestamp.textContent = formatTimestamp(new Date());
+
+  if (isYou) {
+    // You: [timestamp]  [bubble]
+    msgRow.appendChild(timestamp);
+    msgRow.appendChild(content);
+  } else {
+    // Partner: [bubble]  [react-btn]  [timestamp]
     const reactBtn     = document.createElement("button");
     reactBtn.className = "react-btn";
     reactBtn.innerHTML = "📋";
@@ -198,19 +206,16 @@ function addMessage(text, isYou, messageId) {
       e.stopPropagation();
       showReactionPicker(reactBtn, id);
     });
+    msgRow.appendChild(content);
     msgRow.appendChild(reactBtn);
+    msgRow.appendChild(timestamp);
   }
-
-  const timestamp       = document.createElement("div");
-  timestamp.className   = "timestamp";
-  timestamp.textContent = formatTimestamp(new Date());
 
   const reactionArea    = document.createElement("div");
   reactionArea.className = "reaction-area";
   reactionArea.id       = `reactions_${id}`;
 
   wrapper.appendChild(msgRow);
-  wrapper.appendChild(timestamp);
   wrapper.appendChild(reactionArea);
 
   // Seen indicator — only for messages you sent
