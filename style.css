@@ -698,16 +698,9 @@ html, body {
   align-self: flex-start;
 }
 
-.reply-quote-name {
-  font-size: 0.68em;
-  font-weight: 700;
-  color: #848de0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
-.reply-quote.you .reply-quote-name {
+
+.reply-quote.you  {
   color: rgba(255,255,255,0.6);
 }
 
