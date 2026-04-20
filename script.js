@@ -130,7 +130,7 @@ function addDisconnectMessage(text)        { _appendInfoMessage(text, "system-me
 function addReconnectingMessage(name)      {
   document.getElementById("reconnectingMsg")?.remove();
   _appendInfoMessage(
-    `${name} - გავიდა საიტიდან  ... `,
+    `${name} - გავიდა საიტიდან  ... 😟 `,
     "system-message-reconnecting",
     "reconnectingMsg"
   );
@@ -512,7 +512,7 @@ socket.on("nameTaken", () => {
   saveNameBtn.disabled    = false;
   saveNameBtn.textContent = isFirstLogin ? "Start Chatting" : "Save Name";
   isReconnecting          = false;
-  showNameError("ეს სახელი დაკავებულია. სხვა აირჩიეთ.");
+  showNameError("ეს სახელი დაკავებულია. სხვა აირჩიეთ. 😟 ");
   nameInput.focus();
   nameInput.select();
 });
@@ -521,7 +521,7 @@ socket.on("onlineCount", (count) => updateOnlineCount(count));
 
 socket.on("queuePosition", ({ position, total }) => {
   const msg = document.getElementById("searchingMsg");
-  if (msg) msg.textContent = `ვეძებთ ახალ პარტნიორს... `;
+  if (msg) msg.textContent = `ვეძებთ ახალ პარტნიორს... 🔎 `;
 });
 
 socket.on("partnerFound", (partner) => {
@@ -529,7 +529,7 @@ socket.on("partnerFound", (partner) => {
   clearChat();
   partnerName      = partner.name || "Anonymous";
   partnerConnected = true;
-  addSystemMessage(`გილოცავთ პარტნიორი ნაპოვნია : ${partnerName}`);
+  addSystemMessage(`გილოცავთ პარტნიორი ნაპოვნია 🥳 : ${partnerName}`);
   setInputsEnabled(true);
   playNotification("partnerFound");
   incrementUnread();
@@ -598,7 +598,7 @@ socket.on("partnerDisconnected", (data) => {
   removeReconnectingMessage();
   stopSearchRetry();
   hideTypingIndicator();
-  addDisconnectMessage(`${data.name || "Anonymous"} -მ სამწუხაროდ დაგტოვათ`);
+  addDisconnectMessage(`${data.name || "Anonymous"} -მ სამწუხაროდ დაგტოვათ 😟 `);
   partnerConnected = false;
   partnerName      = "";
   setInputsEnabled(false);
@@ -660,7 +660,7 @@ nextBtn.addEventListener("click", () => {
 blockBtn.addEventListener("click", () => {
   if (!partnerConnected || !partnerName) return;
   const confirmed = confirm(
-    `Block "${partnerName}"? თქვენ ვეღარ შეხვდებით ამ იუზერს ბლოკის შემდეგ.`
+    `Block "${partnerName}"? თქვენ ვეღარ შეხვდებით ამ იუზერს ბლოკის შემდეგ. 😡 `
   );
   if (confirmed) socket.emit("blockUser");
 });
