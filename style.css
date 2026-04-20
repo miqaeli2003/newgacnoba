@@ -161,9 +161,9 @@ html, body {
 
 .message-content {
   max-width: 100%;
-  padding: 9px 13px;
+  padding: 10.5px 16.5px;
   border-radius: 18px;
-  font-size: 0.88em;
+  font-size: 1.32em;
   line-height: 1.4;
   background: #5865f2;
   color: #dcddde;
