@@ -191,9 +191,7 @@ function addMessage(text, isYou, messageId, replyToData) {
     const quote       = document.createElement("div");
     quote.className   = `reply-quote ${isYou ? "you" : "partner"}`;
 
-    const quoteName       = document.createElement("span");
-    quoteName.className   = "reply-quote-name";
-    quoteName.textContent = replyToData.senderName || "";
+  
 
     const quoteText       = document.createElement("span");
     quoteText.className   = "reply-quote-text";
