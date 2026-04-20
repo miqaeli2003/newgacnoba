@@ -22,10 +22,10 @@
     <div class="left-side">
       <a href="/" class="site-name">GAICANI</a>
       <div id="onlineCount">Users Online: 0</div>
+      <div id="userNameDisplay" class="user-name-display" style="display:none"></div>
     </div>
     <div class="right-side">
       <button class="change-name-btn" id="changeNameBtn">სახელის შეცვლა</button>
-      <button class="report-button" id="reportBtn" disabled>⚑ Report</button>
       <button class="block-button" id="blockBtn" disabled>ბლოკი</button>
       <button class="next-button" id="nextBtn">ძებნა</button>
     </div>
@@ -54,27 +54,12 @@
     <button id="sendBtn" disabled>SEND</button>
   </div>
 
-  <!-- Name + Interests Modal -->
+  <!-- Name Modal -->
   <div id="nameModal" class="modal">
     <div class="modal-content">
       <input type="text" id="nameInput" placeholder="Enter your username..."
              autocomplete="off" inputmode="text" maxlength="20" />
       <div id="nameError" class="name-error"></div>
-
-      <p class="tags-label">Select your interests (optional — helps find better matches):</p>
-      <div class="tags-grid" id="tagsGrid">
-        <button class="tag-btn" data-tag="gaming">🎮 Gaming</button>
-        <button class="tag-btn" data-tag="music">🎵 Music</button>
-        <button class="tag-btn" data-tag="movies">🎬 Movies &amp; TV</button>
-        <button class="tag-btn" data-tag="books">📚 Books</button>
-        <button class="tag-btn" data-tag="sports">🏋️ Sports</button>
-        <button class="tag-btn" data-tag="tech">💻 Tech</button>
-        <button class="tag-btn" data-tag="art">🎨 Art</button>
-        <button class="tag-btn" data-tag="food">🍕 Food</button>
-        <button class="tag-btn" data-tag="travel">🌍 Travel</button>
-        <button class="tag-btn" data-tag="memes">😂 Memes</button>
-      </div>
-
       <button id="saveNameBtn">Start Chatting</button>
     </div>
   </div>
