@@ -182,7 +182,7 @@ function addMessage(text, isYou, messageId) {
     const seen       = document.createElement("div");
     seen.className   = "seen-status";
     seen.id          = `seen_${id}`;
-    seen.textContent = "✓";
+    seen.textContent = "";
     wrapper.appendChild(seen);
   }
 
