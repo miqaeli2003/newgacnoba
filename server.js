@@ -18,6 +18,7 @@ io.on("connection", (socket) => {
   socket.userName = "";
   socket.partner = null;
   socket.blockedNames = [];
+  socket.recentPartnerIds = new Set(); // prevents immediate re-match after "next"
 
   function updateOnlineCount() {
     io.emit("onlineCount", io.engine.clientsCount);
@@ -50,6 +51,9 @@ io.on("connection", (socket) => {
 
   // ── Matchmaking ────────────────────────────────────────────────────────────
   function tryFindPartner() {
+    // FIX: never let a nameless socket enter matchmaking
+    if (!socket.userName) return;
+
     waitingQueue = waitingQueue.filter(
       (s) => s.connected && !s.partner && s.userName
     );
@@ -60,6 +64,9 @@ io.on("connection", (socket) => {
         s.connected &&
         !s.partner &&
         s.userName &&
+        // FIX: skip recently-disconnected partners to avoid immediate re-match
+        !socket.recentPartnerIds.has(s.id) &&
+        !s.recentPartnerIds.has(socket.id) &&
         !socket.blockedNames.includes(s.userName.toLowerCase()) &&
         !s.blockedNames.includes(socket.userName.toLowerCase())
     );
@@ -82,6 +89,8 @@ io.on("connection", (socket) => {
   }
 
   socket.on("findPartner", () => {
+    // FIX: guard against nameless sockets triggering matchmaking
+    if (!socket.userName) return;
     if (socket.partner) return;
     tryFindPartner();
   });
@@ -119,12 +128,29 @@ io.on("connection", (socket) => {
 
   // ── Next ───────────────────────────────────────────────────────────────────
   socket.on("next", () => {
+    // FIX: guard against nameless sockets
+    if (!socket.userName) return;
+
     if (socket.partner) {
       const oldPartner = socket.partner;
+      const oldPartnerId = oldPartner.id;
+
       socket.partner = null;
       oldPartner.partner = null;
       oldPartner.emit("partnerDisconnected", { name: socket.userName });
+
+      // FIX: mark each other as "recent" to prevent immediate re-match (5 sec window)
+      socket.recentPartnerIds.add(oldPartnerId);
+      oldPartner.recentPartnerIds.add(socket.id);
+
+      setTimeout(() => {
+        socket.recentPartnerIds.delete(oldPartnerId);
+        if (oldPartner.connected) {
+          oldPartner.recentPartnerIds.delete(socket.id);
+        }
+      }, 5000);
     }
+
     waitingQueue = waitingQueue.filter((s) => s.id !== socket.id);
     tryFindPartner();
   });
