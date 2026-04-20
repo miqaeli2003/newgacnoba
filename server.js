@@ -9,9 +9,8 @@ const rateLimit     = require("express-rate-limit");
 const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server, {
-  pingTimeout:  60000,   // was 20000 — gives mobile 60s to come back before dropping
+  pingTimeout:  20000,
   pingInterval: 25000,
-  transports:   ["websocket", "polling"], // polling fallback for mobile resume
 });
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -20,7 +19,7 @@ const TENOR_KEY          = process.env.TENOR_KEY || "LIVDSRZULELA";
 const NAME_MIN           = 2;
 const NAME_MAX           = 20;
 const MSG_MAX            = 2000;
-const RECONNECT_GRACE_MS = 30000; // was 4000 — mobile needs up to 30s to reconnect
+const RECONNECT_GRACE_MS = 4000;  // ms before partner is told you disconnected
 const MAX_BLOCKS_RX      = 3;     // auto-kick after being blocked this many times
 const MSG_RATE_MAX       = 20;    // max messages…
 const MSG_RATE_WINDOW_MS = 5000;  // …per 5 s
@@ -402,7 +401,7 @@ io.on("connection", (socket) => {
       partner.partner = null;
 
       if (socket.userName) {
-        // Grace period: give user time to reconnect before telling partner
+        // Grace period: give user 4 s to reconnect before telling partner
         partner.emit("partnerReconnecting", { name });
 
         const timeout = setTimeout(() => {
