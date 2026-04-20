@@ -16,7 +16,7 @@ let gifFetchController  = null;
 let gifSearchTimer      = null;
 let gifPickerOpen       = false;
 let unreadCount         = 0;
-let replyingTo          = null; // { id, text }
+let replyTo             = null;   // { text, senderName, messageId }
 const originalTitle     = document.title;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -38,6 +38,10 @@ const gifResults     = document.getElementById("gifResults");
 const gifPickerClose = document.getElementById("gifPickerClose");
 const charCount      = document.getElementById("charCount");
 const questionBtn    = document.getElementById("questionBtn");
+const replyPreview   = document.getElementById("replyPreview");
+const replyPreviewName = document.getElementById("replyPreviewName");
+const replyPreviewText = document.getElementById("replyPreviewText");
+const replyPreviewClose = document.getElementById("replyPreviewClose");
 
 // ── Sound ─────────────────────────────────────────────────────────────────────
 let _audioCtx = null;
@@ -175,72 +179,30 @@ function addSearchingMessage() {
     });
 }
 
-// ── Reply helpers ─────────────────────────────────────────────────────────────
-function escapeHtml(str) {
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function showReplyBar(msgId, text) {
-  replyingTo = { id: msgId, text };
-  let bar = document.getElementById("replyBar");
-  if (!bar) {
-    bar = document.createElement("div");
-    bar.id        = "replyBar";
-    bar.className = "reply-bar";
-    document.body.appendChild(bar);   // ← body, never inside .chat-input
-  }
-  bar.innerHTML = `
-    <div class="reply-bar-inner">
-      <span class="reply-bar-accent"></span>
-      <div class="reply-bar-body">
-        <span class="reply-bar-label">Replying to</span>
-        <span class="reply-bar-text">${escapeHtml(text.length > 80 ? text.slice(0, 80) + "…" : text)}</span>
-      </div>
-    </div>
-    <button class="reply-bar-close" id="replyBarClose">✕</button>
-  `;
-  bar.style.display = "flex";
-  positionReplyBar();
-  document.getElementById("replyBarClose").addEventListener("click", clearReplyBar);
-  messageInput.focus();
-}
-
-function positionReplyBar() {
-  const bar = document.getElementById("replyBar");
-  if (!bar || bar.style.display === "none") return;
-  const kbH = getKeyboardHeight();
-  const inputH = chatInputBar.offsetHeight;
-  bar.style.bottom     = (kbH + inputH) + "px";
-  bar.style.transition = kbH === 0 ? "bottom 0.22s ease" : "none";
-}
-
-function clearReplyBar() {
-  replyingTo = null;
-  const bar = document.getElementById("replyBar");
-  if (bar) {
-    bar.style.display = "none";
-    bar.style.bottom  = "";
-  }
-}
-
-function addMessage(text, isYou, messageId, replyTo) {
+function addMessage(text, isYou, messageId, replyToData) {
   const id = messageId || generateMsgId();
 
   const wrapper         = document.createElement("div");
   wrapper.className     = `message-wrapper ${isYou ? "you" : "partner"}`;
   wrapper.dataset.messageId = id;
 
-  // ── Reply preview (quoted text above bubble) ──────────────────────────────
-  if (replyTo && replyTo.text) {
-    const rp        = document.createElement("div");
-    rp.className    = `reply-preview${isYou ? " you" : ""}`;
-    const rpText    = document.createElement("span");
-    rpText.className  = "reply-preview-text";
-    rpText.textContent = replyTo.text.length > 60
-      ? replyTo.text.slice(0, 60) + "…"
-      : replyTo.text;
-    rp.appendChild(rpText);
-    wrapper.appendChild(rp);
+  // ── Reply quote block ────────────────────────────────────────────────────
+  if (replyToData && replyToData.text) {
+    const quote       = document.createElement("div");
+    quote.className   = `reply-quote ${isYou ? "you" : "partner"}`;
+
+    const quoteName       = document.createElement("span");
+    quoteName.className   = "reply-quote-name";
+    quoteName.textContent = replyToData.senderName || "";
+
+    const quoteText       = document.createElement("span");
+    quoteText.className   = "reply-quote-text";
+    const raw = replyToData.text;
+    quoteText.textContent = raw.length > 80 ? raw.slice(0, 80) + "…" : raw;
+
+    quote.appendChild(quoteName);
+    quote.appendChild(quoteText);
+    wrapper.appendChild(quote);
   }
 
   const msgRow      = document.createElement("div");
@@ -254,24 +216,25 @@ function addMessage(text, isYou, messageId, replyTo) {
   timestamp.className   = "timestamp inline-ts";
   timestamp.textContent = formatTimestamp(new Date());
 
-  // Shared reply button factory
-  function makeReplyBtn() {
-    const btn     = document.createElement("button");
-    btn.className = "reply-btn";
-    btn.innerHTML = "↩";
-    btn.title     = "Reply";
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      showReplyBar(id, text);
+  // ── Reply button ──────────────────────────────────────────────────────────
+  const replyBtn     = document.createElement("button");
+  replyBtn.className = "reply-btn";
+  replyBtn.innerHTML = "↩";
+  replyBtn.title     = "Reply";
+  replyBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setReplyTo({
+      text,
+      senderName: isYou ? userName : (partnerName || "Partner"),
+      messageId: id,
     });
-    return btn;
-  }
+  });
 
   if (isYou) {
-    // You: [timestamp]  [bubble]  [reply-btn]
+    // You: [reply-btn]  [timestamp]  [bubble]
+    msgRow.appendChild(replyBtn);
     msgRow.appendChild(timestamp);
     msgRow.appendChild(content);
-    msgRow.appendChild(makeReplyBtn());
   } else {
     // Partner: [bubble]  [react-btn]  [reply-btn]  [timestamp]
     const reactBtn     = document.createElement("button");
@@ -284,7 +247,7 @@ function addMessage(text, isYou, messageId, replyTo) {
     });
     msgRow.appendChild(content);
     msgRow.appendChild(reactBtn);
-    msgRow.appendChild(makeReplyBtn());
+    msgRow.appendChild(replyBtn);
     msgRow.appendChild(timestamp);
   }
 
@@ -367,11 +330,29 @@ function hideTypingIndicator() {
   document.getElementById("typingIndicator")?.remove();
 }
 
-function clearChat() { chat.innerHTML = ""; }
+function clearChat() { chat.innerHTML = ""; clearReply(); }
 
 function updateOnlineCount(count) {
   onlineCountEl.textContent = `Users: ${count+23}`;
 }
+
+// ── Reply helpers ──────────────────────────────────────────────────────────────
+function setReplyTo({ text, senderName, messageId }) {
+  replyTo = { text, senderName, messageId };
+  replyPreviewName.textContent = senderName;
+  replyPreviewText.textContent = text.length > 80 ? text.slice(0, 80) + "…" : text;
+  replyPreview.style.display = "flex";
+  messageInput.focus();
+}
+
+function clearReply() {
+  replyTo = null;
+  replyPreview.style.display = "none";
+  replyPreviewName.textContent = "";
+  replyPreviewText.textContent = "";
+}
+
+replyPreviewClose.addEventListener("click", () => clearReply());
 
 function setInputsEnabled(enabled) {
   messageInput.disabled = !enabled;
@@ -497,9 +478,6 @@ function updateViewportOffsets() {
   if (gifPickerOpen) {
     gifPicker.style.bottom = (kbH + chatInputBar.offsetHeight + 8) + "px";
   }
-
-  // Keep reply bar flush above the input bar
-  positionReplyBar();
 
   // Pin scroll to bottom whenever the viewport shifts
   scheduleScroll();
@@ -663,14 +641,14 @@ function displayReaction(messageId, emoji, isMine) {
 function sendMessage() {
   const message = messageInput.value.trim();
   if (!message || !partnerConnected || !userName) return;
-  const msgId   = generateMsgId();
-  const reply   = replyingTo ? { text: replyingTo.text } : null;
-  addMessage(message, true, msgId, reply);
-  socket.emit("message", { text: message, messageId: msgId, replyTo: reply });
+  const msgId = generateMsgId();
+  const currentReply = replyTo ? { ...replyTo } : null;
+  addMessage(message, true, msgId, currentReply);
+  socket.emit("message", { text: message, messageId: msgId, replyTo: currentReply });
   messageInput.value = "";
   charCount.textContent = "";
   charCount.classList.remove("warning");
-  clearReplyBar();
+  clearReply();
   // Keep focus on input so the keyboard stays open on mobile
   messageInput.focus();
 }
