@@ -336,154 +336,6 @@ html, body {
   font-style: italic;
 }
 
-/* ── REPLY BUTTON ────────────────────────────────────────────────────────── */
-
-.reply-btn {
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  background: #2b2d31;
-  border: 1px solid #404249;
-  border-radius: 50%;
-  font-size: 13px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.18s ease, background 0.15s ease, transform 0.15s ease;
-  padding: 0;
-  touch-action: manipulation;
-  will-change: transform, opacity;
-  color: #b5bac1;
-  line-height: 1;
-}
-
-.message-wrapper:hover .reply-btn { opacity: 1; }
-
-@media (hover: none) {
-  .reply-btn { opacity: 0.55; }
-}
-
-.reply-btn:hover { background: #404249; color: #fff; transform: scale(1.15); }
-
-/* ── REPLY PREVIEW (quoted bubble inside a sent/received message) ────────── */
-
-.reply-preview {
-  display: flex;
-  align-items: stretch;
-  gap: 0;
-  background: rgba(0, 0, 0, 0.18);
-  border-radius: 8px 8px 0 0;
-  overflow: hidden;
-  max-width: 100%;
-  cursor: default;
-  user-select: none;
-  margin-bottom: 0;        /* sits flush above bubble */
-}
-
-.reply-preview::before {
-  content: "";
-  flex-shrink: 0;
-  width: 3px;
-  background: #5865f2;
-  border-radius: 3px 0 0 3px;
-}
-
-.reply-preview-text {
-  font-size: 0.75em;
-  color: #949ba4;
-  padding: 5px 10px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.4;
-}
-
-.reply-preview.you::before  { background: #848de0; }
-.reply-preview.you .reply-preview-text { color: rgba(255,255,255,0.55); }
-
-/* ── REPLY BAR — fixed panel above the input bar ──────────────────────── */
-
-.reply-bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  /* bottom is set by JS */
-  z-index: 101;       /* above chat-input (z:100) */
-  display: none;      /* JS shows it */
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 14px;
-  background: #23272a;
-  border-top: 1px solid #5865f2;
-  box-shadow: 0 -2px 12px rgba(0,0,0,0.35);
-  gap: 10px;
-  /* slide up animation */
-  animation: replyBarIn 0.18s ease forwards;
-}
-
-@keyframes replyBarIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.reply-bar-inner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  flex: 1;
-}
-
-.reply-bar-accent {
-  flex-shrink: 0;
-  width: 3px;
-  height: 32px;
-  background: #5865f2;
-  border-radius: 3px;
-}
-
-.reply-bar-body {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  gap: 1px;
-}
-
-.reply-bar-label {
-  font-size: 0.7em;
-  font-weight: 700;
-  color: #5865f2;
-  letter-spacing: 0.3px;
-}
-
-.reply-bar-text {
-  font-size: 0.82em;
-  color: #b5bac1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.reply-bar-close {
-  flex-shrink: 0;
-  background: #3a3d45;
-  border: none;
-  color: #b5bac1;
-  font-size: 13px;
-  cursor: pointer;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.15s, color 0.15s;
-  touch-action: manipulation;
-}
-.reply-bar-close:hover { background: #5865f2; color: #fff; }
-
 /* ── REACT BUTTON ────────────────────────────────────────────────────────── */
 
 .react-btn {
@@ -737,13 +589,166 @@ html, body {
   right: 0;
   z-index: 100;
   display: flex;
-  padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px));
+  flex-direction: column;
   background: #2b2d31;
   border-top: 1px solid #1a1b1e;
-  gap: 8px;
-  align-items: center;
   will-change: bottom;  /* hint GPU layer so sliding up is smooth */
 }
+
+/* ── REPLY PREVIEW BAR ───────────────────────────────────────────────────── */
+
+.reply-preview-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px 5px;
+  background: #23252a;
+  border-bottom: 1px solid #404249;
+  gap: 8px;
+  animation: replySlideIn 0.15s ease;
+}
+
+@keyframes replySlideIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.reply-preview-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+  flex: 1;
+}
+
+.reply-preview-label {
+  color: #5865f2;
+  font-size: 0.95em;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.reply-preview-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.reply-preview-name {
+  font-size: 0.72em;
+  font-weight: 700;
+  color: #5865f2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reply-preview-text {
+  font-size: 0.78em;
+  color: #b5bac1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}
+
+.reply-preview-close {
+  background: none;
+  border: none;
+  color: #72767d;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+  touch-action: manipulation;
+}
+.reply-preview-close:hover { color: #fff; background: #404249; }
+
+.chat-input-row {
+  display: flex;
+  padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px));
+  gap: 8px;
+  align-items: center;
+}
+
+/* ── REPLY QUOTE (inside message bubble) ─────────────────────────────────── */
+
+.reply-quote {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 10px;
+  border-radius: 10px 10px 0 0;
+  margin-bottom: -2px;
+  max-width: 100%;
+  cursor: default;
+}
+
+.reply-quote.you {
+  background: rgba(255,255,255,0.08);
+  border-left: 3px solid rgba(255,255,255,0.4);
+  align-self: flex-end;
+}
+
+.reply-quote.partner {
+  background: rgba(88,101,242,0.12);
+  border-left: 3px solid #5865f2;
+  align-self: flex-start;
+}
+
+.reply-quote-name {
+  font-size: 0.68em;
+  font-weight: 700;
+  color: #848de0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reply-quote.you .reply-quote-name {
+  color: rgba(255,255,255,0.6);
+}
+
+.reply-quote-text {
+  font-size: 0.78em;
+  color: #b5bac1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+
+/* ── REPLY BUTTON (on messages) ──────────────────────────────────────────── */
+
+.reply-btn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  background: #2b2d31;
+  border: 1px solid #404249;
+  border-radius: 50%;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.18s ease, background 0.15s ease, transform 0.15s ease;
+  padding: 0;
+  touch-action: manipulation;
+  will-change: transform, opacity;
+  color: #b5bac1;
+}
+
+.message-wrapper:hover .reply-btn { opacity: 1; }
+
+@media (hover: none) {
+  .reply-btn { opacity: 0.45; }
+}
+
+.reply-btn:hover { background: #404249; transform: scale(1.15); }
 
 .chat-input input {
   flex: 1;
@@ -951,10 +956,13 @@ html, body {
   /* Hide char counter on mobile to keep input row compact */
   .char-count { display: none; }
 
-  .chat-input input {
+  .chat-input input,
+  .chat-input-row input {
     padding: 10px 12px;
     font-size: 1em; /* prevents iOS auto-zoom */
   }
+
+  .reply-preview-text { max-width: 180px; }
 
   #sendBtn {
     padding: 0 14px;
