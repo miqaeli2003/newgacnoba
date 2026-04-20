@@ -191,16 +191,18 @@ function addMessage(text, isYou, messageId, replyToData) {
     const quote       = document.createElement("div");
     quote.className   = `reply-quote ${isYou ? "you" : "partner"}`;
 
-    const quoteName       = document.createElement("span");
-    quoteName.className   = "reply-quote-name";
-    quoteName.textContent = replyToData.senderName || "";
+    if (replyToData.senderName) {
+      const quoteName       = document.createElement("span");
+      quoteName.className   = "reply-quote-name";
+      quoteName.textContent = replyToData.senderName;
+      quote.appendChild(quoteName);
+    }
 
     const quoteText       = document.createElement("span");
     quoteText.className   = "reply-quote-text";
     const raw = replyToData.text;
     quoteText.textContent = raw.length > 80 ? raw.slice(0, 80) + "…" : raw;
 
-    quote.appendChild(quoteName);
     quote.appendChild(quoteText);
     wrapper.appendChild(quote);
   }
