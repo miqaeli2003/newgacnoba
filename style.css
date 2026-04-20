@@ -95,13 +95,13 @@ html, body {
   background: #f2d36b;
   color: #000;
 }
-.change-name-btn:hover { background: #c03537; }
+.change-name-btn:hover { background: #e0b830; }
 
 .block-button {
   background: #e53935;
-  color: #000;
+  color: #fff;
 }
-.block-button:hover:not(:disabled) { background: #d18b12; }
+.block-button:hover:not(:disabled) { background: #c62828; }
 
 .block-button:disabled,
 .next-button:disabled {
@@ -358,6 +358,12 @@ html, body {
 }
 
 .message-wrapper.partner:hover .react-btn { opacity: 1; }
+
+/* Always show react button on touch devices (no hover support) */
+@media (hover: none) {
+  .react-btn { opacity: 0.55; }
+}
+
 .react-btn:hover { background: #404249; transform: scale(1.15); }
 
 /* ── REACTION PICKER ─────────────────────────────────────────────────────── */
