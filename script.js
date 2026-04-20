@@ -727,15 +727,18 @@ socket.on("reacted", ({ messageId, emoji }) => {
 });
 
 socket.on("partnerDisconnected", (data) => {
-  removeReconnectingMessage();
-  stopSearchRetry();
-  hideTypingIndicator();
   if (!partnerWasReconnecting) {
+    // Normal disconnect — remove any leftover reconnecting msg and show goodbye
+    removeReconnectingMessage();
     addDisconnectMessage(`${data.name || "Anonymous"} -მ სამწუხაროდ დაგტოვათ 😟 `);
   }
+  // If partnerWasReconnecting is true the "გავიდა საიტიდან" message stays
+  // visible until the user presses ძებნა (which calls clearChat).
   partnerWasReconnecting = false;
   partnerConnected = false;
   partnerName      = "";
+  stopSearchRetry();
+  hideTypingIndicator();
   setInputsEnabled(false);
   closeGifPickerPanel();
 });
