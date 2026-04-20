@@ -523,9 +523,8 @@ socket.on("nameAccepted", (acceptedName) => {
     hideTypingIndicator();
     closeGifPickerPanel();
     clearChat();
-    addSearchingMessage();
-    socket.emit("findPartner");
-    startSearchRetry();
+    // Don't auto-search — user was gone too long, let them press Search manually
+    addDisconnectMessage("კავშირი გაწყდა. ახალი პარტნიორის საპოვნელად დააჭირეთ \"ძებნა\" 🔎");
   }
   // else: mid-session name change — no extra action
 });
