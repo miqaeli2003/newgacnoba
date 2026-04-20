@@ -1,947 +1,1131 @@
-const socket = io();
+* {
+  box-sizing: border-box;
+}
 
-// ── State ─────────────────────────────────────────────────────────────────────
-let userName            = "";
-let partnerConnected    = false;
-let partnerName         = "";
-let isFirstLogin        = true;
-let isReconnecting      = false;
-let wasAutoKicked       = false;
-let msgCounter          = 0;
-let typingTimeout       = null;
-let isTyping            = false;
-let searchRetryInterval = null;
-let pendingScrollRaf    = false;
-let gifFetchController  = null;
-let gifSearchTimer      = null;
-let gifPickerOpen       = false;
-let unreadCount         = 0;
-let replyTo             = null;   // { text, senderName, messageId }
-const originalTitle     = document.title;
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: "Segoe UI", Arial, sans-serif;
+  background: #1e1f22;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 
-// ── DOM refs ──────────────────────────────────────────────────────────────────
-const chat           = document.getElementById("chat");
-const messageInput   = document.getElementById("messageInput");
-const sendBtn        = document.getElementById("sendBtn");
-const nextBtn        = document.getElementById("nextBtn");
-const blockBtn       = document.getElementById("blockBtn");
-const changeNameBtn  = document.getElementById("changeNameBtn");
-const nameModal      = document.getElementById("nameModal");
-const nameInput      = document.getElementById("nameInput");
-const saveNameBtn    = document.getElementById("saveNameBtn");
-const nameError      = document.getElementById("nameError");
-const onlineCountEl  = document.getElementById("onlineCount");
-const gifBtn         = document.getElementById("gifBtn");
-const gifPicker      = document.getElementById("gifPicker");
-const gifSearch      = document.getElementById("gifSearch");
-const gifResults     = document.getElementById("gifResults");
-const gifPickerClose = document.getElementById("gifPickerClose");
-const charCount      = document.getElementById("charCount");
-const questionBtn    = document.getElementById("questionBtn");
-const replyPreview   = document.getElementById("replyPreview");
-const replyPreviewName = document.getElementById("replyPreviewName");
-const replyPreviewText = document.getElementById("replyPreviewText");
-const replyPreviewClose = document.getElementById("replyPreviewClose");
+/* ── TOP BAR ────────────────────────────────────────────────────────────── */
 
-// ── Sound ─────────────────────────────────────────────────────────────────────
-let _audioCtx = null;
+.top-bar {
+  flex: 0 0 60px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #2b2d31;
+  padding: 0 18px;
+  border-bottom: 1px solid #1a1b1e;
+}
 
-function getAudioCtx() {
-  if (!_audioCtx) {
-    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+.left-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.site-name {
+  font-weight: 700;
+  font-size: 1.2em;
+  color: #fff;
+  text-decoration: none;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+#onlineCount {
+  font-size: 0.9em;
+  color: #b5bac1;
+  flex-shrink: 0;
+}
+
+.user-name-display {
+  font-size: 0.82em;
+  font-weight: 600;
+  color: #5865f2;
+  background: rgba(88, 101, 242, 0.12);
+  border: 1px solid rgba(88, 101, 242, 0.35);
+  border-radius: 20px;
+  padding: 8px 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+}
+
+/* ── BUTTONS ─────────────────────────────────────────────────────────────── */
+
+.right-side {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.change-name-btn,
+.block-button,
+.next-button {
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  touch-action: manipulation;
+}
+
+.next-button {
+  background: #5865f2;
+  color: white;
+}
+.next-button:hover { background: #4752c4; }
+
+.change-name-btn {
+  background: #f2d36b;
+  color: #000;
+}
+.change-name-btn:hover { background: #e0b830; }
+
+.block-button {
+  background: #e53935;
+  color: #fff;
+}
+.block-button:hover:not(:disabled) { background: #c62828; }
+
+.block-button:disabled,
+.next-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── CHAT AREA ─────────────────────────────────────────────────────────── */
+
+.chat-container {
+  flex: 1;
+  min-height: 0;        /* lets it shrink below its content size inside flex */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 15px;
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: #1a1b1e;
+}
+
+.chat-container::-webkit-scrollbar { width: 8px; }
+.chat-container::-webkit-scrollbar-thumb {
+  background: #1a1b1e;
+  border-radius: 10px;
+}
+
+/* ── MESSAGE WRAPPER ─────────────────────────────────────────────────────── */
+
+.message-wrapper {
+  display: flex;
+  flex-direction: column;
+  max-width: 72%;
+}
+
+.message-wrapper.you {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.message-wrapper.partner {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+/* ── MESSAGE ROW ─────────────────────────────────────────────────────────── */
+
+.message-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ── BUBBLE ──────────────────────────────────────────────────────────────── */
+
+.message-content {
+  max-width: 100%;
+  padding: 10px 14px;
+  border-radius: 22px;
+  font-size: 15px;
+  line-height: 1.45;
+  background: #5865f2;
+  color: #dcddde;
+  word-break: break-word;
+}
+
+.message-content.you {
+  background: #5865f2;
+  color: white;
+}
+
+/* ── SEEN STATUS ─────────────────────────────────────────────────────────── */
+
+.seen-status {
+  font-size: 0.65em;
+  color: #72767d;
+  margin-top: 1px;
+  text-align: right;
+  transition: color 0.3s ease;
+  user-select: none;
+}
+
+.seen-status.seen {
+  color: #5865f2;
+}
+
+/* ── GIF MESSAGE ─────────────────────────────────────────────────────────── */
+
+.message-wrapper.gif-msg-wrapper { max-width: 260px; }
+
+.gif-message-img {
+  width: 100%;
+  max-width: 260px;
+  border-radius: 12px;
+  display: block;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+  will-change: transform;
+}
+.gif-message-img:hover { transform: scale(1.02); }
+
+/* ── TIMESTAMP ───────────────────────────────────────────────────────────── */
+
+.timestamp {
+  font-size: 0.62em;
+  color: #72767d;
+  white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* Inline timestamp inside message-row */
+.inline-ts {
+  margin: 0;
+}
+
+/* ── SYSTEM MESSAGES ─────────────────────────────────────────────────────── */
+
+.system-message {
+  text-align: center;
+  color: #949ba4;
+  font-size: 0.85em;
+  margin: 4px 0;
+}
+
+.system-message-disconnect {
+  text-align: center;
+  color: #f23f42;
+  font-size: 0.85em;
+  margin: 4px 0;
+}
+
+.system-message-reconnecting {
+  text-align: center;
+  color: #f0b232;
+  font-size: 0.85em;
+  margin: 4px 0;
+}
+
+/* ── SEARCHING BLOCK ─────────────────────────────────────────────────────── */
+
+.searching-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin: 12px 0;
+}
+
+/* ── FACT CARD ───────────────────────────────────────────────────────────── */
+
+.fact-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  background: linear-gradient(135deg, #1e2a4a 0%, #2b2d31 100%);
+  border: 1px solid rgba(88, 101, 242, 0.35);
+  border-left: 3px solid #5865f2;
+  border-radius: 10px;
+  padding: 12px 16px;
+  max-width: 380px;
+  width: 90%;
+  animation: factFadeIn 0.4s ease forwards;
+}
+
+@keyframes factFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.fact-label {
+  font-size: 0.7em;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #5865f2;
+}
+
+.fact-text {
+  font-size: 0.85em;
+  color: #b5bac1;
+  line-height: 1.5;
+}
+
+/* ── QUESTION CARD ───────────────────────────────────────────────────────── */
+
+.question-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: 12px;
+  padding: 12px 16px;
+  max-width: 75%;
+  animation: questionPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.question-card.you {
+  align-self: flex-end;
+  background: linear-gradient(135deg, #3d3270 0%, #2b2d31 100%);
+  border: 1px solid rgba(88, 101, 242, 0.4);
+}
+
+.question-card.partner {
+  align-self: flex-start;
+  background: linear-gradient(135deg, #1c3a2e 0%, #2b2d31 100%);
+  border: 1px solid rgba(35, 165, 90, 0.4);
+}
+
+@keyframes questionPop {
+  from { opacity: 0; transform: scale(0.9); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.question-card-label {
+  font-size: 0.7em;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.question-card.you   .question-card-label { color: #848de0; }
+.question-card.partner .question-card-label { color: #23a55a; }
+
+.question-card-text {
+  font-size: 0.95em;
+  color: #e0e0e0;
+  line-height: 1.5;
+  font-style: italic;
+}
+
+/* ── REACT BUTTON ────────────────────────────────────────────────────────── */
+
+.react-btn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  background: #2b2d31;
+  border: 1px solid #404249;
+  border-radius: 50%;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.18s ease, background 0.15s ease, transform 0.15s ease;
+  padding: 0;
+  touch-action: manipulation;
+  will-change: transform, opacity;
+}
+
+.message-wrapper.partner:hover .react-btn { opacity: 1; }
+
+/* Always show react button on touch devices (no hover support) */
+@media (hover: none) {
+  .react-btn { opacity: 0.55; }
+}
+
+.react-btn:hover { background: #404249; transform: scale(1.15); }
+
+/* ── REACTION PICKER ─────────────────────────────────────────────────────── */
+
+.reaction-picker {
+  position: fixed;
+  display: flex;
+  gap: 4px;
+  background: #2b2d31;
+  border: 1px solid #404249;
+  border-radius: 24px;
+  padding: 6px 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  will-change: opacity, transform;
+}
+
+.reaction-emoji-btn {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 8px;
+  transition: transform 0.12s ease, background 0.12s ease;
+  line-height: 1;
+  touch-action: manipulation;
+  will-change: transform;
+}
+.reaction-emoji-btn:hover { background: #404249; transform: scale(1.3); }
+
+/* ── REACTION AREA & PILLS ───────────────────────────────────────────────── */
+
+.reaction-area {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+}
+
+.reaction-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 16px;
+  background: #2b2d31;
+  border: 1.5px solid #404249;
+  border-radius: 12px;
+  padding: 2px 7px;
+  line-height: 1.3;
+}
+
+.reaction-mine {
+  border-color: #5865f2;
+  background: rgba(88, 101, 242, 0.12);
+}
+
+@keyframes reactionPop {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+.reaction-pop {
+  animation: reactionPop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  will-change: transform, opacity;
+}
+
+/* ── GIF PICKER PANEL ────────────────────────────────────────────────────── */
+
+.gif-picker {
+  position: fixed;
+  bottom: 72px;
+  right: 12px;
+  width: 320px;
+  height: 420px;
+  background: #2b2d31;
+  border: 1px solid #404249;
+  border-radius: 14px;
+  box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.55);
+  z-index: 500;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.gif-picker-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px 8px;
+  border-bottom: 1px solid #1a1b1e;
+  flex-shrink: 0;
+}
+
+.gif-picker-header input {
+  flex: 1;
+  background: #1e1f22;
+  border: none;
+  outline: none;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.88em;
+}
+.gif-picker-header input::placeholder { color: #72767d; }
+
+.gif-picker-close {
+  background: none;
+  border: none;
+  color: #b5bac1;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: background 0.15s;
+  touch-action: manipulation;
+}
+.gif-picker-close:hover { background: #404249; color: #fff; }
+
+.gif-results {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px;
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.gif-results::-webkit-scrollbar { width: 6px; }
+.gif-results::-webkit-scrollbar-thumb { background: #1a1b1e; border-radius: 6px; }
+
+.gif-col { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+
+.gif-item {
+  width: 100%;
+  border-radius: 8px;
+  cursor: pointer;
+  display: block;
+  transition: transform 0.12s ease, opacity 0.12s ease;
+  background: #1e1f22;
+  will-change: transform;
+}
+.gif-item:hover { transform: scale(1.03); opacity: 0.92; }
+
+.gif-placeholder {
+  width: 100%;
+  text-align: center;
+  color: #72767d;
+  font-size: 0.85em;
+  padding: 40px 0;
+}
+
+.gif-powered {
+  text-align: center;
+  font-size: 0.7em;
+  color: #72767d;
+  padding: 5px;
+  border-top: 1px solid #1a1b1e;
+  flex-shrink: 0;
+}
+
+/* ── GIF BUTTON ──────────────────────────────────────────────────────────── */
+
+.gif-btn {
+  background: #2b2d31;
+  border: 1px solid #404249;
+  border-radius: 10px;
+  color: #b5bac1;
+  font-size: 0.8em;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+  touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gif-btn:hover:not(:disabled) { background: #404249; color: #fff; }
+.gif-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── QUESTION BUTTON ─────────────────────────────────────────────────────── */
+
+.question-btn {
+  background: #2b2d31;
+  border: 1px solid rgba(88, 101, 242, 0.5);
+  border-radius: 10px;
+  color: #848de0;
+  font-size: 1.1em;
+  font-weight: 700;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  flex-shrink: 0;
+  touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.question-btn:hover:not(:disabled) {
+  background: rgba(88, 101, 242, 0.18);
+  color: #fff;
+  transform: scale(1.08);
+}
+.question-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── INPUT BAR ─────────────────────────────────────────────────────────── */
+
+.chat-input {
+  position: fixed;
+  bottom: 0;          /* JS overrides this on iOS via visualViewport */
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: #2b2d31;
+  border-top: 1px solid #1a1b1e;
+  will-change: bottom;  /* hint GPU layer so sliding up is smooth */
+}
+
+/* ── REPLY PREVIEW BAR ───────────────────────────────────────────────────── */
+
+.reply-preview-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px 5px;
+  background: #23252a;
+  border-bottom: 1px solid #404249;
+  gap: 8px;
+  animation: replySlideIn 0.15s ease;
+}
+
+@keyframes replySlideIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.reply-preview-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+  flex: 1;
+}
+
+.reply-preview-label {
+  color: #5865f2;
+  font-size: 0.95em;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.reply-preview-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.reply-preview-name {
+  font-size: 0.72em;
+  font-weight: 700;
+  color: #5865f2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reply-preview-text {
+  font-size: 0.78em;
+  color: #b5bac1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}
+
+.reply-preview-close {
+  background: none;
+  border: none;
+  color: #72767d;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+  touch-action: manipulation;
+}
+.reply-preview-close:hover { color: #fff; background: #404249; }
+
+.chat-input-row {
+  display: flex;
+  padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px));
+  gap: 8px;
+  align-items: center;
+}
+
+/* ── REPLY QUOTE (inside message bubble) ─────────────────────────────────── */
+
+.reply-quote {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 10px;
+  border-radius: 10px 10px 0 0;
+  margin-bottom: -2px;
+  max-width: 100%;
+  cursor: default;
+}
+
+.reply-quote.you {
+  background: rgba(255,255,255,0.08);
+  border-left: 3px solid rgba(255,255,255,0.4);
+  align-self: flex-end;
+}
+
+.reply-quote.partner {
+  background: rgba(88,101,242,0.12);
+  border-left: 3px solid #5865f2;
+  align-self: flex-start;
+}
+
+.reply-quote-name {
+  font-size: 0.68em;
+  font-weight: 700;
+  color: #848de0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reply-quote.you .reply-quote-name {
+  color: rgba(255,255,255,0.6);
+}
+
+.reply-quote-text {
+  font-size: 0.78em;
+  color: #b5bac1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+
+/* ── REPLY BUTTON (on messages) ──────────────────────────────────────────── */
+
+.reply-btn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  background: #2b2d31;
+  border: 1px solid #404249;
+  border-radius: 50%;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.18s ease, background 0.15s ease, transform 0.15s ease;
+  padding: 0;
+  touch-action: manipulation;
+  will-change: transform, opacity;
+  color: #b5bac1;
+}
+
+.message-wrapper:hover .reply-btn { opacity: 1; }
+
+@media (hover: none) {
+  .reply-btn { opacity: 0.45; }
+}
+
+.reply-btn:hover { background: #404249; transform: scale(1.15); }
+
+.chat-input input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: #1e1f22;
+  color: white;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 0.95em;
+}
+
+/* ── CHARACTER COUNTER ───────────────────────────────────────────────────── */
+
+.char-count {
+  font-size: 0.68em;
+  color: #72767d;
+  flex-shrink: 0;
+  min-width: 46px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.2s ease;
+  user-select: none;
+}
+.char-count.warning { color: #f23f42; }
+
+#sendBtn {
+  background: #5865f2;
+  border: none;
+  color: white;
+  padding: 0 18px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+  touch-action: manipulation;
+  align-self: stretch;
+}
+#sendBtn:hover:not(:disabled) { background: #4752c4; }
+#sendBtn:disabled { background: #3a3d45; cursor: not-allowed; }
+
+/* ── MODAL ─────────────────────────────────────────────────────────────── */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: #2b2d31;
+  padding: 28px 28px 24px;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  max-height: 90vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.modal-logo {
+  width: 95%;
+  height: 95%;
+  object-fit: contain;
+  display: block;
+  margin: auto;
+  padding: 2.5%;
+  border-radius: 20px;
+}
+
+.modal-content input[type="text"] {
+  width: 100%;
+  padding: 12px;
+  margin-top: 10px;
+  border-radius: 8px;
+  border: none;
+  background: #1e1f22;
+  color: white;
+  font-size: 0.95em;
+}
+
+.name-error {
+  color: #f23f42;
+  font-size: 0.82em;
+  margin-top: 6px;
+  display: none;
+}
+
+.modal-content button#saveNameBtn {
+  display: block;
+  margin-top: 16px;
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  border: none;
+  background: #5865f2;
+  color: white;
+  font-weight: 600;
+  font-size: 0.95em;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.2s ease;
+}
+.modal-content button#saveNameBtn:hover { background: #4752c4; }
+
+/* ── TYPING INDICATOR ────────────────────────────────────────────────────── */
+
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 14px;
+  background: #2b2d31;
+  border-radius: 12px;
+  width: fit-content;
+  align-self: flex-start;
+  margin: 2px 0;
+}
+
+.typing-indicator span {
+  width: 7px;
+  height: 7px;
+  background: #b5bac1;
+  border-radius: 50%;
+  will-change: transform, opacity;
+  animation: typingBounce 1.2s infinite ease-in-out;
+}
+.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typingBounce {
+  0%, 60%, 100% { transform: translateY(0);    opacity: 0.4; }
+  30%            { transform: translateY(-5px); opacity: 1;   }
+}
+
+/* ── RESPONSIVE ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .top-bar {
+    font-size: 0.85em;
+    padding: 0 8px;
   }
-  return _audioCtx;
-}
 
-function ensureAudioReady() {
-  if (_audioCtx && _audioCtx.state === "suspended") _audioCtx.resume().catch(() => {});
-}
+  .change-name-btn,
+  .block-button,
+  .next-button {
+    padding: 6px 8px;
+    font-size: 0.72em;
+  }
 
-document.addEventListener("click",   ensureAudioReady, { passive: true });
-document.addEventListener("keydown", ensureAudioReady, { passive: true });
+  /* Show online count on mobile — shrink font instead of hiding */
+  #onlineCount {
+    font-size: 0.72em;
+  }
 
-function playTone(freq, duration = 0.2, volume = 0.07) {
-  try {
-    const ctx  = getAudioCtx();
-    const osc  = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = "sine";
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(volume, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + duration);
-  } catch (_) { /* audio not supported */ }
-}
+  /* Grid: GAICANI spans both rows on left; onlineCount top-right; username below it */
+  .left-side {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 0 8px;
+  }
 
-function playNotification(type) {
-  if (type === "partnerFound") {
-    playTone(880, 0.12); setTimeout(() => playTone(1100, 0.18), 110);
-  } else if (type === "message") {
-    playTone(660, 0.1, 0.04);
+  .site-name {
+    grid-column: 1;
+    grid-row: 1 / 3;
+  }
+
+  #onlineCount {
+    grid-column: 2;
+    grid-row: 1;
+    font-size: 0.72em;
+  }
+
+  .user-name-display {
+    grid-column: 2;
+    grid-row: 2;
+    font-size: 0.72em;
+    max-width: 140px;
+    padding: 1px 8px;
+  }
+
+  .gif-picker {
+    width: calc(100vw - 24px);
+    right: 12px;
+    left: 12px;
+    height: 380px;
+  }
+
+  .message-wrapper          { max-width: 82%; }
+  .message-wrapper.gif-msg-wrapper { max-width: 200px; }
+  .question-card            { max-width: 82%; }
+
+  .modal-content { padding: 20px 16px 18px; }
+
+  /* Hide char counter on mobile to keep input row compact */
+  .char-count { display: none; }
+
+  .chat-input input,
+  .chat-input-row input {
+    padding: 10px 12px;
+    font-size: 1em; /* prevents iOS auto-zoom */
+  }
+
+  .reply-preview-text { max-width: 180px; }
+
+  #sendBtn {
+    padding: 0 14px;
+    font-size: 0.9em;
+  }
+
+  .gif-btn,
+  .question-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .fact-card {
+    max-width: 95%;
   }
 }
 
-// ── Tab unread badge ──────────────────────────────────────────────────────────
-function incrementUnread() {
-  if (document.hidden) {
-    unreadCount++;
-    document.title = `(${unreadCount}) ${originalTitle}`;
-  }
+/* ── KEYBOARD-OPEN ZOOM ───────────────────────────────────────────────────── */
+/* When the keyboard is open, shrink everything so more messages are visible.  */
+
+.keyboard-open .chat-container {
+  gap: 1px;
+  padding-top: 6px;
 }
 
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) {
-    unreadCount    = 0;
-    document.title = originalTitle;
-  }
-});
-
-// ── Scroll ────────────────────────────────────────────────────────────────────
-function scheduleScroll() {
-  if (pendingScrollRaf) return;
-  pendingScrollRaf = true;
-  requestAnimationFrame(() => {
-    chat.scrollTop   = chat.scrollHeight;
-    pendingScrollRaf = false;
-  });
+.keyboard-open .message-content {
+  /* same size as normal — matches Instagram where text never changes size */
+  font-size: 15px;
+  padding: 10px 14px;
+  border-radius: 22px;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function generateMsgId() {
-  return `${socket.id}_${++msgCounter}_${Date.now()}`;
+.keyboard-open .message-wrapper {
+  max-width: 78%;
 }
 
-function formatTimestamp(date) {
-  const h    = date.getHours();
-  const m    = date.getMinutes();
-  const ampm = h >= 12 ? "PM" : "AM";
-  const h12  = h % 12 || 12;
-  return `${h12}:${m.toString().padStart(2, "0")} ${ampm}`;
+.keyboard-open .inline-ts {
+  font-size: 0.56em;
 }
 
-function _appendInfoMessage(text, className, id) {
-  const el       = document.createElement("div");
-  el.className   = className;
-  el.textContent = text;
-  if (id) el.id  = id;
-  chat.appendChild(el);
-  scheduleScroll();
+.keyboard-open .system-message,
+.keyboard-open .system-message-disconnect,
+.keyboard-open .system-message-reconnecting {
+  font-size: 0.7em;
+  margin: 1px 0;
 }
 
-function addSystemMessage(text)            { _appendInfoMessage(text, "system-message"); }
-function addDisconnectMessage(text)        { _appendInfoMessage(text, "system-message-disconnect"); }
-function addReconnectingMessage(name)      {
-  document.getElementById("reconnectingMsg")?.remove();
-  _appendInfoMessage(
-    `${name} - გავიდა საიტიდან  ... 😟 `,
-    "system-message-reconnecting",
-    "reconnectingMsg"
-  );
-}
-function removeReconnectingMessage()       { document.getElementById("reconnectingMsg")?.remove(); }
-
-// ── Searching message with random fact ───────────────────────────────────────
-function addSearchingMessage() {
-  // Remove any existing searching block
-  document.getElementById("searchingMsg")?.remove();
-
-  const wrapper     = document.createElement("div");
-  wrapper.id        = "searchingMsg";
-  wrapper.className = "searching-block";
-
-  const searchText       = document.createElement("div");
-  searchText.className   = "system-message";
-  searchText.textContent = "ვეძებთ ახალ პარტნიორს... 🔎";
-  wrapper.appendChild(searchText);
-
-  // Fact card placeholder — filled after fetch
-  const factCard       = document.createElement("div");
-  factCard.className   = "fact-card";
-  factCard.innerHTML   = '<span class="fact-label">💡 Random Fact</span><span class="fact-text">...</span>';
-  wrapper.appendChild(factCard);
-
-  chat.appendChild(wrapper);
-  scheduleScroll();
-
-  // Fetch a random fact from the server
-  fetch("/api/random-fact")
-    .then(r => r.json())
-    .then(data => {
-      if (data.fact) {
-        factCard.querySelector(".fact-text").textContent = data.fact;
-      }
-    })
-    .catch(() => {
-      factCard.querySelector(".fact-text").textContent = "ფაქტი ვერ ჩაიტვირთა 😕";
-    });
+.keyboard-open .typing-indicator {
+  padding: 6px 10px;
 }
 
-function addMessage(text, isYou, messageId, replyToData) {
-  const id = messageId || generateMsgId();
-
-  const wrapper         = document.createElement("div");
-  wrapper.className     = `message-wrapper ${"you" : "partner"}`;
-  wrapper.dataset.messageId = id;
-
-  // ── Reply quote block ────────────────────────────────────────────────────
-  if (replyToData && replyToData.text) {
-    const quote       = document.createElement("div");
-    quote.className   = `reply-quote ${"you" : "partner"}`;
-
-    const quoteName       = document.createElement("span");
-    quoteName.textContent = replyToData.senderName || "";
-
-    const quoteText       = document.createElement("span");
-    quoteText.className   = "reply-quote-text";
-    const raw = replyToData.text;
-    quoteText.textContent = raw.length > 80 ? raw.slice(0, 80) + "…" : raw;
-
-    quote.appendChild(quoteName);
-    quote.appendChild(quoteText);
-    wrapper.appendChild(quote);
-  }
-
-  const msgRow      = document.createElement("div");
-  msgRow.className  = "message-row";
-
-  const content     = document.createElement("div");
-  content.className = `message-content${isYou ? " you" : ""}`;
-  content.textContent = text;
-
-  const timestamp       = document.createElement("div");
-  timestamp.className   = "timestamp inline-ts";
-  timestamp.textContent = formatTimestamp(new Date());
-
-  // ── Reply button ──────────────────────────────────────────────────────────
-  const replyBtn     = document.createElement("button");
-  replyBtn.className = "reply-btn";
-  replyBtn.innerHTML = "↩";
-  replyBtn.title     = "Reply";
-  replyBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    setReplyTo({
-      text,
-      senderName: isYou ? userName : (partnerName || "Partner"),
-      messageId: id,
-    });
-  });
-
-  if (isYou) {
-    // You: [reply-btn]  [timestamp]  [bubble]
-    msgRow.appendChild(replyBtn);
-    msgRow.appendChild(timestamp);
-    msgRow.appendChild(content);
-  } else {
-    // Partner: [bubble]  [react-btn]  [reply-btn]  [timestamp]
-    const reactBtn     = document.createElement("button");
-    reactBtn.className = "react-btn";
-    reactBtn.innerHTML = "🙂";
-    reactBtn.title     = "React";
-    reactBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      showReactionPicker(reactBtn, id);
-    });
-    msgRow.appendChild(content);
-    msgRow.appendChild(reactBtn);
-    msgRow.appendChild(replyBtn);
-    msgRow.appendChild(timestamp);
-  }
-
-  const reactionArea    = document.createElement("div");
-  reactionArea.className = "reaction-area";
-  reactionArea.id       = `reactions_${id}`;
-
-  wrapper.appendChild(msgRow);
-  wrapper.appendChild(reactionArea);
-
-  // Seen indicator — only for messages you sent
-  if (isYou) {
-    const seen       = document.createElement("div");
-    seen.className   = "seen-status";
-    seen.id          = `seen_${id}`;
-    seen.textContent = "";
-    wrapper.appendChild(seen);
-  }
-
-  chat.appendChild(wrapper);
-  scheduleScroll();
-  return id;
+.keyboard-open .typing-indicator span {
+  width: 5px;
+  height: 5px;
 }
 
-function addGifMessage(gifUrl, isYou) {
-  const wrapper     = document.createElement("div");
-  wrapper.className = `message-wrapper gif-msg-wrapper ${isYou ? "you" : "partner"}`;
-
-  const img       = document.createElement("img");
-  img.src         = gifUrl;
-  img.className   = "gif-message-img";
-  img.loading     = "lazy";
-  img.decoding    = "async";
-
-  const timestamp       = document.createElement("div");
-  timestamp.className   = "timestamp";
-  timestamp.textContent = formatTimestamp(new Date());
-
-  wrapper.appendChild(img);
-  wrapper.appendChild(timestamp);
-  chat.appendChild(wrapper);
-  scheduleScroll();
+.keyboard-open .seen-status {
+  font-size: 0.56em;
 }
 
-// ── Question card ─────────────────────────────────────────────────────────────
-function addQuestionCard(questionText, isYou) {
-  const card       = document.createElement("div");
-  card.className   = `question-card ${isYou ? "you" : "partner"}`;
+/* ── SAFETY / AGE-VERIFICATION MODAL ────────────────────────────────────── */
 
-  const label      = document.createElement("div");
-  label.className  = "question-card-label";
-  label.textContent = isYou ? "❓ შენ გამოგზავნე კითხვა" : `❓ ${partnerName || "პარტნიორი"} გიგზავნის კითხვას`;
-
-  const text       = document.createElement("div");
-  text.className   = "question-card-text";
-  text.textContent = questionText;
-
-  const ts         = document.createElement("div");
-  ts.className     = "timestamp";
-  ts.textContent   = formatTimestamp(new Date());
-
-  card.appendChild(label);
-  card.appendChild(text);
-  card.appendChild(ts);
-  chat.appendChild(card);
-  scheduleScroll();
+.safety-modal-content {
+  max-width: 420px;
+  text-align: left;
 }
 
-function showTypingIndicator() {
-  if (document.getElementById("typingIndicator")) return;
-  const el      = document.createElement("div");
-  el.id         = "typingIndicator";
-  el.className  = "typing-indicator";
-  el.innerHTML  = "<span></span><span></span><span></span>";
-  chat.appendChild(el);
-  scheduleScroll();
+.safety-icon {
+  font-size: 2.4em;
+  text-align: center;
+  margin-bottom: 8px;
 }
 
-function hideTypingIndicator() {
-  document.getElementById("typingIndicator")?.remove();
+.safety-title {
+  font-size: 1.25em;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 18px;
+  text-align: center;
 }
 
-function clearChat() { chat.innerHTML = ""; clearReply(); }
-
-function updateOnlineCount(count) {
-  onlineCountEl.textContent = `Users: ${count+23}`;
+.safety-list {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-// ── Reply helpers ──────────────────────────────────────────────────────────────
-function setReplyTo({ text, senderName, messageId }) {
-  replyTo = { text, senderName, messageId };
-  replyPreviewName.textContent = senderName;
-  replyPreviewText.textContent = text.length > 80 ? text.slice(0, 80) + "…" : text;
-  replyPreview.style.display = "flex";
-  messageInput.focus();
+.safety-list li {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 14px;
+  background: rgba(88, 101, 242, 0.08);
+  border: 1px solid rgba(88, 101, 242, 0.2);
+  border-radius: 8px;
+  font-size: 0.9em;
+  color: #b5bac1;
+  line-height: 1.5;
+  position: relative;
 }
 
-function clearReply() {
-  replyTo = null;
-  replyPreview.style.display = "none";
-  replyPreviewName.textContent = "";
-  replyPreviewText.textContent = "";
+.safety-list li::before {
+  content: "✓";
+  display: inline-block;
+  color: #23a55a;
+  font-weight: 700;
+  margin-right: 6px;
 }
 
-replyPreviewClose.addEventListener("click", () => clearReply());
+.safety-list li strong { color: #fff; }
 
-function setInputsEnabled(enabled) {
-  messageInput.disabled = !enabled;
-  sendBtn.disabled      = !enabled;
-  blockBtn.disabled     = !enabled;
-  gifBtn.disabled       = !enabled;
-  questionBtn.disabled  = !enabled;
+.safety-sub {
+  font-size: 0.82em;
+  color: #72767d;
+  margin-top: 2px;
+  padding-left: 18px;
 }
 
-function showNameError(msg) {
-  nameError.textContent   = msg;
-  nameError.style.display = "block";
-  nameInput.classList.add("error");
+.safety-age-confirm {
+  font-size: 0.82em;
+  color: #72767d;
+  text-align: center;
+  margin: 0 0 18px;
+  line-height: 1.6;
 }
 
-function clearNameError() {
-  nameError.textContent   = "";
-  nameError.style.display = "none";
-  nameInput.classList.remove("error");
+.safety-link {
+  color: #5865f2;
+  text-decoration: none;
+  transition: color 0.15s;
 }
+.safety-link:hover { color: #848de0; text-decoration: underline; }
 
-// ── Search retry ──────────────────────────────────────────────────────────────
-function startSearchRetry() {
-  stopSearchRetry();
-  searchRetryInterval = setInterval(() => {
-    if (!partnerConnected && userName) socket.emit("findPartner");
-  }, 2000);
+.safety-confirm-btn {
+  display: block;
+  width: 100%;
+  padding: 13px;
+  border-radius: 8px;
+  border: none;
+  background: #5865f2;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95em;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.2s ease, transform 0.1s ease;
 }
-
-function stopSearchRetry() {
-  if (searchRetryInterval !== null) {
-    clearInterval(searchRetryInterval);
-    searchRetryInterval = null;
-  }
+.safety-confirm-btn:hover {
+  background: #4752c4;
+  transform: translateY(-1px);
 }
+.safety-confirm-btn:active { transform: translateY(0); }
 
-// ── GIF Picker ────────────────────────────────────────────────────────────────
-const TENOR_PROXY = "/api/gifs"; // key stays on the server
+/* ── LEGAL PAGE FOOTER LINKS (shown in chat footer) ─────────────────────── */
 
-async function fetchGifs(query) {
-  if (gifFetchController) gifFetchController.abort();
-  gifFetchController = new AbortController();
-  gifResults.innerHTML = '<div class="gif-placeholder">Loading...</div>';
-
-  try {
-    const url  = query ? `${TENOR_PROXY}?q=${encodeURIComponent(query)}` : TENOR_PROXY;
-    const res  = await fetch(url, { signal: gifFetchController.signal });
-    const data = await res.json();
-    renderGifResults(data.results || []);
-  } catch (err) {
-    if (err.name !== "AbortError") {
-      gifResults.innerHTML = '<div class="gif-placeholder">Failed to load GIFs 😢</div>';
-    }
-  } finally {
-    gifFetchController = null;
-  }
+.legal-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 99; /* below input bar z:100 */
+  /* hidden behind the chat-input bar — only visible if JS moves it */
+  display: none; /* not used in chat UI, kept for possible future use */
 }
-
-function renderGifResults(results) {
-  const frag = document.createDocumentFragment();
-  if (!results.length) {
-    const ph = document.createElement("div");
-    ph.className = "gif-placeholder";
-    ph.textContent = "No GIFs found";
-    gifResults.innerHTML = "";
-    gifResults.appendChild(ph);
-    return;
-  }
-  const col1 = document.createElement("div");
-  const col2 = document.createElement("div");
-  col1.className = "gif-col";
-  col2.className = "gif-col";
-  results.forEach((result, i) => {
-    const media      = result.media[0];
-    const previewUrl = media.tinygif?.url || media.gif?.url;
-    const fullUrl    = media.gif?.url;
-    if (!previewUrl || !fullUrl) return;
-    const img        = document.createElement("img");
-    img.src          = previewUrl;
-    img.className    = "gif-item";
-    img.loading      = "lazy";
-    img.decoding     = "async";
-    img.addEventListener("click", () => sendGif(fullUrl, previewUrl));
-    (i % 2 === 0 ? col1 : col2).appendChild(img);
-  });
-  frag.appendChild(col1);
-  frag.appendChild(col2);
-  gifResults.innerHTML = "";
-  gifResults.appendChild(frag);
-}
-
-// ── Visual Viewport — drives BOTH the input bar and GIF picker ────────────────
-// On iOS Safari the keyboard (+ its accessory bar) shrinks the visual viewport
-// but NOT the layout viewport, so position:fixed elements stay hidden behind it.
-// We read the gap and push everything up by exactly that amount — the same trick
-// Instagram uses so their input sits flush above the keyboard with no extra bar.
-const chatInputBar = document.querySelector(".chat-input");
-
-function getKeyboardHeight() {
-  if (!window.visualViewport) return 0;
-  const vv = window.visualViewport;
-  return Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-}
-
-function updateViewportOffsets() {
-  const vv  = window.visualViewport;
-  const kbH = getKeyboardHeight();
-
-  // Clamp body to the visual viewport height so the flex chat area fills
-  // exactly the space above the keyboard — maximum messages visible and
-  // the container stays scrollable (same trick Instagram uses).
-  document.body.style.height = kbH > 0 ? vv.height + "px" : "";
-
-  // Toggle a class so CSS can zoom out messages slightly when keyboard is open
-  document.body.classList.toggle("keyboard-open", kbH > 0);
-
-  // Input bar is position:fixed (layout-viewport coords) so still needs
-  // shifting up by the full keyboard height (accessory bar included).
-  chatInputBar.style.bottom     = kbH + "px";
-  chatInputBar.style.transition = kbH === 0 ? "bottom 0.22s ease" : "none";
-
-  // GIF picker floats 8 px above the input bar
-  if (gifPickerOpen) {
-    gifPicker.style.bottom = (kbH + chatInputBar.offsetHeight + 8) + "px";
-  }
-
-  // Pin scroll to bottom whenever the viewport shifts
-  scheduleScroll();
-}
-
-if (window.visualViewport) {
-  window.visualViewport.addEventListener("resize", updateViewportOffsets, { passive: true });
-  window.visualViewport.addEventListener("scroll", updateViewportOffsets, { passive: true });
-}
-
-function updateGifPickerPosition() {
-  if (!gifPickerOpen) return;
-  const kbH = getKeyboardHeight();
-  gifPicker.style.bottom = (kbH + chatInputBar.offsetHeight + 8) + "px";
-}
-
-function openGifPicker() {
-  gifPicker.style.display = "flex";
-  gifPickerOpen = true;
-  gifSearch.value = "";
-  gifSearch.focus();
-  updateGifPickerPosition();
-  fetchGifs("");
-}
-
-function closeGifPickerPanel() {
-  gifPicker.style.display = "none";
-  gifPicker.style.bottom  = ""; // reset Visual Viewport override
-  gifPickerOpen = false;
-}
-
-gifBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  gifPickerOpen ? closeGifPickerPanel() : openGifPicker();
-});
-
-gifPickerClose.addEventListener("click", (e) => { e.stopPropagation(); closeGifPickerPanel(); });
-
-gifSearch.addEventListener("input", () => {
-  clearTimeout(gifSearchTimer);
-  gifSearchTimer = setTimeout(() => fetchGifs(gifSearch.value.trim()), 400);
-});
-
-gifSearch.addEventListener("keydown", (e) => e.stopPropagation());
-
-document.addEventListener("click", (e) => {
-  if (gifPickerOpen && !gifPicker.contains(e.target) && e.target !== gifBtn) {
-    closeGifPickerPanel();
-  }
-});
-
-function sendGif(fullUrl, previewUrl) {
-  if (!partnerConnected) return;
-  socket.emit("gif", { url: fullUrl, preview: previewUrl });
-  addGifMessage(fullUrl, true);
-  closeGifPickerPanel();
-}
-
-socket.on("gif", (data) => addGifMessage(data.url, false));
-
-// ── Question button ───────────────────────────────────────────────────────────
-let questionBtnCooldown = false;
-
-questionBtn.addEventListener("click", async () => {
-  if (!partnerConnected || questionBtnCooldown) return;
-  questionBtnCooldown = true;
-  questionBtn.disabled = true;
-  questionBtn.textContent = "⌛";
-
-  try {
-    const res  = await fetch("/api/random-question");
-    const data = await res.json();
-    if (data.question) {
-      // Show question card locally for you
-      addQuestionCard(data.question, true);
-      // Relay to partner via socket
-      socket.emit("sendQuestion", { text: data.question });
-    }
-  } catch {
-    addSystemMessage("კითხვა ვერ ჩაიტვირთა 😕");
-  } finally {
-    setTimeout(() => {
-      questionBtnCooldown  = false;
-      questionBtn.disabled = !partnerConnected;
-      questionBtn.textContent = "?";
-    }, 3000); // 3 s cooldown
-  }
-});
-
-// Partner received a question card from us
-socket.on("partnerQuestion", ({ text }) => {
-  addQuestionCard(text, false);
-  playNotification("message");
-  incrementUnread();
-});
-
-// ── Reactions ─────────────────────────────────────────────────────────────────
-const REACTIONS          = ["❤️","😂","😢"];
-let activeReactionPicker = null;
-
-function showReactionPicker(anchorEl, messageId) {
-  closeReactionPicker();
-  const picker      = document.createElement("div");
-  picker.className  = "reaction-picker";
-  const frag = document.createDocumentFragment();
-  REACTIONS.forEach(emoji => {
-    const btn       = document.createElement("button");
-    btn.className   = "reaction-emoji-btn";
-    btn.textContent = emoji;
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      reactToMessage(messageId, emoji);
-      closeReactionPicker();
-    });
-    frag.appendChild(btn);
-  });
-  picker.appendChild(frag);
-  document.body.appendChild(picker);
-  activeReactionPicker = picker;
-  requestAnimationFrame(() => {
-    const rect = anchorEl.getBoundingClientRect();
-    const pw = picker.offsetWidth, ph = picker.offsetHeight;
-    let left = rect.left, top = rect.top - ph - 8;
-    if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
-    if (top < 4) top = rect.bottom + 8;
-    picker.style.cssText += `left:${left}px;top:${top}px;opacity:1;transform:scale(1)`;
-  });
-}
-
-function closeReactionPicker() {
-  activeReactionPicker?.remove();
-  activeReactionPicker = null;
-}
-
-document.addEventListener("click", () => closeReactionPicker());
-
-function reactToMessage(messageId, emoji) {
-  socket.emit("react", { messageId, emoji });
-  displayReaction(messageId, emoji, true);
-}
-
-function displayReaction(messageId, emoji, isMine) {
-  const area = document.getElementById(`reactions_${messageId}`);
-  if (!area) return;
-  const cls = isMine ? "reaction-mine" : "reaction-partner";
-  let pill   = area.querySelector(`.${cls}`);
-  if (pill) {
-    pill.classList.remove("reaction-pop");
-    void pill.offsetWidth;
-    pill.textContent = emoji;
-    pill.classList.add("reaction-pop");
-  } else {
-    pill = document.createElement("span");
-    pill.className   = `reaction-pill ${cls} reaction-pop`;
-    pill.textContent = emoji;
-    area.appendChild(pill);
-  }
-}
-
-// ── Message sending ───────────────────────────────────────────────────────────
-function sendMessage() {
-  const message = messageInput.value.trim();
-  if (!message || !partnerConnected || !userName) return;
-  const msgId = generateMsgId();
-  const currentReply = replyTo ? { ...replyTo } : null;
-  addMessage(message, true, msgId, currentReply);
-  socket.emit("message", { text: message, messageId: msgId, replyTo: currentReply });
-  messageInput.value = "";
-  charCount.textContent = "";
-  charCount.classList.remove("warning");
-  clearReply();
-  // Keep focus on input so the keyboard stays open on mobile
-  messageInput.focus();
-}
-
-// ── Name modal ────────────────────────────────────────────────────────────────
-function saveName() {
-  const name = nameInput.value.trim();
-  if (!name)            { showNameError("შეიყვანეთ სახელი ..."); return; }
-  if (name.length < 2)  { showNameError("სახელი უნდა შედგებოდეს მინიმუ ორი სიმბოლოსგან!"); return; }
-  if (name.length > 20) { showNameError("20 სიმბოლოზე მეტი ვერ იქნება სახელი ! "); return; }
-  clearNameError();
-  saveNameBtn.disabled    = true;
-  saveNameBtn.textContent = "Checking...";
-  socket.emit("setName", name);
-}
-
-// ── Socket events ─────────────────────────────────────────────────────────────
-
-socket.on("connect", () => {
-  if (wasAutoKicked) return;
-  if (userName && !isFirstLogin) {
-    isReconnecting = true;
-    socket.emit("setName", userName);
-  }
-});
-
-socket.on("nameAccepted", (acceptedName) => {
-  userName                = acceptedName;
-  nameModal.style.display = "none";
-  saveNameBtn.disabled    = false;
-  saveNameBtn.textContent = "თანხმობა და შესვლა";
-  clearNameError();
-
-  // Show the username in the top bar
-  const displayEl = document.getElementById("userNameDisplay");
-  if (displayEl) {
-    displayEl.textContent = `👤 ${acceptedName}`;
-    displayEl.style.display = "block";
-  }
-
-  if (isFirstLogin) {
-    isFirstLogin = false;
-    clearChat();
-    addSearchingMessage();
-    socket.emit("findPartner");
-    startSearchRetry();
-  } else if (isReconnecting) {
-    isReconnecting   = false;
-    partnerConnected = false;
-    partnerName      = "";
-    setInputsEnabled(false);
-    hideTypingIndicator();
-    closeGifPickerPanel();
-    clearChat();
-    addSearchingMessage();
-    socket.emit("findPartner");
-    startSearchRetry();
-  }
-  // else: mid-session name change — no extra action
-});
-
-socket.on("nameTaken", () => {
-  saveNameBtn.disabled    = false;
-  saveNameBtn.textContent = isFirstLogin ? "თანხმობა და შესვლა" : "Save Name";
-  isReconnecting          = false;
-  showNameError("ეს სახელი დაკავებულია. სხვა აირჩიეთ. 😟 ");
-  nameInput.focus();
-  nameInput.select();
-});
-
-socket.on("onlineCount", (count) => updateOnlineCount(count));
-
-socket.on("queuePosition", ({ position, total }) => {
-  const wrapper = document.getElementById("searchingMsg");
-  if (wrapper) {
-    const msg = wrapper.querySelector(".system-message");
-    if (msg) msg.textContent = `ვეძებთ ახალ პარტნიორს... 🔎`;
-  }
-});
-
-socket.on("partnerFound", (partner) => {
-  stopSearchRetry();
-  clearChat();
-  partnerName      = partner.name || "Anonymous";
-  partnerConnected = true;
-  addSystemMessage(`გილოცავთ პარტნიორი ნაპოვნია 🥳 : ${partnerName}`);
-  setInputsEnabled(true);
-  playNotification("partnerFound");
-  incrementUnread();
-});
-
-// Reconnect grace-period events
-let partnerWasReconnecting = false;
-
-socket.on("partnerReconnecting", (data) => {
-  partnerWasReconnecting = true;
-  setInputsEnabled(false);
-  hideTypingIndicator();
-  closeGifPickerPanel();
-  addReconnectingMessage(data.name || "Partner");
-});
-
-socket.on("partnerReconnected", (data) => {
-  partnerWasReconnecting = false;
-  removeReconnectingMessage();
-  partnerName      = data.name || partnerName;
-  partnerConnected = true;
-  setInputsEnabled(true);
-  addSystemMessage(`${data.name} - დაბრუნდა! 🎉`);
-  playNotification("partnerFound");
-});
-
-// Own socket restored to previous partner after reconnecting
-socket.on("partnerRestored", (data) => {
-  stopSearchRetry();
-  clearChat();
-  partnerName      = data.name || "Anonymous";
-  partnerConnected = true;
-  addSystemMessage(`${partnerName}-ს კვლავ დაუკავშირდით! 🎉`);
-  setInputsEnabled(true);
-  playNotification("partnerFound");
-});
-
-socket.on("waitingForPartner", () => {
-  clearChat();
-  addSearchingMessage();
-  partnerConnected = false;
-  partnerName      = "";
-  setInputsEnabled(false);
-  startSearchRetry();
-});
-
-socket.on("partnerTyping", (typing) => {
-  typing ? showTypingIndicator() : hideTypingIndicator();
-});
-
-socket.on("message", (msg) => {
-  hideTypingIndicator();
-  addMessage(msg.text, false, msg.messageId, msg.replyTo || null);
-  playNotification("message");
-  incrementUnread();
-  // Tell sender we received/read the message
-  if (msg.messageId) socket.emit("seen", { messageId: msg.messageId });
-});
-
-socket.on("partnerSeen", ({ messageId }) => {
-  const el = document.getElementById(`seen_${messageId}`);
-  if (el) { el.textContent = ""; el.classList.add("seen"); }
-});
-
-socket.on("reacted", ({ messageId, emoji }) => {
-  displayReaction(messageId, emoji, false);
-});
-
-socket.on("partnerDisconnected", (data) => {
-  if (!partnerWasReconnecting) {
-    // Normal disconnect — remove any leftover reconnecting msg and show goodbye
-    removeReconnectingMessage();
-    addDisconnectMessage(`${data.name || "Anonymous"} -მ სამწუხაროდ დაგტოვათ 😟 `);
-  }
-  // If partnerWasReconnecting is true the "გავიდა საიტიდან" message stays
-  // visible until the user presses ძებნა (which calls clearChat).
-  partnerWasReconnecting = false;
-  partnerConnected = false;
-  partnerName      = "";
-  stopSearchRetry();
-  hideTypingIndicator();
-  setInputsEnabled(false);
-  closeGifPickerPanel();
-});
-
-socket.on("userBlocked", (data) => {
-  stopSearchRetry();
-  clearChat();
-  addSystemMessage(`${data.name} დაბლოკილია. ვეძებთ ახალ პარტნიორს...`);
-  partnerConnected = false;
-  partnerName      = "";
-  setInputsEnabled(false);
-  closeGifPickerPanel();
-  addSearchingMessage();
-  startSearchRetry();
-});
-
-socket.on("reportConfirmed", () => {
-  addSystemMessage("შეტყობინება გაგზავნილია. გმადლობთ. 🙏");
-});
-
-socket.on("messageFlagged", () => {
-  const notice       = document.createElement("div");
-  notice.className   = "system-message";
-  notice.textContent = "შეტყობინება გაიფილტრა და არ გაიგზავნა.";
-  chat.appendChild(notice);
-  scheduleScroll();
-  setTimeout(() => notice.remove(), 3000);
-});
-
-socket.on("autoKicked", () => {
-  wasAutoKicked    = true;
-  partnerConnected = false;
-  partnerName      = "";
-  stopSearchRetry();
-  clearChat();
-  setInputsEnabled(false);
-  addDisconnectMessage("თქვენ დაბლოკილი ხართ განმეორებადი დარღვევების გამო.");
-  socket.disconnect();
-});
-
-// ── Button handlers ───────────────────────────────────────────────────────────
-
-nextBtn.addEventListener("click", () => {
-  nextBtn.disabled = true;
-  setTimeout(() => { nextBtn.disabled = false; }, 1000);
-  hideTypingIndicator();
-  clearChat();
-  addSearchingMessage();
-  partnerConnected = false;
-  partnerName      = "";
-  setInputsEnabled(false);
-  closeGifPickerPanel();
-  socket.emit("next");
-  startSearchRetry();
-});
-
-blockBtn.addEventListener("click", () => {
-  if (!partnerConnected || !partnerName) return;
-  const confirmed = confirm(
-    `Block "${partnerName}"? თქვენ ვეღარ შეხვდებით ამ იუზერს ბლოკის შემდეგ. 😡 `
-  );
-  if (confirmed) socket.emit("blockUser");
-});
-
-sendBtn.addEventListener("click", sendMessage);
-
-messageInput.addEventListener("keypress", (e) => {
-  if (e.key === "Enter") sendMessage();
-});
-
-messageInput.addEventListener("input", () => {
-  // Character counter
-  const len = messageInput.value.length;
-  charCount.textContent = ``;
-  charCount.classList.toggle("warning", len > 1800);
-
-  // Typing indicator
-  if (!partnerConnected) return;
-  if (!isTyping) { isTyping = true; socket.emit("typing", true); }
-  clearTimeout(typingTimeout);
-  typingTimeout = setTimeout(() => {
-    isTyping = false;
-    socket.emit("typing", false);
-  }, 1500);
-});
-
-changeNameBtn.addEventListener("click", () => {
-  nameInput.value         = userName;
-  saveNameBtn.textContent = "Save Name";
-  clearNameError();
-  nameModal.style.display = "flex";
-  setTimeout(() => nameInput.focus(), 50);
-});
-
-saveNameBtn.addEventListener("click", saveName);
-nameInput.addEventListener("keypress", (e) => { if (e.key === "Enter") saveName(); });
-
-// ── Swipe-right gesture → Next (mobile) ──────────────────────────────────────
-let touchStartX = 0, touchStartY = 0;
-
-document.addEventListener("touchstart", (e) => {
-  touchStartX = e.touches[0].clientX;
-  touchStartY = e.touches[0].clientY;
-}, { passive: true });
-
-document.addEventListener("touchend", (e) => {
-  const dx = e.changedTouches[0].clientX - touchStartX;
-  const dy = Math.abs(e.changedTouches[0].clientY - touchStartY);
-  // Swipe right > 80 px, mostly horizontal, Next not disabled
-  if (dx > 80 && dy < 50 && !nextBtn.disabled) {
-    nextBtn.click();
-  }
-}, { passive: true });
-
-// ── Init ──────────────────────────────────────────────────────────────────────
-document.addEventListener("DOMContentLoaded", () => {
-  userName       = "";
-  isFirstLogin   = true;
-  isReconnecting = false;
-  wasAutoKicked  = false;
-  stopSearchRetry();
-  setInputsEnabled(false);
-  blockBtn.disabled        = true;
-  saveNameBtn.textContent  = "თანხმობა და შესვლა";
-  charCount.textContent    = "";
-
-  // Always show entry modal — nothing is stored between visits
-  nameModal.style.display = "flex";
-  setTimeout(() => nameInput.focus(), 100);
-});
