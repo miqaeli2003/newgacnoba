@@ -223,7 +223,7 @@ function addMessage(text, isYou, messageId) {
     const seen       = document.createElement("div");
     seen.className   = "seen-status";
     seen.id          = `seen_${id}`;
-    seen.textContent = "✓";
+    seen.textContent = "";
     wrapper.appendChild(seen);
   }
 
@@ -736,7 +736,7 @@ socket.on("message", (msg) => {
 
 socket.on("partnerSeen", ({ messageId }) => {
   const el = document.getElementById(`seen_${messageId}`);
-  if (el) { el.textContent = "✓✓"; el.classList.add("seen"); }
+  if (el) { el.textContent = ""; el.classList.add("seen"); }
 });
 
 socket.on("reacted", ({ messageId, emoji }) => {
