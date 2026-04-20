@@ -1,9 +1,4 @@
-const socket = io({
-  transports: ["websocket", "polling"], // polling fallback helps mobile resume
-  reconnectionDelay: 1000,
-  reconnectionDelayMax: 5000,
-  reconnectionAttempts: Infinity,
-});
+const socket = io();
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let userName            = "";
@@ -91,29 +86,12 @@ function incrementUnread() {
   }
 }
 
-// ── Mobile background / foreground reconnection ───────────────────────────────
-// When the user switches apps on mobile, the browser suspends the tab and the
-// WebSocket heartbeat stops. On return, we force a reconnect if the socket
-// dropped while we were in the background.
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
-    // Clear unread badge
+  if (!document.hidden) {
     unreadCount    = 0;
     document.title = originalTitle;
-
-    // Reconnect if the socket went away while backgrounded
-    if (!wasAutoKicked && !socket.connected) {
-      socket.connect();
-    }
   }
 });
-
-// Also fires when the browser tab/window regains focus (covers desktop too)
-window.addEventListener("focus", () => {
-  if (!wasAutoKicked && !socket.connected) {
-    socket.connect();
-  }
-}, { passive: true });
 
 // ── Scroll ────────────────────────────────────────────────────────────────────
 function scheduleScroll() {
@@ -523,8 +501,9 @@ socket.on("nameAccepted", (acceptedName) => {
     hideTypingIndicator();
     closeGifPickerPanel();
     clearChat();
-    // Don't auto-search — user was gone too long, let them press Search manually
-    addDisconnectMessage("კავშირი გაწყდა. ახალი პარტნიორის საპოვნელად დააჭირეთ \"ძებნა\" 🔎");
+    addSearchingMessage();
+    socket.emit("findPartner");
+    startSearchRetry();
   }
   // else: mid-session name change — no extra action
 });
