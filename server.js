@@ -269,12 +269,19 @@ io.on("connection", (socket) => {
     if (!socket.partner) return;
     if (!msgRateLimiter.check(socket)) return; // silently drop if rate exceeded
 
-    let text = "", messageId = null;
+    let text = "", messageId = null, replyTo = null;
     if (typeof msg === "string") {
       text = msg;
     } else if (msg && typeof msg.text === "string") {
       text = msg.text;
       messageId = msg.messageId;
+      // Validate and sanitise the replyTo payload
+      if (msg.replyTo && typeof msg.replyTo.text === "string") {
+        replyTo = {
+          text:       msg.replyTo.text.slice(0, 100).replace(/<[^>]*>/g, "").trim(),
+          senderName: String(msg.replyTo.senderName || "").slice(0, 30).replace(/<[^>]*>/g, "").trim(),
+        };
+      }
     }
 
     text = text.slice(0, MSG_MAX).replace(/<[^>]*>/g, "").trim();
@@ -282,7 +289,7 @@ io.on("connection", (socket) => {
 
     if (hasProfanity(text)) { socket.emit("messageFlagged"); return; }
 
-    socket.partner.emit("message", { text, messageId });
+    socket.partner.emit("message", { text, messageId, replyTo });
   });
 
   // ── Question card ─────────────────────────────────────────────────────────
