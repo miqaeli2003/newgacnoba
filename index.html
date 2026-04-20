@@ -19,22 +19,15 @@
 </head>
 <body>
   <div class="top-bar">
-    <div class="top-bar-row">
-      <div class="left-side">
-        <a href="/" class="site-name">GAICANI</a>
-        <div id="onlineCount"></div>
-        <div id="userNameDisplay" class="user-name-display" style="display:none"></div>
-      </div>
-      <div class="right-side">
-        <button class="change-name-btn" id="changeNameBtn">სახელის შეცვლა</button>
-        <button class="block-button" id="blockBtn" disabled>ბლოკი</button>
-        <button class="next-button" id="nextBtn">ძებნა</button>
-      </div>
+    <div class="left-side">
+      <a href="/" class="site-name">GAICANI</a>
+      <div id="onlineCount"></div>
+      <div id="userNameDisplay" class="user-name-display" style="display:none"></div>
     </div>
-    <!-- Mobile-only: username shown on second row -->
-    <div class="top-bar-user-row" id="userNameRow" style="display:none">
-      <span class="user-row-label">user:</span>
-      <span id="userNameMobile" class="user-name-mobile"></span>
+    <div class="right-side">
+      <button class="change-name-btn" id="changeNameBtn">სახელის შეცვლა</button>
+      <button class="block-button" id="blockBtn" disabled>ბლოკი</button>
+      <button class="next-button" id="nextBtn">ძებნა</button>
     </div>
   </div>
 
@@ -42,39 +35,6 @@
 
   <!-- GIF Picker Panel -->
   <div id="gifPicker" class="gif-picker" style="display:none">
-    <div class="gif-picker-header">
-      <input type="text" id="gifSearch" placeholder="🔍 Search GIFs..."
-             autocomplete="off" inputmode="search" />
-      <button class="gif-picker-close" id="gifPickerClose">✕</button>
-    </div>
-    <div class="gif-results" id="gifResults">
-      <div class="gif-placeholder" id="gifLoading">✨ Loading trending GIFs...</div>
-    </div>
-    <div class="gif-powered">Powered by Tenor</div>
-  </div>
-
-  <div class="chat-input">
-    <input type="text" id="messageInput" placeholder="Type your message..."
-           autocomplete="off" inputmode="text" disabled />
-    <span id="charCount" class="char-count">0/2000</span>
-    <button id="gifBtn" class="gif-btn" disabled title="Send a GIF">GIF</button>
-    <button id="sendBtn" disabled>SEND</button>
-  </div>
-
-  <!-- Name Modal -->
-  <div id="nameModal" class="modal">
-    <div class="modal-content">
-      <input type="text" id="nameInput" placeholder="Enter your username..."
-             autocomplete="off" inputmode="text" maxlength="20" />
-      <div id="nameError" class="name-error"></div>
-      <button id="saveNameBtn">Start Chatting</button>
-    </div>
-  </div>
-
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="script.js"></script>
-</body>
-</html>  <div id="gifPicker" class="gif-picker" style="display:none">
     <div class="gif-picker-header">
       <input type="text" id="gifSearch" placeholder="🔍 Search GIFs..."
              autocomplete="off" inputmode="search" />
