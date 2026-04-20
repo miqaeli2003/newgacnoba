@@ -4,6 +4,7 @@ let userName = "";
 let partnerConnected = false;
 let partnerName = "";
 let isFirstLogin = true;
+let isReconnecting = false; // FIX: track reconnect vs first login vs name change
 let msgCounter = 0;
 let typingTimeout = null;
 let isTyping = false;
@@ -368,22 +369,47 @@ function saveName() {
 
 // ── Socket Events ─────────────────────────────────────────────────────────────
 
+// FIX: handle socket.io auto-reconnect (e.g. after a network blip)
+// Without this, the new server socket has no name and the client is stuck in broken state
+socket.on("connect", () => {
+  if (userName && !isFirstLogin) {
+    // We have a known username — re-register it silently on the new socket
+    isReconnecting = true;
+    socket.emit("setName", userName);
+  }
+});
+
 socket.on("nameAccepted", (acceptedName) => {
   userName = acceptedName;
   nameModal.style.display = "none";
   saveNameBtn.disabled = false;
   saveNameBtn.textContent = "Start Chatting";
   clearNameError();
+
   if (isFirstLogin) {
+    // Normal first-time flow
     isFirstLogin = false;
     clearChat();
     socket.emit("findPartner");
+  } else if (isReconnecting) {
+    // FIX: after a reconnect, reset state and search again
+    isReconnecting = false;
+    partnerConnected = false;
+    partnerName = "";
+    setInputsEnabled(false);
+    hideTypingIndicator();
+    closeGifPickerPanel();
+    clearChat();
+    addSystemMessage("ვეძებთ ახალ პარტნიორს...");
+    socket.emit("findPartner");
   }
+  // else: user just changed their name mid-session — do nothing extra
 });
 
 socket.on("nameTaken", () => {
   saveNameBtn.disabled = false;
   saveNameBtn.textContent = isFirstLogin ? "Start Chatting" : "Save Name";
+  isReconnecting = false;
   showNameError("ეს სახელი დაკავებულია. სხვა აირჩიეთ.");
   nameInput.focus();
   nameInput.select();
@@ -422,7 +448,8 @@ socket.on("reacted", ({ messageId, emoji }) => {
 
 socket.on("partnerDisconnected", (data) => {
   hideTypingIndicator();
-  addDisconnectMessage(`${data.name || "Anonymous"} -მ სამწუხაროდ დაგტოვათt`);
+  // FIX: typo fix — removed stray 't' at end of Georgian text
+  addDisconnectMessage(`${data.name || "Anonymous"} -მ სამწუხაროდ დაგტოვათ`);
   partnerConnected = false;
   partnerName = "";
   setInputsEnabled(false);
@@ -495,6 +522,7 @@ nameInput.addEventListener("keypress", (e) => {
 window.onload = () => {
   userName = "";
   isFirstLogin = true;
+  isReconnecting = false;
   nameModal.style.display = "flex";
   setInputsEnabled(false);
   blockBtn.disabled = true;
