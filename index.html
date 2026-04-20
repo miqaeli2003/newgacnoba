@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Chatting Site</title>
 
-  <!-- PWA / mobile chrome -->
   <meta name="theme-color" content="#2b2d31" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -14,9 +13,7 @@
   <link rel="apple-touch-icon" href="/logo.png" />
   <link rel="manifest" href="/manifest.json" />
 
-  <!-- Preconnect to Tenor CDN so GIF images load faster -->
   <link rel="preconnect" href="https://media.tenor.com" />
-
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -35,7 +32,6 @@
 
   <div class="chat-container" id="chat"></div>
 
-  <!-- GIF Picker Panel -->
   <div id="gifPicker" class="gif-picker" style="display:none">
     <div class="gif-picker-header">
       <input type="text" id="gifSearch" placeholder="🔍 Search GIFs..."
@@ -70,7 +66,6 @@
     </div>
   </div>
 
-  <!-- ── Combined Entry Modal ───────────────────────────────────────────────── -->
   <div id="nameModal" class="modal">
     <div class="modal-content">
       <img src="/Logo2.png" alt="GAICANI" class="modal-logo" />
@@ -79,8 +74,7 @@
       <div id="nameError" class="name-error"></div>
       <p class="safety-age-confirm">
         საუბრის დაწყებით ადასტურებთ რომ ხართ <strong>18+</strong> და ეთანხმებით
-        <a href="/terms.html" target="_blank" class="safety-link">Terms of Service</a>-ს
-        და
+        <a href="/terms.html" target="_blank" class="safety-link">Terms of Service</a>-ს და
         <a href="/privacy.html" target="_blank" class="safety-link">Privacy Policy</a>-ს.
       </p>
       <button id="saveNameBtn">საუბრის დაწყება</button>
