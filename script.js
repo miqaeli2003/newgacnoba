@@ -713,12 +713,11 @@ socket.on("partnerRestored", (data) => {
 });
 
 socket.on("waitingForPartner", () => {
-  clearChat();
-  addSearchingMessage();
   partnerConnected = false;
   partnerName      = "";
   setInputsEnabled(false);
-  startSearchRetry();
+  stopSearchRetry();
+  addSystemMessage("დააჭირეთ „ძებნა" ახალი პარტნიორის საპოვნელად.");
 });
 
 socket.on("partnerTyping", (typing) => {
