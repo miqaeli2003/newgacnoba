@@ -37,27 +37,6 @@ const gifResults     = document.getElementById("gifResults");
 const gifPickerClose = document.getElementById("gifPickerClose");
 const charCount      = document.getElementById("charCount");
 const questionBtn    = document.getElementById("questionBtn");
-const safetyModal    = document.getElementById("safetyModal");
-const safetyConfirmBtn = document.getElementById("safetyConfirmBtn");
-
-// ── Age / Safety gate ──────────────────────────────────────────────────────
-const AGE_KEY = "gaicani_age_ok";
-
-function isAgeVerified() {
-  try { return localStorage.getItem(AGE_KEY) === "1"; } catch { return false; }
-}
-
-function markAgeVerified() {
-  try { localStorage.setItem(AGE_KEY, "1"); } catch { /* private mode */ }
-}
-
-safetyConfirmBtn.addEventListener("click", () => {
-  markAgeVerified();
-  safetyModal.style.display = "none";
-  // Now show the name modal
-  nameModal.style.display   = "flex";
-  setTimeout(() => nameInput.focus(), 100);
-});
 
 // ── Sound ─────────────────────────────────────────────────────────────────────
 let _audioCtx = null;
@@ -640,7 +619,7 @@ socket.on("nameAccepted", (acceptedName) => {
   userName                = acceptedName;
   nameModal.style.display = "none";
   saveNameBtn.disabled    = false;
-  saveNameBtn.textContent = "Start Chatting";
+  saveNameBtn.textContent = "თანხმობა და შესვლა";
   clearNameError();
 
   // Show the username in the top bar
@@ -673,7 +652,7 @@ socket.on("nameAccepted", (acceptedName) => {
 
 socket.on("nameTaken", () => {
   saveNameBtn.disabled    = false;
-  saveNameBtn.textContent = isFirstLogin ? "Start Chatting" : "Save Name";
+  saveNameBtn.textContent = isFirstLogin ? "თანხმობა და შესვლა" : "Save Name";
   isReconnecting          = false;
   showNameError("ეს სახელი დაკავებულია. სხვა აირჩიეთ. 😟 ");
   nameInput.focus();
@@ -900,17 +879,10 @@ document.addEventListener("DOMContentLoaded", () => {
   stopSearchRetry();
   setInputsEnabled(false);
   blockBtn.disabled        = true;
-  saveNameBtn.textContent  = "Start Chatting";
+  saveNameBtn.textContent  = "თანხმობა და შესვლა";
   charCount.textContent    = "";
 
-  if (isAgeVerified()) {
-    // Already confirmed — go straight to the name modal
-    safetyModal.style.display = "none";
-    nameModal.style.display   = "flex";
-    setTimeout(() => nameInput.focus(), 100);
-  } else {
-    // First visit — show safety / age gate first
-    nameModal.style.display   = "none";
-    safetyModal.style.display = "flex";
-  }
+  // Always show entry modal — nothing is stored between visits
+  nameModal.style.display = "flex";
+  setTimeout(() => nameInput.focus(), 100);
 });
