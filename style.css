@@ -699,16 +699,17 @@ html, body {
 }
 
 .reply-quote-name {
-  font-size: 0.68em;
+  font-size: 0.72em;
   font-weight: 700;
-  color: #848de0;
+  color: #5865f2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: 0.1px;
 }
 
 .reply-quote.you .reply-quote-name {
-  color: rgba(255,255,255,0.6);
+  color: rgba(255,255,255,0.85);
 }
 
 .reply-quote-text {
