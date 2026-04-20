@@ -381,16 +381,44 @@ function renderGifResults(results) {
   gifResults.appendChild(frag);
 }
 
-function updateGifPickerPosition() {
-  if (!gifPickerOpen || !window.visualViewport) return;
+// ── Visual Viewport — drives BOTH the input bar and GIF picker ────────────────
+// On iOS Safari the keyboard (+ its accessory bar) shrinks the visual viewport
+// but NOT the layout viewport, so position:fixed elements stay hidden behind it.
+// We read the gap and push everything up by exactly that amount — the same trick
+// Instagram uses so their input sits flush above the keyboard with no extra bar.
+const chatInputBar = document.querySelector(".chat-input");
+
+function getKeyboardHeight() {
+  if (!window.visualViewport) return 0;
   const vv = window.visualViewport;
-  const keyboardH = window.innerHeight - vv.height - vv.offsetTop;
-  gifPicker.style.bottom = (72 + Math.max(0, keyboardH)) + "px";
+  return Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+}
+
+function updateViewportOffsets() {
+  const kbH = getKeyboardHeight();
+
+  // Move the input bar up by the full keyboard height (includes accessory bar)
+  chatInputBar.style.bottom     = kbH + "px";
+  chatInputBar.style.transition = kbH === 0 ? "bottom 0.22s ease" : "none";
+
+  // Keep GIF picker sitting 8 px above the input bar
+  if (gifPickerOpen) {
+    gifPicker.style.bottom = (kbH + chatInputBar.offsetHeight + 8) + "px";
+  }
+
+  // Keep chat scroll pinned to bottom when keyboard opens/closes
+  scheduleScroll();
 }
 
 if (window.visualViewport) {
-  window.visualViewport.addEventListener("resize", updateGifPickerPosition, { passive: true });
-  window.visualViewport.addEventListener("scroll", updateGifPickerPosition, { passive: true });
+  window.visualViewport.addEventListener("resize", updateViewportOffsets, { passive: true });
+  window.visualViewport.addEventListener("scroll", updateViewportOffsets, { passive: true });
+}
+
+function updateGifPickerPosition() {
+  if (!gifPickerOpen) return;
+  const kbH = getKeyboardHeight();
+  gifPicker.style.bottom = (kbH + chatInputBar.offsetHeight + 8) + "px";
 }
 
 function openGifPicker() {
