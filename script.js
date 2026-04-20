@@ -16,6 +16,8 @@ let gifFetchController  = null;
 let gifSearchTimer      = null;
 let gifPickerOpen       = false;
 let unreadCount         = 0;
+let hiddenAt            = null;        // timestamp when app went to background
+const INACTIVE_LIMIT_MS = 60_000;     // 1 minute of absence = session end
 const originalTitle     = document.title;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -88,9 +90,31 @@ function incrementUnread() {
 }
 
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) {
+  if (document.hidden) {
+    // App went to background — record the time
+    hiddenAt = Date.now();
     unreadCount    = 0;
     document.title = originalTitle;
+  } else {
+    // App came back to foreground
+    unreadCount    = 0;
+    document.title = originalTitle;
+
+    if (hiddenAt !== null) {
+      const awayMs = Date.now() - hiddenAt;
+      hiddenAt = null;
+
+      // Only trigger if the user had an active session and was gone >= 1 minute
+      if (awayMs >= INACTIVE_LIMIT_MS && userName && !wasAutoKicked) {
+        // Wait a brief moment — lets any socket reconnect events (partnerRestored,
+        // partnerFound) arrive first; if partner was restored we skip the kick.
+        setTimeout(() => {
+          if (!wasAutoKicked && !partnerConnected && userName) {
+            handleInactivityKick();
+          }
+        }, 500);
+      }
+    }
   }
 });
 
@@ -137,6 +161,34 @@ function addReconnectingMessage(name)      {
   );
 }
 function removeReconnectingMessage()       { document.getElementById("reconnectingMsg")?.remove(); }
+
+// ── Inactivity session end ────────────────────────────────────────────────────
+function handleInactivityKick() {
+  stopSearchRetry();
+  socket.emit("inactivityKick");   // server cleans up partner immediately (no grace)
+  partnerConnected = false;
+  partnerName      = "";
+  isTyping         = false;
+  clearTimeout(typingTimeout);
+  hideTypingIndicator();
+  closeGifPickerPanel();
+  setInputsEnabled(false);
+  clearChat();
+  wasAutoKicked = true;            // block any in-flight socket reconnect logic
+  addDisconnectMessage("არა აქტირობის გამო გამოირთო სესია");
+
+  // After 3 s let the user re-enter their name and start fresh
+  setTimeout(() => {
+    wasAutoKicked    = false;
+    isFirstLogin     = true;
+    userName         = "";
+    nameInput.value  = "";
+    saveNameBtn.textContent = "Start Chatting";
+    clearNameError();
+    nameModal.style.display = "flex";
+    setTimeout(() => nameInput.focus(), 50);
+  }, 3000);
+}
 
 // ── Searching message with random fact ───────────────────────────────────────
 function addSearchingMessage() {
