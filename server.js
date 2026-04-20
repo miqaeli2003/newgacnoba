@@ -1,109 +1,223 @@
-const express = require("express");
-const http = require("http");
+const express    = require("express");
+const http       = require("http");
 const { Server } = require("socket.io");
-const path = require("path");
+const path       = require("path");
+const compression   = require("compression");
+const rateLimit     = require("express-rate-limit");
 
-const app = express();
+const app    = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  // Tune ping/pong so stale connections are detected faster
-  pingTimeout: 20000,
+const io     = new Server(server, {
+  pingTimeout:  20000,
   pingInterval: 25000,
 });
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+// Store your real Tenor key in a TENOR_KEY environment variable for production.
+const TENOR_KEY          = process.env.TENOR_KEY || "LIVDSRZULELA";
+const NAME_MIN           = 2;
+const NAME_MAX           = 20;
+const MSG_MAX            = 2000;
+const RECONNECT_GRACE_MS = 4000;  // ms before partner is told you disconnected
+const MAX_BLOCKS_RX      = 3;     // auto-kick after being blocked this many times
+const MSG_RATE_MAX       = 20;    // max messages…
+const MSG_RATE_WINDOW_MS = 5000;  // …per 5 s
+
+const VALID_TAGS = new Set([
+  "gaming","music","movies","books","sports",
+  "tech","art","food","travel","memes",
+]);
+const VALID_EMOJIS = new Set(["❤️","😂","😢"]);
+
+// Add words to this Set to enable the profanity filter.
+const BANNED_WORDS = new Set([]);
+
+// ── Middleware ────────────────────────────────────────────────────────────────
+app.use(compression());
 app.use(express.static(path.join(__dirname)));
 
-let waitingQueue = [];
-const activeUsernames = new Set();
+// ── GIF Proxy — keeps the Tenor API key off the client ───────────────────────
+const gifHttpLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
-// ── Validation constants ────────────────────────────────────────────────────
-const NAME_MIN = 2;
-const NAME_MAX = 20;
-const MSG_MAX  = 2000;
+app.get("/api/gifs", gifHttpLimiter, async (req, res) => {
+  const q = (req.query.q || "").trim().slice(0, 100);
+  const endpoint = q
+    ? `https://api.tenor.com/v1/search?q=${encodeURIComponent(q)}&key=${TENOR_KEY}&limit=24&media_filter=minimal&contentfilter=medium`
+    : `https://api.tenor.com/v1/trending?key=${TENOR_KEY}&limit=24&media_filter=minimal&contentfilter=medium`;
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+  try {
+    const response = await fetch(endpoint);
+    if (!response.ok) throw new Error(`Tenor HTTP ${response.status}`);
+    const data = await response.json();
+    res.set("Cache-Control", "public, max-age=300"); // browser caches 5 min
+    res.json(data);
+  } catch {
+    res.status(502).json({ error: "Failed to fetch GIFs" });
+  }
+});
 
-/** Broadcast the current connected-client count to everyone. */
+// ── In-memory state ───────────────────────────────────────────────────────────
+let waitingQueue     = [];
+const activeUsernames    = new Set();
+const pendingDisconnects = new Map(); // nameLower → { partner, timeout }
+const reportLog          = [];        // append-only; persist to DB in production
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function updateOnlineCount() {
   io.emit("onlineCount", io.engine.clientsCount);
 }
 
-/** Remove disconnected / already-paired sockets from the waiting queue. */
 function cleanQueue() {
-  waitingQueue = waitingQueue.filter((s) => s.connected && !s.partner && s.userName);
+  waitingQueue = waitingQueue.filter(s => s.connected && !s.partner && s.userName);
 }
 
-// ── Socket handlers ─────────────────────────────────────────────────────────
+function countTagOverlap(a = [], b = []) {
+  const setB = new Set(b);
+  return a.filter(t => setB.has(t)).length;
+}
+
+function broadcastQueuePositions() {
+  cleanQueue();
+  waitingQueue.forEach((s, i) =>
+    s.emit("queuePosition", { position: i + 1, total: waitingQueue.length })
+  );
+}
+
+function makeRateLimiter(max, windowMs) {
+  return {
+    check(socket) {
+      const now = Date.now();
+      if (!socket._rl || now > socket._rl.resetAt) {
+        socket._rl = { count: 0, resetAt: now + windowMs };
+      }
+      return ++socket._rl.count <= max;
+    },
+  };
+}
+const msgRateLimiter = makeRateLimiter(MSG_RATE_MAX, MSG_RATE_WINDOW_MS);
+
+function hasProfanity(text) {
+  if (!BANNED_WORDS.size) return false;
+  const lower = text.toLowerCase();
+  for (const word of BANNED_WORDS) if (lower.includes(word)) return true;
+  return false;
+}
+
+// ── Socket handlers ───────────────────────────────────────────────────────────
 
 io.on("connection", (socket) => {
   console.log("User connected", socket.id);
 
-  socket.userName          = "";
-  socket.partner           = null;
-  socket.blockedNames      = [];
-  socket.recentPartnerIds  = new Set();
+  socket.userName         = "";
+  socket.partner          = null;
+  socket.blockedNames     = [];
+  socket.recentPartnerIds = new Set();
+  socket.interests        = [];
+  socket.blockedByCount   = 0;
+  socket._rl              = null;
 
   updateOnlineCount();
 
-  // ── Username Registration ────────────────────────────────────────────────
+  // ── Username registration ────────────────────────────────────────────────
   socket.on("setName", (name) => {
     if (typeof name !== "string") return;
     const trimmed = name.trim();
-
-    // Server-side validation (mirrors client rules)
     if (trimmed.length < NAME_MIN || trimmed.length > NAME_MAX) return;
 
-    // No-op if name is unchanged (case-insensitive)
     if (socket.userName.toLowerCase() === trimmed.toLowerCase()) {
       socket.emit("nameAccepted", socket.userName);
+      tryRestorePartnership(socket, trimmed.toLowerCase());
       return;
     }
 
     if (activeUsernames.has(trimmed.toLowerCase())) {
-      socket.emit("nameTaken");
-      return;
+      if (pendingDisconnects.has(trimmed.toLowerCase())) {
+        // The old socket for this name just dropped — let it be reclaimed
+        activeUsernames.delete(trimmed.toLowerCase());
+      } else {
+        socket.emit("nameTaken");
+        return;
+      }
     }
 
-    if (socket.userName) {
-      activeUsernames.delete(socket.userName.toLowerCase());
-    }
-
+    if (socket.userName) activeUsernames.delete(socket.userName.toLowerCase());
     socket.userName = trimmed;
     activeUsernames.add(trimmed.toLowerCase());
     socket.emit("nameAccepted", trimmed);
+
+    tryRestorePartnership(socket, trimmed.toLowerCase());
+  });
+
+  function tryRestorePartnership(sock, nameLower) {
+    if (!pendingDisconnects.has(nameLower)) return false;
+    const { partner, timeout } = pendingDisconnects.get(nameLower);
+    clearTimeout(timeout);
+    pendingDisconnects.delete(nameLower);
+
+    if (partner.connected && !partner.partner) {
+      sock.partner    = partner;
+      partner.partner = sock;
+      sock.emit("partnerRestored",       { name: partner.userName });
+      partner.emit("partnerReconnected", { name: sock.userName });
+      return true;
+    }
+    return false;
+  }
+
+  // ── Interests ────────────────────────────────────────────────────────────
+  socket.on("setInterests", (tags) => {
+    if (!Array.isArray(tags)) return;
+    socket.interests = tags.filter(t => typeof t === "string" && VALID_TAGS.has(t)).slice(0, 10);
   });
 
   // ── Matchmaking ──────────────────────────────────────────────────────────
   function tryFindPartner() {
-    if (!socket.userName) return;
-
+    if (!socket.userName || socket.partner) return;
     cleanQueue();
 
-    const idx = waitingQueue.findIndex(
-      (s) =>
-        s.id !== socket.id &&
-        !socket.recentPartnerIds.has(s.id) &&
-        !s.recentPartnerIds.has(socket.id) &&
-        !socket.blockedNames.includes(s.userName.toLowerCase()) &&
-        !s.blockedNames.includes(socket.userName.toLowerCase())
+    const candidates = waitingQueue.filter(s =>
+      s.id !== socket.id &&
+      !socket.recentPartnerIds.has(s.id) &&
+      !s.recentPartnerIds.has(socket.id) &&
+      !socket.blockedNames.includes(s.userName.toLowerCase()) &&
+      !s.blockedNames.includes(socket.userName.toLowerCase())
     );
 
-    if (idx !== -1) {
-      const partnerSocket = waitingQueue.splice(idx, 1)[0];
-      // Also remove self from queue in case we slipped in
-      waitingQueue = waitingQueue.filter((s) => s.id !== socket.id);
-
-      socket.partner        = partnerSocket;
-      partnerSocket.partner = socket;
-
-      socket.emit("partnerFound",        { name: partnerSocket.userName });
-      partnerSocket.emit("partnerFound", { name: socket.userName });
-    } else {
-      if (!waitingQueue.some((s) => s.id === socket.id)) {
-        waitingQueue.push(socket);
-      }
-      socket.emit("waitingForPartner");
+    if (!candidates.length) {
+      if (!waitingQueue.some(s => s.id === socket.id)) waitingQueue.push(socket);
+      broadcastQueuePositions();
+      return;
     }
+
+    // Prefer candidate with most shared interests; fall back to first available
+    let best = candidates[0];
+    let bestScore = countTagOverlap(socket.interests, best.interests);
+    for (let i = 1; i < candidates.length; i++) {
+      const score = countTagOverlap(socket.interests, candidates[i].interests);
+      if (score > bestScore) { bestScore = score; best = candidates[i]; }
+    }
+
+    const partnerSocket = best;
+    waitingQueue = waitingQueue.filter(
+      s => s.id !== partnerSocket.id && s.id !== socket.id
+    );
+
+    socket.partner        = partnerSocket;
+    partnerSocket.partner = socket;
+
+    const sharedTags = (socket.interests || []).filter(t =>
+      (partnerSocket.interests || []).includes(t)
+    );
+
+    socket.emit("partnerFound",        { name: partnerSocket.userName, sharedTags });
+    partnerSocket.emit("partnerFound", { name: socket.userName,        sharedTags });
+    broadcastQueuePositions();
   }
 
   socket.on("findPartner", () => {
@@ -114,35 +228,63 @@ io.on("connection", (socket) => {
   // ── Messaging ────────────────────────────────────────────────────────────
   socket.on("message", (msg) => {
     if (!socket.partner) return;
+    if (!msgRateLimiter.check(socket)) return; // silently drop if rate exceeded
 
+    let text = "", messageId = null;
     if (typeof msg === "string") {
-      // Legacy plain-string path — truncate for safety
-      const text = msg.slice(0, MSG_MAX);
-      socket.partner.emit("message", { text });
+      text = msg;
     } else if (msg && typeof msg.text === "string") {
-      const text = msg.text.slice(0, MSG_MAX);
-      socket.partner.emit("message", { text, messageId: msg.messageId });
+      text = msg.text;
+      messageId = msg.messageId;
+    }
+
+    text = text.slice(0, MSG_MAX).replace(/<[^>]*>/g, "").trim();
+    if (!text) return;
+
+    if (hasProfanity(text)) { socket.emit("messageFlagged"); return; }
+
+    socket.partner.emit("message", { text, messageId });
+  });
+
+  // ── Seen indicator ───────────────────────────────────────────────────────
+  socket.on("seen", ({ messageId }) => {
+    if (socket.partner && messageId) {
+      socket.partner.emit("partnerSeen", { messageId });
     }
   });
 
   // ── GIF ──────────────────────────────────────────────────────────────────
   socket.on("gif", (data) => {
     if (!socket.partner || typeof data?.url !== "string") return;
+    if (!data.url.startsWith("https://media.tenor.com/")) return; // Tenor CDN only
     socket.partner.emit("gif", { url: data.url, preview: data.preview });
   });
 
   // ── Reactions ────────────────────────────────────────────────────────────
   socket.on("react", ({ messageId, emoji }) => {
-    if (socket.partner && messageId && emoji) {
-      socket.partner.emit("reacted", { messageId, emoji });
-    }
+    if (!socket.partner || !messageId || !emoji) return;
+    if (!VALID_EMOJIS.has(emoji)) return;
+    socket.partner.emit("reacted", { messageId, emoji });
   });
 
   // ── Typing ───────────────────────────────────────────────────────────────
   socket.on("typing", (isTyping) => {
-    if (socket.partner) {
-      socket.partner.emit("partnerTyping", Boolean(isTyping));
-    }
+    if (socket.partner) socket.partner.emit("partnerTyping", Boolean(isTyping));
+  });
+
+  // ── Report ───────────────────────────────────────────────────────────────
+  socket.on("reportUser", ({ reason }) => {
+    if (!socket.partner) return;
+    const entry = {
+      reportedId:   socket.partner.id,
+      reportedName: socket.partner.userName,
+      reportedBy:   socket.userName,
+      reason:       (reason || "").slice(0, 200),
+      timestamp:    new Date().toISOString(),
+    };
+    reportLog.push(entry);
+    console.log("REPORT:", JSON.stringify(entry));
+    socket.emit("reportConfirmed");
   });
 
   // ── Next ─────────────────────────────────────────────────────────────────
@@ -153,23 +295,19 @@ io.on("connection", (socket) => {
       const oldPartner   = socket.partner;
       const oldPartnerId = oldPartner.id;
 
-      socket.partner    = null;
+      socket.partner     = null;
       oldPartner.partner = null;
       oldPartner.emit("partnerDisconnected", { name: socket.userName });
 
-      // Prevent immediate re-match for 5 s
       socket.recentPartnerIds.add(oldPartnerId);
       oldPartner.recentPartnerIds.add(socket.id);
-
       setTimeout(() => {
         socket.recentPartnerIds.delete(oldPartnerId);
-        if (oldPartner.connected) {
-          oldPartner.recentPartnerIds.delete(socket.id);
-        }
+        if (oldPartner.connected) oldPartner.recentPartnerIds.delete(socket.id);
       }, 5000);
     }
 
-    waitingQueue = waitingQueue.filter((s) => s.id !== socket.id);
+    waitingQueue = waitingQueue.filter(s => s.id !== socket.id);
     tryFindPartner();
   });
 
@@ -179,19 +317,24 @@ io.on("connection", (socket) => {
 
     const blockedName        = socket.partner.userName.toLowerCase();
     const blockedDisplayName = socket.partner.userName;
+    const blockedSocket      = socket.partner;
 
-    if (!socket.blockedNames.includes(blockedName)) {
-      socket.blockedNames.push(blockedName);
+    if (!socket.blockedNames.includes(blockedName)) socket.blockedNames.push(blockedName);
+
+    socket.partner         = null;
+    blockedSocket.partner  = null;
+    blockedSocket.emit("partnerDisconnected", { name: socket.userName });
+
+    blockedSocket.blockedByCount = (blockedSocket.blockedByCount || 0) + 1;
+    if (blockedSocket.blockedByCount >= MAX_BLOCKS_RX) {
+      console.log(`Auto-kicking ${blockedSocket.userName}: blocked ${MAX_BLOCKS_RX}x`);
+      blockedSocket.emit("autoKicked");
+      blockedSocket.disconnect(true);
+      return;
     }
 
-    const oldPartner  = socket.partner;
-    socket.partner    = null;
-    oldPartner.partner = null;
-    oldPartner.emit("partnerDisconnected", { name: socket.userName });
-
     socket.emit("userBlocked", { name: blockedDisplayName });
-
-    waitingQueue = waitingQueue.filter((s) => s.id !== socket.id);
+    waitingQueue = waitingQueue.filter(s => s.id !== socket.id);
     tryFindPartner();
   });
 
@@ -199,21 +342,37 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     console.log("User disconnected", socket.id);
 
-    if (socket.userName) {
-      activeUsernames.delete(socket.userName.toLowerCase());
-    }
+    if (socket.userName) activeUsernames.delete(socket.userName.toLowerCase());
 
     if (socket.partner) {
-      socket.partner.emit("partnerDisconnected", { name: socket.userName });
-      socket.partner.partner = null;
+      const partner   = socket.partner;
+      const name      = socket.userName || "Anonymous";
+      const nameLower = name.toLowerCase();
+
+      socket.partner  = null;
+      partner.partner = null;
+
+      if (socket.userName) {
+        // Grace period: give user 4 s to reconnect before telling partner
+        partner.emit("partnerReconnecting", { name });
+
+        const timeout = setTimeout(() => {
+          pendingDisconnects.delete(nameLower);
+          if (partner.connected) partner.emit("partnerDisconnected", { name });
+        }, RECONNECT_GRACE_MS);
+
+        pendingDisconnects.set(nameLower, { partner, timeout });
+      } else {
+        partner.emit("partnerDisconnected", { name: "Anonymous" });
+      }
     }
 
-    waitingQueue = waitingQueue.filter((s) => s.id !== socket.id);
+    waitingQueue = waitingQueue.filter(s => s.id !== socket.id);
     updateOnlineCount();
   });
 });
 
-// ── Server start ─────────────────────────────────────────────────────────────
+// ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server listening on http://localhost:${PORT}`);
