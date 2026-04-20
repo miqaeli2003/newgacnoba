@@ -572,7 +572,7 @@ html, body {
 
 .chat-input {
   position: fixed;
-  bottom: 0;
+  bottom: 0;          /* JS overrides this on iOS via visualViewport */
   left: 0;
   right: 0;
   z-index: 100;
@@ -582,6 +582,7 @@ html, body {
   border-top: 1px solid #1a1b1e;
   gap: 8px;
   align-items: center;
+  will-change: bottom;  /* hint GPU layer so sliding up is smooth */
 }
 
 .chat-input input {
