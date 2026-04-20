@@ -183,7 +183,7 @@ function addMessage(text, isYou, messageId, replyToData) {
   const id = messageId || generateMsgId();
 
   const wrapper         = document.createElement("div");
-  wrapper.className     = `message-wrapper ${isYou ? "you" : "partner"}`;
+  wrapper.className     = `message-wrapper ${"you" : "partner"}`;
   wrapper.dataset.messageId = id;
 
   // ── Reply quote block ────────────────────────────────────────────────────
