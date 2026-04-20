@@ -56,33 +56,20 @@
     <button id="sendBtn" disabled>SEND</button>
   </div>
 
-  <!-- ── Safety / Age-Verification Modal ───────────────────────────────────── -->
-  <div id="safetyModal" class="modal">
-    <div class="modal-content safety-modal-content">
-      <div class="safety-icon">🛡️</div>
-    
-
-    
-      <p class="safety-age-confirm">
-        გთხოვთ მხოლოდ იმ შემთხვევაშ შეხვიდეთ საიტზე თუ ხართ <strong>18+</strong> და ეთანხმებით :
-        <a href="/terms.html" target="_blank" class="safety-link">Terms of Service</a>
-        და
-        <a href="/privacy.html" target="_blank" class="safety-link">Privacy Policy</a>.
-      </p>
-
-      <button id="safetyConfirmBtn" class="safety-confirm-btn">
-        ვარ სრულწლოვანი / შესვლა
-      </button>
-    </div>
-  </div>
-
-  <!-- Name Modal -->
+  <!-- ── Combined Entry Modal ───────────────────────────────────────────────── -->
   <div id="nameModal" class="modal">
     <div class="modal-content">
-      <input type="text" id="nameInput" placeholder="Enter your username..."
+      <div class="safety-icon">🛡️</div>
+      <input type="text" id="nameInput" placeholder="შეიყვანეთ სახელი..."
              autocomplete="off" inputmode="text" enterkeyhint="go" maxlength="20" />
       <div id="nameError" class="name-error"></div>
-      <button id="saveNameBtn">Start Chatting</button>
+      <p class="safety-age-confirm">
+        შესვლით ადასტურებთ რომ ხართ <strong>18+</strong> და ეთანხმებით
+        <a href="/terms.html" target="_blank" class="safety-link">Terms of Service</a>-ს
+        და
+        <a href="/privacy.html" target="_blank" class="safety-link">Privacy Policy</a>-ს.
+      </p>
+      <button id="saveNameBtn">თანხმობა და შესვლა</button>
     </div>
   </div>
 
