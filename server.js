@@ -110,6 +110,13 @@ io.on("connection", (socket) => {
     }
   });
 
+  // ── Typing ─────────────────────────────────────────────────────────────────
+  socket.on("typing", (isTyping) => {
+    if (socket.partner) {
+      socket.partner.emit("partnerTyping", isTyping);
+    }
+  });
+
   // ── Next ───────────────────────────────────────────────────────────────────
   socket.on("next", () => {
     if (socket.partner) {
