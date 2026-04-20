@@ -802,3 +802,41 @@ html, body {
     max-width: 95%;
   }
 }
+
+/* ── KEYBOARD-OPEN ZOOM ───────────────────────────────────────────────────── */
+/* When the keyboard is open, slightly shrink messages so more fit on screen.  */
+
+.keyboard-open .chat-container {
+  gap: 3px;
+  padding-top: 8px;
+}
+
+.keyboard-open .message-content {
+  font-size: 0.82em;
+  padding: 7px 11px;
+}
+
+.keyboard-open .message-wrapper {
+  gap: 1px;
+}
+
+.keyboard-open .timestamp {
+  font-size: 0.62em;
+  margin-top: 1px;
+}
+
+.keyboard-open .system-message,
+.keyboard-open .system-message-disconnect,
+.keyboard-open .system-message-reconnecting {
+  font-size: 0.75em;
+  margin: 2px 0;
+}
+
+.keyboard-open .typing-indicator {
+  padding: 7px 11px;
+}
+
+.keyboard-open .typing-indicator span {
+  width: 6px;
+  height: 6px;
+}
