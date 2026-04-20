@@ -187,25 +187,40 @@ function showReplyBar(msgId, text) {
     bar = document.createElement("div");
     bar.id        = "replyBar";
     bar.className = "reply-bar";
-    const inputArea = document.querySelector(".chat-input");
-    inputArea.insertBefore(bar, inputArea.firstChild);
+    document.body.appendChild(bar);   // ← body, never inside .chat-input
   }
   bar.innerHTML = `
-    <div class="reply-bar-content">
-      <span class="reply-bar-icon">↩</span>
-      <span class="reply-bar-text">${escapeHtml(text.length > 70 ? text.slice(0, 70) + "…" : text)}</span>
+    <div class="reply-bar-inner">
+      <span class="reply-bar-accent"></span>
+      <div class="reply-bar-body">
+        <span class="reply-bar-label">Replying to</span>
+        <span class="reply-bar-text">${escapeHtml(text.length > 80 ? text.slice(0, 80) + "…" : text)}</span>
+      </div>
     </div>
     <button class="reply-bar-close" id="replyBarClose">✕</button>
   `;
   bar.style.display = "flex";
+  positionReplyBar();
   document.getElementById("replyBarClose").addEventListener("click", clearReplyBar);
   messageInput.focus();
+}
+
+function positionReplyBar() {
+  const bar = document.getElementById("replyBar");
+  if (!bar || bar.style.display === "none") return;
+  const kbH = getKeyboardHeight();
+  const inputH = chatInputBar.offsetHeight;
+  bar.style.bottom     = (kbH + inputH) + "px";
+  bar.style.transition = kbH === 0 ? "bottom 0.22s ease" : "none";
 }
 
 function clearReplyBar() {
   replyingTo = null;
   const bar = document.getElementById("replyBar");
-  if (bar) bar.style.display = "none";
+  if (bar) {
+    bar.style.display = "none";
+    bar.style.bottom  = "";
+  }
 }
 
 function addMessage(text, isYou, messageId, replyTo) {
@@ -217,11 +232,14 @@ function addMessage(text, isYou, messageId, replyTo) {
 
   // ── Reply preview (quoted text above bubble) ──────────────────────────────
   if (replyTo && replyTo.text) {
-    const rp       = document.createElement("div");
-    rp.className   = `reply-preview${isYou ? " you" : ""}`;
-    rp.textContent = replyTo.text.length > 60
+    const rp        = document.createElement("div");
+    rp.className    = `reply-preview${isYou ? " you" : ""}`;
+    const rpText    = document.createElement("span");
+    rpText.className  = "reply-preview-text";
+    rpText.textContent = replyTo.text.length > 60
       ? replyTo.text.slice(0, 60) + "…"
       : replyTo.text;
+    rp.appendChild(rpText);
     wrapper.appendChild(rp);
   }
 
@@ -479,6 +497,9 @@ function updateViewportOffsets() {
   if (gifPickerOpen) {
     gifPicker.style.bottom = (kbH + chatInputBar.offsetHeight + 8) + "px";
   }
+
+  // Keep reply bar flush above the input bar
+  positionReplyBar();
 
   // Pin scroll to bottom whenever the viewport shifts
   scheduleScroll();
