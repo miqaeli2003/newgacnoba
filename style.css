@@ -49,21 +49,21 @@ html, body {
 
 .right-side {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
 }
 
 .change-name-btn,
 .block-button,
+.report-button,
 .next-button {
   border: none;
-  padding: 8px 16px;
+  padding: 8px 14px;
   border-radius: 8px;
   font-weight: 600;
   font-size: 0.9em;
   cursor: pointer;
   transition: background 0.2s ease;
-  /* Eliminates 300 ms tap delay on mobile without breaking double-tap zoom */
   touch-action: manipulation;
 }
 
@@ -85,8 +85,16 @@ html, body {
 }
 .block-button:hover:not(:disabled) { background: #d18b12; }
 
+.report-button {
+  background: #3d2b2b;
+  color: #f23f42;
+  font-size: 0.85em;
+}
+.report-button:hover:not(:disabled) { background: #5a3535; }
+
 .block-button:disabled,
-.next-button:disabled {
+.next-button:disabled,
+.report-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -96,9 +104,7 @@ html, body {
 .chat-container {
   flex: 1;
   overflow-y: auto;
-  /* Prevent the scroll from bubbling up to the page on iOS */
   overscroll-behavior: contain;
-  /* Smooth momentum scrolling on iOS */
   -webkit-overflow-scrolling: touch;
   padding: 15px;
   display: flex;
@@ -157,11 +163,43 @@ html, body {
   color: white;
 }
 
+/* ── SEEN STATUS ─────────────────────────────────────────────────────────── */
+
+.seen-status {
+  font-size: 0.65em;
+  color: #72767d;
+  margin-top: 1px;
+  text-align: right;
+  transition: color 0.3s ease;
+  user-select: none;
+}
+
+.seen-status.seen {
+  color: #5865f2;
+}
+
+/* ── SHARED TAGS ROW ─────────────────────────────────────────────────────── */
+
+.shared-tags-row {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 2px 0 6px;
+}
+
+.shared-tag-pill {
+  background: rgba(88, 101, 242, 0.15);
+  border: 1px solid rgba(88, 101, 242, 0.5);
+  border-radius: 12px;
+  font-size: 0.75em;
+  padding: 3px 9px;
+  color: #b5bac1;
+}
+
 /* ── GIF MESSAGE ─────────────────────────────────────────────────────────── */
 
-.message-wrapper.gif-msg-wrapper {
-  max-width: 260px;
-}
+.message-wrapper.gif-msg-wrapper { max-width: 260px; }
 
 .gif-message-img {
   width: 100%;
@@ -170,10 +208,8 @@ html, body {
   display: block;
   cursor: pointer;
   transition: transform 0.15s ease;
-  /* Promote to its own compositor layer to avoid layout on hover */
   will-change: transform;
 }
-
 .gif-message-img:hover { transform: scale(1.02); }
 
 /* ── TIMESTAMP ───────────────────────────────────────────────────────────── */
@@ -202,6 +238,13 @@ html, body {
   margin: 4px 0;
 }
 
+.system-message-reconnecting {
+  text-align: center;
+  color: #f0b232;
+  font-size: 0.85em;
+  margin: 4px 0;
+}
+
 /* ── REACT BUTTON ────────────────────────────────────────────────────────── */
 
 .react-btn {
@@ -224,10 +267,7 @@ html, body {
 }
 
 .message-wrapper.partner:hover .react-btn { opacity: 1; }
-.react-btn:hover {
-  background: #404249;
-  transform: scale(1.15);
-}
+.react-btn:hover { background: #404249; transform: scale(1.15); }
 
 /* ── REACTION PICKER ─────────────────────────────────────────────────────── */
 
@@ -259,11 +299,7 @@ html, body {
   touch-action: manipulation;
   will-change: transform;
 }
-
-.reaction-emoji-btn:hover {
-  background: #404249;
-  transform: scale(1.3);
-}
+.reaction-emoji-btn:hover { background: #404249; transform: scale(1.3); }
 
 /* ── REACTION AREA & PILLS ───────────────────────────────────────────────── */
 
@@ -337,7 +373,6 @@ html, body {
   border-radius: 8px;
   font-size: 0.88em;
 }
-
 .gif-picker-header input::placeholder { color: #72767d; }
 
 .gif-picker-close {
@@ -364,20 +399,10 @@ html, body {
   gap: 6px;
   align-items: flex-start;
 }
-
 .gif-results::-webkit-scrollbar { width: 6px; }
-.gif-results::-webkit-scrollbar-thumb {
-  background: #1a1b1e;
-  border-radius: 6px;
-}
+.gif-results::-webkit-scrollbar-thumb { background: #1a1b1e; border-radius: 6px; }
 
-/* Two-column masonry layout */
-.gif-col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
+.gif-col { flex: 1; display: flex; flex-direction: column; gap: 6px; }
 
 .gif-item {
   width: 100%;
@@ -388,11 +413,7 @@ html, body {
   background: #1e1f22;
   will-change: transform;
 }
-
-.gif-item:hover {
-  transform: scale(1.03);
-  opacity: 0.92;
-}
+.gif-item:hover { transform: scale(1.03); opacity: 0.92; }
 
 .gif-placeholder {
   width: 100%;
@@ -427,16 +448,8 @@ html, body {
   flex-shrink: 0;
   touch-action: manipulation;
 }
-
-.gif-btn:hover:not(:disabled) {
-  background: #404249;
-  color: #fff;
-}
-
-.gif-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
+.gif-btn:hover:not(:disabled) { background: #404249; color: #fff; }
+.gif-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* ── INPUT BAR ─────────────────────────────────────────────────────────── */
 
@@ -444,12 +457,11 @@ html, body {
   flex: 0 0 auto;
   display: flex;
   padding: 10px;
-  /* Respect iOS notch / home-indicator area */
   padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   background: #2b2d31;
   border-top: 1px solid #1a1b1e;
   gap: 8px;
-  align-items: stretch;
+  align-items: center;
 }
 
 .chat-input input {
@@ -463,6 +475,20 @@ html, body {
   font-size: 0.95em;
 }
 
+/* ── CHARACTER COUNTER ───────────────────────────────────────────────────── */
+
+.char-count {
+  font-size: 0.68em;
+  color: #72767d;
+  flex-shrink: 0;
+  min-width: 46px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.2s ease;
+  user-select: none;
+}
+.char-count.warning { color: #f23f42; }
+
 #sendBtn {
   background: #5865f2;
   border: none;
@@ -474,13 +500,10 @@ html, body {
   transition: background 0.2s ease;
   flex-shrink: 0;
   touch-action: manipulation;
+  align-self: stretch;
 }
-
 #sendBtn:hover:not(:disabled) { background: #4752c4; }
-#sendBtn:disabled {
-  background: #3a3d45;
-  cursor: not-allowed;
-}
+#sendBtn:disabled { background: #3a3d45; cursor: not-allowed; }
 
 /* ── MODAL ─────────────────────────────────────────────────────────────── */
 
@@ -491,19 +514,23 @@ html, body {
   display: flex;
   justify-content: center;
   align-items: center;
+  z-index: 1000;
 }
 
 .modal-content {
   background: #2b2d31;
-  padding: 30px;
+  padding: 28px 28px 24px;
   border-radius: 12px;
   width: 100%;
-  max-width: 380px;
+  max-width: 420px;
   text-align: center;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  max-height: 90vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
-.modal-content input {
+.modal-content input[type="text"] {
   width: 100%;
   padding: 12px;
   margin-top: 10px;
@@ -511,10 +538,52 @@ html, body {
   border: none;
   background: #1e1f22;
   color: white;
+  font-size: 0.95em;
 }
 
-.modal-content button {
-  margin-top: 15px;
+/* ── INTEREST TAGS ───────────────────────────────────────────────────────── */
+
+.tags-label {
+  font-size: 0.82em;
+  color: #b5bac1;
+  margin: 16px 0 8px;
+  text-align: left;
+}
+
+.tags-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 6px;
+}
+
+.tag-btn {
+  background: #1e1f22;
+  border: 1.5px solid #404249;
+  border-radius: 20px;
+  color: #b5bac1;
+  font-size: 0.8em;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  touch-action: manipulation;
+}
+
+.tag-btn.selected {
+  background: rgba(88, 101, 242, 0.2);
+  border-color: #5865f2;
+  color: #fff;
+}
+
+.tag-btn:hover:not(.selected) {
+  background: #404249;
+  color: #fff;
+}
+
+.modal-content button#saveNameBtn {
+  display: block;
+  margin-top: 16px;
   width: 100%;
   padding: 12px;
   border-radius: 8px;
@@ -522,11 +591,12 @@ html, body {
   background: #5865f2;
   color: white;
   font-weight: 600;
+  font-size: 0.95em;
   cursor: pointer;
   touch-action: manipulation;
+  transition: background 0.2s ease;
 }
-
-.modal-content button:hover { background: #4752c4; }
+.modal-content button#saveNameBtn:hover { background: #4752c4; }
 
 /* ── TYPING INDICATOR ────────────────────────────────────────────────────── */
 
@@ -547,11 +617,9 @@ html, body {
   height: 7px;
   background: #b5bac1;
   border-radius: 50%;
-  /* Promote each dot to its own layer — prevents layout during animation */
   will-change: transform, opacity;
   animation: typingBounce 1.2s infinite ease-in-out;
 }
-
 .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
 .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
 
@@ -564,15 +632,16 @@ html, body {
 
 @media (max-width: 600px) {
   .top-bar {
-    font-size: 0.9em;
-    padding: 0 10px;
+    font-size: 0.85em;
+    padding: 0 8px;
   }
 
   .change-name-btn,
   .block-button,
+  .report-button,
   .next-button {
-    padding: 6px 10px;
-    font-size: 0.75em;
+    padding: 6px 8px;
+    font-size: 0.72em;
   }
 
   .gif-picker {
@@ -583,4 +652,6 @@ html, body {
 
   .message-wrapper          { max-width: 85%; }
   .message-wrapper.gif-msg-wrapper { max-width: 200px; }
+
+  .modal-content { padding: 20px 16px 18px; }
 }
