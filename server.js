@@ -9,9 +9,8 @@ const rateLimit     = require("express-rate-limit");
 const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server, {
-  pingTimeout:       30000,  // wait 30 s for pong before dropping
-  pingInterval:      10000,  // probe every 10 s — catches phone backgrounding faster
-  perMessageDeflate: false,  // small messages don't benefit; saves CPU
+  pingTimeout:  20000,
+  pingInterval: 25000,
 });
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -20,7 +19,7 @@ const TENOR_KEY          = process.env.TENOR_KEY || "LIVDSRZULELA";
 const NAME_MIN           = 2;
 const NAME_MAX           = 20;
 const MSG_MAX            = 2000;
-const RECONNECT_GRACE_MS = 60000; // 1 minute before partner is told you disconnected
+const RECONNECT_GRACE_MS = 4000;  // ms before partner is told you disconnected
 const MAX_BLOCKS_RX      = 3;     // auto-kick after being blocked this many times
 const MSG_RATE_MAX       = 20;    // max messages…
 const MSG_RATE_WINDOW_MS = 5000;  // …per 5 s
@@ -49,27 +48,6 @@ function loadLines(filename) {
 
 let FACTS     = loadLines("facts.txt");
 let QUESTIONS = loadLines("questions.txt");
-
-// Re-read files at most once every 5 minutes so edits take effect without restart
-const FILE_CACHE_TTL  = 5 * 60 * 1000;
-let   factsCachedAt   = Date.now();
-let   questionsCachedAt = Date.now();
-
-function getFacts() {
-  if (Date.now() - factsCachedAt > FILE_CACHE_TTL) {
-    FACTS = loadLines("facts.txt");
-    factsCachedAt = Date.now();
-  }
-  return FACTS;
-}
-
-function getQuestions() {
-  if (Date.now() - questionsCachedAt > FILE_CACHE_TTL) {
-    QUESTIONS = loadLines("questions.txt");
-    questionsCachedAt = Date.now();
-  }
-  return QUESTIONS;
-}
 
 function randomItem(arr) {
   if (!arr.length) return null;
@@ -107,14 +85,17 @@ app.get("/api/gifs", gifHttpLimiter, async (req, res) => {
 
 // ── Random Fact API ───────────────────────────────────────────────────────────
 app.get("/api/random-fact", (req, res) => {
-  const fact = randomItem(getFacts());
+  // Reload file on each request so you can update facts.txt without restart
+  FACTS = loadLines("facts.txt");
+  const fact = randomItem(FACTS);
   if (!fact) return res.status(404).json({ error: "No facts available" });
   res.json({ fact });
 });
 
 // ── Random Question API ───────────────────────────────────────────────────────
 app.get("/api/random-question", (req, res) => {
-  const question = randomItem(getQuestions());
+  QUESTIONS = loadLines("questions.txt");
+  const question = randomItem(QUESTIONS);
   if (!question) return res.status(404).json({ error: "No questions available" });
   res.json({ question });
 });
@@ -403,18 +384,6 @@ io.on("connection", (socket) => {
     socket.emit("userBlocked", { name: blockedDisplayName });
     waitingQueue = waitingQueue.filter(s => s.id !== socket.id);
     tryFindPartner();
-  });
-
-  // ── Inactivity kick (client-initiated) ──────────────────────────────────
-  socket.on("inactivityKick", () => {
-    if (socket.partner) {
-      const partner  = socket.partner;
-      socket.partner = null;
-      partner.partner = null;
-      waitingQueue = waitingQueue.filter(s => s.id !== partner.id);
-      partner.emit("partnerDisconnected", { name: socket.userName });
-    }
-    waitingQueue = waitingQueue.filter(s => s.id !== socket.id);
   });
 
   // ── Disconnect ───────────────────────────────────────────────────────────
