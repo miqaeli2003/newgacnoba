@@ -336,6 +336,116 @@ html, body {
   font-style: italic;
 }
 
+/* ── REPLY BUTTON ────────────────────────────────────────────────────────── */
+
+.reply-btn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  background: #2b2d31;
+  border: 1px solid #404249;
+  border-radius: 50%;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.18s ease, background 0.15s ease, transform 0.15s ease;
+  padding: 0;
+  touch-action: manipulation;
+  will-change: transform, opacity;
+  color: #b5bac1;
+  line-height: 1;
+}
+
+.message-wrapper:hover .reply-btn { opacity: 1; }
+
+@media (hover: none) {
+  .reply-btn { opacity: 0.55; }
+}
+
+.reply-btn:hover { background: #404249; color: #fff; transform: scale(1.15); }
+
+/* ── REPLY PREVIEW (quoted bubble inside message) ───────────────────────── */
+
+.reply-preview {
+  font-size: 0.75em;
+  color: #949ba4;
+  background: rgba(255,255,255,0.06);
+  border-left: 3px solid #5865f2;
+  border-radius: 6px;
+  padding: 4px 9px;
+  margin-bottom: 3px;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+  user-select: none;
+}
+
+.reply-preview.you {
+  border-left-color: #848de0;
+  text-align: left;
+}
+
+/* ── REPLY BAR (above input when replying) ──────────────────────────────── */
+
+.reply-bar {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #1e2a4a;
+  border-top: 1px solid rgba(88,101,242,0.35);
+  border-bottom: 1px solid rgba(88,101,242,0.25);
+  padding: 6px 12px;
+  width: 100%;
+  animation: replyBarIn 0.18s ease forwards;
+}
+
+@keyframes replyBarIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.reply-bar-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.reply-bar-icon {
+  color: #5865f2;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.reply-bar-text {
+  font-size: 0.8em;
+  color: #b5bac1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reply-bar-close {
+  background: none;
+  border: none;
+  color: #72767d;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+  touch-action: manipulation;
+}
+.reply-bar-close:hover { background: #404249; color: #fff; }
+
 /* ── REACT BUTTON ────────────────────────────────────────────────────────── */
 
 .react-btn {
