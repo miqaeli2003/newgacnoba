@@ -200,7 +200,7 @@ function addMessage(text, isYou, messageId) {
     // Partner: [bubble]  [react-btn]  [timestamp]
     const reactBtn     = document.createElement("button");
     reactBtn.className = "react-btn";
-    reactBtn.innerHTML = "📋";
+    reactBtn.innerHTML = "🙂";
     reactBtn.title     = "React";
     reactBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -223,7 +223,7 @@ function addMessage(text, isYou, messageId) {
     const seen       = document.createElement("div");
     seen.className   = "seen-status";
     seen.id          = `seen_${id}`;
-    seen.textContent = "";
+    seen.textContent = "✓";
     wrapper.appendChild(seen);
   }
 
@@ -697,7 +697,7 @@ socket.on("partnerReconnected", (data) => {
   partnerName      = data.name || partnerName;
   partnerConnected = true;
   setInputsEnabled(true);
-  addSystemMessage(`${data.name} reconnected! 🎉`);
+  addSystemMessage(`${data.name} - დაბრუნდა! 🎉`);
   playNotification("partnerFound");
 });
 
@@ -707,7 +707,7 @@ socket.on("partnerRestored", (data) => {
   clearChat();
   partnerName      = data.name || "Anonymous";
   partnerConnected = true;
-  addSystemMessage(`You were reconnected with ${partnerName}!`);
+  addSystemMessage(`${partnerName}-ს კვლავ დაუკავშირდით! 🎉`);
   setInputsEnabled(true);
   playNotification("partnerFound");
 });
@@ -736,7 +736,7 @@ socket.on("message", (msg) => {
 
 socket.on("partnerSeen", ({ messageId }) => {
   const el = document.getElementById(`seen_${messageId}`);
-  if (el) { el.textContent = ""; el.classList.add("seen"); }
+  if (el) { el.textContent = "✓✓"; el.classList.add("seen"); }
 });
 
 socket.on("reacted", ({ messageId, emoji }) => {
@@ -763,7 +763,7 @@ socket.on("partnerDisconnected", (data) => {
 socket.on("userBlocked", (data) => {
   stopSearchRetry();
   clearChat();
-  addSystemMessage(`You blocked ${data.name}. Searching for a new partner...`);
+  addSystemMessage(`${data.name} დაბლოკილია. ვეძებთ ახალ პარტნიორს...`);
   partnerConnected = false;
   partnerName      = "";
   setInputsEnabled(false);
@@ -773,13 +773,13 @@ socket.on("userBlocked", (data) => {
 });
 
 socket.on("reportConfirmed", () => {
-  addSystemMessage("Report submitted. Thank you.");
+  addSystemMessage("შეტყობინება გაგზავნილია. გმადლობთ. 🙏");
 });
 
 socket.on("messageFlagged", () => {
   const notice       = document.createElement("div");
   notice.className   = "system-message";
-  notice.textContent = "Your message was flagged and not sent.";
+  notice.textContent = "შეტყობინება გაიფილტრა და არ გაიგზავნა.";
   chat.appendChild(notice);
   scheduleScroll();
   setTimeout(() => notice.remove(), 3000);
@@ -792,7 +792,7 @@ socket.on("autoKicked", () => {
   stopSearchRetry();
   clearChat();
   setInputsEnabled(false);
-  addDisconnectMessage("You have been removed due to repeated violations.");
+  addDisconnectMessage("თქვენ დაბლოკილი ხართ განმეორებადი დარღვევების გამო.");
   socket.disconnect();
 });
 
