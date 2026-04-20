@@ -587,7 +587,7 @@ socket.on("message", (msg) => {
 
 socket.on("partnerSeen", ({ messageId }) => {
   const el = document.getElementById(`seen_${messageId}`);
-  if (el) { el.textContent = "✓✓"; el.classList.add("seen"); }
+  if (el) { el.textContent = ""; el.classList.add("seen"); }
 });
 
 socket.on("reacted", ({ messageId, emoji }) => {
