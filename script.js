@@ -521,7 +521,7 @@ socket.on("onlineCount", (count) => updateOnlineCount(count));
 
 socket.on("queuePosition", ({ position, total }) => {
   const msg = document.getElementById("searchingMsg");
-  if (msg) msg.textContent = `ვეძებთ ახალ პარტნიორს... (${position} / ${total} searching)`;
+  if (msg) msg.textContent = `ვეძებთ ახალ პარტნიორს... `;
 });
 
 socket.on("partnerFound", (partner) => {
