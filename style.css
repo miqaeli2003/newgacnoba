@@ -856,3 +856,110 @@ html, body {
 .keyboard-open .seen-status {
   font-size: 0.56em;
 }
+
+/* ── SAFETY / AGE-VERIFICATION MODAL ────────────────────────────────────── */
+
+.safety-modal-content {
+  max-width: 420px;
+  text-align: left;
+}
+
+.safety-icon {
+  font-size: 2.4em;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.safety-title {
+  font-size: 1.25em;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 18px;
+  text-align: center;
+}
+
+.safety-list {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.safety-list li {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 14px;
+  background: rgba(88, 101, 242, 0.08);
+  border: 1px solid rgba(88, 101, 242, 0.2);
+  border-radius: 8px;
+  font-size: 0.9em;
+  color: #b5bac1;
+  line-height: 1.5;
+  position: relative;
+}
+
+.safety-list li::before {
+  content: "✓";
+  display: inline-block;
+  color: #23a55a;
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+.safety-list li strong { color: #fff; }
+
+.safety-sub {
+  font-size: 0.82em;
+  color: #72767d;
+  margin-top: 2px;
+  padding-left: 18px;
+}
+
+.safety-age-confirm {
+  font-size: 0.82em;
+  color: #72767d;
+  text-align: center;
+  margin: 0 0 18px;
+  line-height: 1.6;
+}
+
+.safety-link {
+  color: #5865f2;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.safety-link:hover { color: #848de0; text-decoration: underline; }
+
+.safety-confirm-btn {
+  display: block;
+  width: 100%;
+  padding: 13px;
+  border-radius: 8px;
+  border: none;
+  background: #5865f2;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95em;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+.safety-confirm-btn:hover {
+  background: #4752c4;
+  transform: translateY(-1px);
+}
+.safety-confirm-btn:active { transform: translateY(0); }
+
+/* ── LEGAL PAGE FOOTER LINKS (shown in chat footer) ─────────────────────── */
+
+.legal-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 99; /* below input bar z:100 */
+  /* hidden behind the chat-input bar — only visible if JS moves it */
+  display: none; /* not used in chat UI, kept for possible future use */
+}
