@@ -1,4 +1,9 @@
-const socket = io();
+const socket = io({
+  transports: ["websocket", "polling"], // polling fallback helps mobile resume
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 5000,
+  reconnectionAttempts: Infinity,
+});
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let userName            = "";
@@ -86,12 +91,29 @@ function incrementUnread() {
   }
 }
 
+// ── Mobile background / foreground reconnection ───────────────────────────────
+// When the user switches apps on mobile, the browser suspends the tab and the
+// WebSocket heartbeat stops. On return, we force a reconnect if the socket
+// dropped while we were in the background.
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) {
+  if (document.visibilityState === "visible") {
+    // Clear unread badge
     unreadCount    = 0;
     document.title = originalTitle;
+
+    // Reconnect if the socket went away while backgrounded
+    if (!wasAutoKicked && !socket.connected) {
+      socket.connect();
+    }
   }
 });
+
+// Also fires when the browser tab/window regains focus (covers desktop too)
+window.addEventListener("focus", () => {
+  if (!wasAutoKicked && !socket.connected) {
+    socket.connect();
+  }
+}, { passive: true });
 
 // ── Scroll ────────────────────────────────────────────────────────────────────
 function scheduleScroll() {
