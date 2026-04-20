@@ -113,6 +113,7 @@ html, body {
 
 .chat-container {
   flex: 1;
+  min-height: 0;        /* lets it shrink below its content size inside flex */
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
