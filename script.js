@@ -16,6 +16,7 @@ let gifFetchController  = null;
 let gifSearchTimer      = null;
 let gifPickerOpen       = false;
 let unreadCount         = 0;
+let replyingTo          = null; // { id, text }
 const originalTitle     = document.title;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -174,12 +175,55 @@ function addSearchingMessage() {
     });
 }
 
-function addMessage(text, isYou, messageId) {
+// ── Reply helpers ─────────────────────────────────────────────────────────────
+function escapeHtml(str) {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function showReplyBar(msgId, text) {
+  replyingTo = { id: msgId, text };
+  let bar = document.getElementById("replyBar");
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.id        = "replyBar";
+    bar.className = "reply-bar";
+    const inputArea = document.querySelector(".chat-input");
+    inputArea.insertBefore(bar, inputArea.firstChild);
+  }
+  bar.innerHTML = `
+    <div class="reply-bar-content">
+      <span class="reply-bar-icon">↩</span>
+      <span class="reply-bar-text">${escapeHtml(text.length > 70 ? text.slice(0, 70) + "…" : text)}</span>
+    </div>
+    <button class="reply-bar-close" id="replyBarClose">✕</button>
+  `;
+  bar.style.display = "flex";
+  document.getElementById("replyBarClose").addEventListener("click", clearReplyBar);
+  messageInput.focus();
+}
+
+function clearReplyBar() {
+  replyingTo = null;
+  const bar = document.getElementById("replyBar");
+  if (bar) bar.style.display = "none";
+}
+
+function addMessage(text, isYou, messageId, replyTo) {
   const id = messageId || generateMsgId();
 
   const wrapper         = document.createElement("div");
   wrapper.className     = `message-wrapper ${isYou ? "you" : "partner"}`;
   wrapper.dataset.messageId = id;
+
+  // ── Reply preview (quoted text above bubble) ──────────────────────────────
+  if (replyTo && replyTo.text) {
+    const rp       = document.createElement("div");
+    rp.className   = `reply-preview${isYou ? " you" : ""}`;
+    rp.textContent = replyTo.text.length > 60
+      ? replyTo.text.slice(0, 60) + "…"
+      : replyTo.text;
+    wrapper.appendChild(rp);
+  }
 
   const msgRow      = document.createElement("div");
   msgRow.className  = "message-row";
@@ -192,12 +236,26 @@ function addMessage(text, isYou, messageId) {
   timestamp.className   = "timestamp inline-ts";
   timestamp.textContent = formatTimestamp(new Date());
 
+  // Shared reply button factory
+  function makeReplyBtn() {
+    const btn     = document.createElement("button");
+    btn.className = "reply-btn";
+    btn.innerHTML = "↩";
+    btn.title     = "Reply";
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showReplyBar(id, text);
+    });
+    return btn;
+  }
+
   if (isYou) {
-    // You: [timestamp]  [bubble]
+    // You: [timestamp]  [bubble]  [reply-btn]
     msgRow.appendChild(timestamp);
     msgRow.appendChild(content);
+    msgRow.appendChild(makeReplyBtn());
   } else {
-    // Partner: [bubble]  [react-btn]  [timestamp]
+    // Partner: [bubble]  [react-btn]  [reply-btn]  [timestamp]
     const reactBtn     = document.createElement("button");
     reactBtn.className = "react-btn";
     reactBtn.innerHTML = "🙂";
@@ -208,6 +266,7 @@ function addMessage(text, isYou, messageId) {
     });
     msgRow.appendChild(content);
     msgRow.appendChild(reactBtn);
+    msgRow.appendChild(makeReplyBtn());
     msgRow.appendChild(timestamp);
   }
 
@@ -583,12 +642,14 @@ function displayReaction(messageId, emoji, isMine) {
 function sendMessage() {
   const message = messageInput.value.trim();
   if (!message || !partnerConnected || !userName) return;
-  const msgId = generateMsgId();
-  addMessage(message, true, msgId);
-  socket.emit("message", { text: message, messageId: msgId });
+  const msgId   = generateMsgId();
+  const reply   = replyingTo ? { text: replyingTo.text } : null;
+  addMessage(message, true, msgId, reply);
+  socket.emit("message", { text: message, messageId: msgId, replyTo: reply });
   messageInput.value = "";
   charCount.textContent = "";
   charCount.classList.remove("warning");
+  clearReplyBar();
   // Keep focus on input so the keyboard stays open on mobile
   messageInput.focus();
 }
@@ -727,7 +788,7 @@ socket.on("partnerTyping", (typing) => {
 
 socket.on("message", (msg) => {
   hideTypingIndicator();
-  addMessage(msg.text, false, msg.messageId);
+  addMessage(msg.text, false, msg.messageId, msg.replyTo || null);
   playNotification("message");
   incrementUnread();
   // Tell sender we received/read the message
