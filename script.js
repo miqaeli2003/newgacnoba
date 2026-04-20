@@ -263,7 +263,7 @@ function startSearchRetry() {
     if (!partnerConnected && userName) {
       socket.emit("findPartner");
     }
-  }, 2000);
+  }, 500);
 }
 
 function stopSearchRetry() {
