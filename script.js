@@ -36,6 +36,7 @@ const gifSearch      = document.getElementById("gifSearch");
 const gifResults     = document.getElementById("gifResults");
 const gifPickerClose = document.getElementById("gifPickerClose");
 const charCount      = document.getElementById("charCount");
+const questionBtn    = document.getElementById("questionBtn");
 
 // ── Sound ─────────────────────────────────────────────────────────────────────
 let _audioCtx = null;
@@ -136,7 +137,42 @@ function addReconnectingMessage(name)      {
   );
 }
 function removeReconnectingMessage()       { document.getElementById("reconnectingMsg")?.remove(); }
-function addSearchingMessage()             { _appendInfoMessage("ვეძებთ ახალ პარტნიორს...", "system-message", "searchingMsg"); }
+
+// ── Searching message with random fact ───────────────────────────────────────
+function addSearchingMessage() {
+  // Remove any existing searching block
+  document.getElementById("searchingMsg")?.remove();
+
+  const wrapper     = document.createElement("div");
+  wrapper.id        = "searchingMsg";
+  wrapper.className = "searching-block";
+
+  const searchText       = document.createElement("div");
+  searchText.className   = "system-message";
+  searchText.textContent = "ვეძებთ ახალ პარტნიორს... 🔎";
+  wrapper.appendChild(searchText);
+
+  // Fact card placeholder — filled after fetch
+  const factCard       = document.createElement("div");
+  factCard.className   = "fact-card";
+  factCard.innerHTML   = '<span class="fact-label">💡 Random Fact</span><span class="fact-text">...</span>';
+  wrapper.appendChild(factCard);
+
+  chat.appendChild(wrapper);
+  scheduleScroll();
+
+  // Fetch a random fact from the server
+  fetch("/api/random-fact")
+    .then(r => r.json())
+    .then(data => {
+      if (data.fact) {
+        factCard.querySelector(".fact-text").textContent = data.fact;
+      }
+    })
+    .catch(() => {
+      factCard.querySelector(".fact-text").textContent = "ფაქტი ვერ ჩაიტვირთა 😕";
+    });
+}
 
 function addMessage(text, isYou, messageId) {
   const id = messageId || generateMsgId();
@@ -211,6 +247,30 @@ function addGifMessage(gifUrl, isYou) {
   scheduleScroll();
 }
 
+// ── Question card ─────────────────────────────────────────────────────────────
+function addQuestionCard(questionText, isYou) {
+  const card       = document.createElement("div");
+  card.className   = `question-card ${isYou ? "you" : "partner"}`;
+
+  const label      = document.createElement("div");
+  label.className  = "question-card-label";
+  label.textContent = isYou ? "❓ შენ გამოგზავნე კითხვა" : `❓ ${partnerName || "პარტნიორი"} გიგზავნის კითხვას`;
+
+  const text       = document.createElement("div");
+  text.className   = "question-card-text";
+  text.textContent = questionText;
+
+  const ts         = document.createElement("div");
+  ts.className     = "timestamp";
+  ts.textContent   = formatTimestamp(new Date());
+
+  card.appendChild(label);
+  card.appendChild(text);
+  card.appendChild(ts);
+  chat.appendChild(card);
+  scheduleScroll();
+}
+
 function showTypingIndicator() {
   if (document.getElementById("typingIndicator")) return;
   const el      = document.createElement("div");
@@ -236,6 +296,7 @@ function setInputsEnabled(enabled) {
   sendBtn.disabled      = !enabled;
   blockBtn.disabled     = !enabled;
   gifBtn.disabled       = !enabled;
+  questionBtn.disabled  = !enabled;
 }
 
 function showNameError(msg) {
@@ -375,6 +436,42 @@ function sendGif(fullUrl, previewUrl) {
 }
 
 socket.on("gif", (data) => addGifMessage(data.url, false));
+
+// ── Question button ───────────────────────────────────────────────────────────
+let questionBtnCooldown = false;
+
+questionBtn.addEventListener("click", async () => {
+  if (!partnerConnected || questionBtnCooldown) return;
+  questionBtnCooldown = true;
+  questionBtn.disabled = true;
+  questionBtn.textContent = "⌛";
+
+  try {
+    const res  = await fetch("/api/random-question");
+    const data = await res.json();
+    if (data.question) {
+      // Show question card locally for you
+      addQuestionCard(data.question, true);
+      // Relay to partner via socket
+      socket.emit("sendQuestion", { text: data.question });
+    }
+  } catch {
+    addSystemMessage("კითხვა ვერ ჩაიტვირთა 😕");
+  } finally {
+    setTimeout(() => {
+      questionBtnCooldown  = false;
+      questionBtn.disabled = !partnerConnected;
+      questionBtn.textContent = "?";
+    }, 3000); // 3 s cooldown
+  }
+});
+
+// Partner received a question card from us
+socket.on("partnerQuestion", ({ text }) => {
+  addQuestionCard(text, false);
+  playNotification("message");
+  incrementUnread();
+});
 
 // ── Reactions ─────────────────────────────────────────────────────────────────
 const REACTIONS          = ["❤️","😂","😢"];
@@ -520,8 +617,11 @@ socket.on("nameTaken", () => {
 socket.on("onlineCount", (count) => updateOnlineCount(count));
 
 socket.on("queuePosition", ({ position, total }) => {
-  const msg = document.getElementById("searchingMsg");
-  if (msg) msg.textContent = `ვეძებთ ახალ პარტნიორს... 🔎 `;
+  const wrapper = document.getElementById("searchingMsg");
+  if (wrapper) {
+    const msg = wrapper.querySelector(".system-message");
+    if (msg) msg.textContent = `ვეძებთ ახალ პარტნიორს... 🔎`;
+  }
 });
 
 socket.on("partnerFound", (partner) => {
