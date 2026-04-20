@@ -16,7 +16,6 @@ let gifFetchController  = null;
 let gifSearchTimer      = null;
 let gifPickerOpen       = false;
 let unreadCount         = 0;
-const selectedTags      = new Set();
 const originalTitle     = document.title;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -25,7 +24,6 @@ const messageInput   = document.getElementById("messageInput");
 const sendBtn        = document.getElementById("sendBtn");
 const nextBtn        = document.getElementById("nextBtn");
 const blockBtn       = document.getElementById("blockBtn");
-const reportBtn      = document.getElementById("reportBtn");
 const changeNameBtn  = document.getElementById("changeNameBtn");
 const nameModal      = document.getElementById("nameModal");
 const nameInput      = document.getElementById("nameInput");
@@ -38,14 +36,6 @@ const gifSearch      = document.getElementById("gifSearch");
 const gifResults     = document.getElementById("gifResults");
 const gifPickerClose = document.getElementById("gifPickerClose");
 const charCount      = document.getElementById("charCount");
-
-// ── Tag label map ─────────────────────────────────────────────────────────────
-const TAG_LABELS = {
-  gaming: "🎮 Gaming", music: "🎵 Music", movies: "🎬 Movies",
-  books:  "📚 Books",  sports: "🏋️ Sports", tech: "💻 Tech",
-  art:    "🎨 Art",    food:   "🍕 Food",   travel: "🌍 Travel",
-  memes:  "😂 Memes",
-};
 
 // ── Sound ─────────────────────────────────────────────────────────────────────
 let _audioCtx = null;
@@ -148,20 +138,6 @@ function addReconnectingMessage(name)      {
 function removeReconnectingMessage()       { document.getElementById("reconnectingMsg")?.remove(); }
 function addSearchingMessage()             { _appendInfoMessage("ვეძებთ ახალ პარტნიორს...", "system-message", "searchingMsg"); }
 
-function addSharedTagsMessage(tags) {
-  if (!tags || !tags.length) return;
-  const row = document.createElement("div");
-  row.className = "shared-tags-row";
-  tags.forEach(tag => {
-    const pill       = document.createElement("span");
-    pill.className   = "shared-tag-pill";
-    pill.textContent = TAG_LABELS[tag] || tag;
-    row.appendChild(pill);
-  });
-  chat.appendChild(row);
-  scheduleScroll();
-}
-
 function addMessage(text, isYou, messageId) {
   const id = messageId || generateMsgId();
 
@@ -260,7 +236,6 @@ function setInputsEnabled(enabled) {
   sendBtn.disabled      = !enabled;
   blockBtn.disabled     = !enabled;
   gifBtn.disabled       = !enabled;
-  reportBtn.disabled    = !enabled;
 }
 
 function showNameError(msg) {
@@ -274,20 +249,6 @@ function clearNameError() {
   nameError.style.display = "none";
   nameInput.classList.remove("error");
 }
-
-// ── Interest tags ─────────────────────────────────────────────────────────────
-document.querySelectorAll(".tag-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const tag = btn.dataset.tag;
-    if (selectedTags.has(tag)) {
-      selectedTags.delete(tag);
-      btn.classList.remove("selected");
-    } else {
-      selectedTags.add(tag);
-      btn.classList.add("selected");
-    }
-  });
-});
 
 // ── Search retry ──────────────────────────────────────────────────────────────
 function startSearchRetry() {
@@ -519,8 +480,12 @@ socket.on("nameAccepted", (acceptedName) => {
   saveNameBtn.textContent = "Start Chatting";
   clearNameError();
 
-  // Always push interests before searching
-  socket.emit("setInterests", [...selectedTags]);
+  // Show the username in the top bar
+  const displayEl = document.getElementById("userNameDisplay");
+  if (displayEl) {
+    displayEl.textContent = `👤 ${acceptedName}`;
+    displayEl.style.display = "block";
+  }
 
   if (isFirstLogin) {
     isFirstLogin = false;
@@ -565,10 +530,9 @@ socket.on("partnerFound", (partner) => {
   partnerName      = partner.name || "Anonymous";
   partnerConnected = true;
   addSystemMessage(`გილოცავთ პარტნიორი ნაპოვნია : ${partnerName}`);
-  addSharedTagsMessage(partner.sharedTags);
   setInputsEnabled(true);
   playNotification("partnerFound");
-  incrementUnread(); // flash tab if in background
+  incrementUnread();
 });
 
 // Reconnect grace-period events
@@ -701,14 +665,6 @@ blockBtn.addEventListener("click", () => {
   if (confirmed) socket.emit("blockUser");
 });
 
-reportBtn.addEventListener("click", () => {
-  if (!partnerConnected || !partnerName) return;
-  const confirmed = confirm(
-    `Report "${partnerName}" for inappropriate behavior?\nThis will be logged for review.`
-  );
-  if (confirmed) socket.emit("reportUser", { reason: "inappropriate behavior" });
-});
-
 sendBtn.addEventListener("click", sendMessage);
 
 messageInput.addEventListener("keypress", (e) => {
@@ -769,7 +725,6 @@ document.addEventListener("DOMContentLoaded", () => {
   nameModal.style.display = "flex";
   setInputsEnabled(false);
   blockBtn.disabled        = true;
-  reportBtn.disabled       = true;
   saveNameBtn.textContent  = "Start Chatting";
   charCount.textContent    = "0/2000";
   setTimeout(() => nameInput.focus(), 100);
