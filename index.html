@@ -4,6 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Chatting Site</title>
+
+  <!-- Mobile browser chrome / PWA hints -->
+  <meta name="theme-color" content="#2b2d31" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <!-- Preconnect to Tenor so GIF requests start sooner -->
+  <link rel="preconnect" href="https://api.tenor.com" />
+  <link rel="preconnect" href="https://media.tenor.com" />
+
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -24,7 +35,8 @@
   <!-- GIF Picker Panel -->
   <div id="gifPicker" class="gif-picker" style="display:none">
     <div class="gif-picker-header">
-      <input type="text" id="gifSearch" placeholder="🔍 Search GIFs..." autocomplete="off" />
+      <input type="text" id="gifSearch" placeholder="🔍 Search GIFs..."
+             autocomplete="off" inputmode="search" />
       <button class="gif-picker-close" id="gifPickerClose">✕</button>
     </div>
     <div class="gif-results" id="gifResults">
@@ -34,14 +46,16 @@
   </div>
 
   <div class="chat-input">
-    <input type="text" id="messageInput" placeholder="Type your message..." autocomplete="off" disabled />
+    <input type="text" id="messageInput" placeholder="Type your message..."
+           autocomplete="off" inputmode="text" disabled />
     <button id="gifBtn" class="gif-btn" disabled title="Send a GIF">GIF</button>
     <button id="sendBtn" disabled>SEND</button>
   </div>
 
   <div id="nameModal" class="modal">
     <div class="modal-content">
-      <input type="text" id="nameInput" placeholder="Enter your username..." autocomplete="off" maxlength="20" />
+      <input type="text" id="nameInput" placeholder="Enter your username..."
+             autocomplete="off" inputmode="text" maxlength="20" />
       <div id="nameError" class="name-error"></div>
       <button id="saveNameBtn">Start Chatting</button>
     </div>
