@@ -1,86 +1,105 @@
 const socket = io();
 
-let userName = "";
-let partnerConnected = false;
-let partnerName = "";
-let isFirstLogin = true;
-let isReconnecting = false; // FIX: track reconnect vs first login vs name change
-let msgCounter = 0;
-let typingTimeout = null;
-let isTyping = false;
-let searchRetryInterval = null; // auto-retry while searching for a partner
+let userName              = "";
+let partnerConnected      = false;
+let partnerName           = "";
+let isFirstLogin          = true;
+let isReconnecting        = false;
+let msgCounter            = 0;
+let typingTimeout         = null;
+let isTyping              = false;
+let searchRetryInterval   = null;
+let pendingScrollRaf      = false; // batch scroll-to-bottom via rAF
+let activeFetchController = null;  // AbortController for in-flight GIF requests
 
-const chat = document.getElementById("chat");
-const messageInput = document.getElementById("messageInput");
-const sendBtn = document.getElementById("sendBtn");
-const nextBtn = document.getElementById("nextBtn");
-const blockBtn = document.getElementById("blockBtn");
-const changeNameBtn = document.getElementById("changeNameBtn");
-const nameModal = document.getElementById("nameModal");
-const nameInput = document.getElementById("nameInput");
-const saveNameBtn = document.getElementById("saveNameBtn");
-const nameError = document.getElementById("nameError");
-const onlineCountElem = document.getElementById("onlineCount");
-const gifBtn = document.getElementById("gifBtn");
-const gifPicker = document.getElementById("gifPicker");
-const gifSearch = document.getElementById("gifSearch");
-const gifResults = document.getElementById("gifResults");
+// ── DOM refs (cached once) ────────────────────────────────────────────────────
+const chat           = document.getElementById("chat");
+const messageInput   = document.getElementById("messageInput");
+const sendBtn        = document.getElementById("sendBtn");
+const nextBtn        = document.getElementById("nextBtn");
+const blockBtn       = document.getElementById("blockBtn");
+const changeNameBtn  = document.getElementById("changeNameBtn");
+const nameModal      = document.getElementById("nameModal");
+const nameInput      = document.getElementById("nameInput");
+const saveNameBtn    = document.getElementById("saveNameBtn");
+const nameError      = document.getElementById("nameError");
+const onlineCountEl  = document.getElementById("onlineCount");
+const gifBtn         = document.getElementById("gifBtn");
+const gifPicker      = document.getElementById("gifPicker");
+const gifSearch      = document.getElementById("gifSearch");
+const gifResults     = document.getElementById("gifResults");
 const gifPickerClose = document.getElementById("gifPickerClose");
-const gifLoading = document.getElementById("gifLoading");
 
 // ── GIF System (Tenor API) ────────────────────────────────────────────────────
 
-const TENOR_KEY = "LIVDSRZULELA"; // Tenor demo key
-let gifSearchTimeout = null;
-let gifPickerOpen = false;
+const TENOR_KEY    = "LIVDSRZULELA"; // Tenor demo key
+let gifSearchTimer = null;
+let gifPickerOpen  = false;
 
 async function fetchGifs(query) {
+  // Cancel any in-flight request so stale results don't overwrite fresh ones
+  if (activeFetchController) activeFetchController.abort();
+  activeFetchController = new AbortController();
+
   gifResults.innerHTML = '<div class="gif-placeholder">Loading...</div>';
+
   try {
-    const url = query
+    const endpoint = query
       ? `https://api.tenor.com/v1/search?q=${encodeURIComponent(query)}&key=${TENOR_KEY}&limit=24&media_filter=minimal&contentfilter=medium`
       : `https://api.tenor.com/v1/trending?key=${TENOR_KEY}&limit=24&media_filter=minimal&contentfilter=medium`;
 
-    const res = await fetch(url);
+    const res  = await fetch(endpoint, { signal: activeFetchController.signal });
     const data = await res.json();
     renderGifResults(data.results || []);
   } catch (err) {
-    gifResults.innerHTML = '<div class="gif-placeholder">Failed to load GIFs 😢</div>';
+    if (err.name !== "AbortError") {
+      gifResults.innerHTML = '<div class="gif-placeholder">Failed to load GIFs 😢</div>';
+    }
+  } finally {
+    activeFetchController = null;
   }
 }
 
 function renderGifResults(results) {
-  gifResults.innerHTML = "";
+  // Build off-DOM fragment to avoid repeated reflows
+  const fragment = document.createDocumentFragment();
 
   if (!results.length) {
-    gifResults.innerHTML = '<div class="gif-placeholder">No GIFs found</div>';
+    const ph = document.createElement("div");
+    ph.className = "gif-placeholder";
+    ph.textContent = "No GIFs found";
+    gifResults.innerHTML = "";
+    gifResults.appendChild(ph);
     return;
   }
 
-  // Masonry-style two-column layout
   const col1 = document.createElement("div");
   const col2 = document.createElement("div");
   col1.className = "gif-col";
   col2.className = "gif-col";
 
   results.forEach((result, i) => {
-    const media = result.media[0];
+    const media      = result.media[0];
     const previewUrl = media.tinygif?.url || media.gif?.url;
-    const fullUrl = media.gif?.url;
+    const fullUrl    = media.gif?.url;
     if (!previewUrl || !fullUrl) return;
 
-    const img = document.createElement("img");
-    img.src = previewUrl;
-    img.className = "gif-item";
-    img.loading = "lazy";
+    const img        = document.createElement("img");
+    img.src          = previewUrl;
+    img.className    = "gif-item";
+    img.loading      = "lazy";
+    img.decoding     = "async";
     img.dataset.full = fullUrl;
     img.addEventListener("click", () => sendGif(fullUrl, previewUrl));
 
     (i % 2 === 0 ? col1 : col2).appendChild(img);
   });
 
-  gifResults.appendChild(col1);
-  gifResults.appendChild(col2);
+  fragment.appendChild(col1);
+  fragment.appendChild(col2);
+
+  gifResults.innerHTML = "";
+  gifResults.appendChild(fragment);
 }
 
 function openGifPicker() {
@@ -107,8 +126,9 @@ gifPickerClose.addEventListener("click", (e) => {
 });
 
 gifSearch.addEventListener("input", () => {
-  clearTimeout(gifSearchTimeout);
-  gifSearchTimeout = setTimeout(() => fetchGifs(gifSearch.value.trim()), 400);
+  clearTimeout(gifSearchTimer);
+  // 400 ms debounce — avoids a network request on every keystroke
+  gifSearchTimer = setTimeout(() => fetchGifs(gifSearch.value.trim()), 400);
 });
 
 gifSearch.addEventListener("keydown", (e) => e.stopPropagation()); // prevent chat shortcuts
@@ -129,67 +149,78 @@ function sendGif(fullUrl, previewUrl) {
 
 function addGifMessage(gifUrl, isYou) {
   const wrapper = document.createElement("div");
-  wrapper.className = "message-wrapper gif-msg-wrapper " + (isYou ? "you" : "partner");
+  wrapper.className = `message-wrapper gif-msg-wrapper ${isYou ? "you" : "partner"}`;
 
-  const img = document.createElement("img");
-  img.src = gifUrl;
-  img.className = "gif-message-img";
-  img.loading = "lazy";
+  const img      = document.createElement("img");
+  img.src        = gifUrl;
+  img.className  = "gif-message-img";
+  img.loading    = "lazy";
+  img.decoding   = "async";
 
-  const timestamp = document.createElement("div");
-  timestamp.className = "timestamp";
+  const timestamp       = document.createElement("div");
+  timestamp.className   = "timestamp";
   timestamp.textContent = formatTimestamp(new Date());
 
   wrapper.appendChild(img);
   wrapper.appendChild(timestamp);
   chat.appendChild(wrapper);
-  chat.scrollTop = chat.scrollHeight;
+  scheduleScroll();
 }
 
-socket.on("gif", (data) => {
-  addGifMessage(data.url, false);
-});
+socket.on("gif", (data) => addGifMessage(data.url, false));
 
 // ── Reaction Config ───────────────────────────────────────────────────────────
 
-const REACTIONS = ["❤️", "😂", "😢"];
-let activeReactionPicker = null;
+const REACTIONS           = ["❤️", "😂", "😢"];
+let activeReactionPicker  = null;
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function generateMsgId() {
   return `${socket.id}_${++msgCounter}_${Date.now()}`;
 }
 
 function formatTimestamp(date) {
-  const h = date.getHours();
-  const m = date.getMinutes();
-  const ampm = h >= 12 ? "PM" : "AM";
-  const hour12 = h % 12 || 12;
-  return `${hour12}:${m.toString().padStart(2, "0")} ${ampm}`;
+  const h     = date.getHours();
+  const m     = date.getMinutes();
+  const ampm  = h >= 12 ? "PM" : "AM";
+  const h12   = h % 12 || 12;
+  return `${h12}:${m.toString().padStart(2, "0")} ${ampm}`;
+}
+
+/**
+ * Batch scroll-to-bottom updates via requestAnimationFrame so that multiple
+ * messages appended in the same tick only trigger one layout read.
+ */
+function scheduleScroll() {
+  if (pendingScrollRaf) return;
+  pendingScrollRaf = true;
+  requestAnimationFrame(() => {
+    chat.scrollTop   = chat.scrollHeight;
+    pendingScrollRaf = false;
+  });
 }
 
 function addMessage(text, isYou, messageId) {
   const id = messageId || generateMsgId();
 
-  const wrapper = document.createElement("div");
-  wrapper.className = "message-wrapper " + (isYou ? "you" : "partner");
+  const wrapper         = document.createElement("div");
+  wrapper.className     = `message-wrapper ${isYou ? "you" : "partner"}`;
   wrapper.dataset.messageId = id;
 
-  const msgRow = document.createElement("div");
-  msgRow.className = "message-row";
+  const msgRow      = document.createElement("div");
+  msgRow.className  = "message-row";
 
-  const content = document.createElement("div");
-  content.className = "message-content" + (isYou ? " you" : "");
+  const content     = document.createElement("div");
+  content.className = `message-content${isYou ? " you" : ""}`;
   content.textContent = text;
   msgRow.appendChild(content);
 
-  // React button only on partner messages
   if (!isYou) {
-    const reactBtn = document.createElement("button");
+    const reactBtn   = document.createElement("button");
     reactBtn.className = "react-btn";
     reactBtn.innerHTML = "📋";
-    reactBtn.title = "React";
+    reactBtn.title   = "React";
     reactBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       showReactionPicker(reactBtn, id);
@@ -197,52 +228,53 @@ function addMessage(text, isYou, messageId) {
     msgRow.appendChild(reactBtn);
   }
 
-  const timestamp = document.createElement("div");
-  timestamp.className = "timestamp";
+  const timestamp       = document.createElement("div");
+  timestamp.className   = "timestamp";
   timestamp.textContent = formatTimestamp(new Date());
 
-  const reactionArea = document.createElement("div");
+  const reactionArea    = document.createElement("div");
   reactionArea.className = "reaction-area";
-  reactionArea.id = `reactions_${id}`;
+  reactionArea.id       = `reactions_${id}`;
 
+  // Append all children in one shot to minimize reflows
   wrapper.appendChild(msgRow);
   wrapper.appendChild(timestamp);
   wrapper.appendChild(reactionArea);
   chat.appendChild(wrapper);
-  chat.scrollTop = chat.scrollHeight;
+  scheduleScroll();
 
   return id;
 }
 
+/** Shared helper for system / disconnect notices (avoids duplicated logic). */
+function _appendInfoMessage(text, className) {
+  const el      = document.createElement("div");
+  el.className  = className;
+  el.textContent = text;
+  chat.appendChild(el);
+  scheduleScroll();
+}
+
 function addSystemMessage(text) {
-  const sysMsg = document.createElement("div");
-  sysMsg.className = "system-message";
-  sysMsg.textContent = text;
-  chat.appendChild(sysMsg);
-  chat.scrollTop = chat.scrollHeight;
+  _appendInfoMessage(text, "system-message");
 }
 
 function addDisconnectMessage(text) {
-  const sysMsg = document.createElement("div");
-  sysMsg.className = "system-message-disconnect";
-  sysMsg.textContent = text;
-  chat.appendChild(sysMsg);
-  chat.scrollTop = chat.scrollHeight;
+  _appendInfoMessage(text, "system-message-disconnect");
 }
 
 function showTypingIndicator() {
   if (document.getElementById("typingIndicator")) return;
-  const el = document.createElement("div");
-  el.id = "typingIndicator";
-  el.className = "typing-indicator";
-  el.innerHTML = `<span></span><span></span><span></span>`;
+  const el      = document.createElement("div");
+  el.id         = "typingIndicator";
+  el.className  = "typing-indicator";
+  el.innerHTML  = "<span></span><span></span><span></span>";
   chat.appendChild(el);
-  chat.scrollTop = chat.scrollHeight;
+  scheduleScroll();
 }
 
 function hideTypingIndicator() {
-  const el = document.getElementById("typingIndicator");
-  if (el) el.remove();
+  document.getElementById("typingIndicator")?.remove();
 }
 
 function clearChat() {
@@ -250,12 +282,12 @@ function clearChat() {
 }
 
 function updateOnlineCount(count) {
-  onlineCountElem.textContent = `Users Online: ${count}`;
+  onlineCountEl.textContent = `Users Online: ${count}`;
 }
 
 // ── Auto-retry while searching ────────────────────────────────────────────────
-// Silently re-emits findPartner every 2 s so the user never has to press
-// "ძებნა" a second time when already waiting in the queue.
+// Re-emits findPartner every 2 s so the user never has to press Search again
+// if they were already in the queue when a previous partner disconnected.
 
 function startSearchRetry() {
   stopSearchRetry();
@@ -263,7 +295,7 @@ function startSearchRetry() {
     if (!partnerConnected && userName) {
       socket.emit("findPartner");
     }
-  }, 500);
+  }, 2000); // 2 s — prevents hammering the server
 }
 
 function stopSearchRetry() {
@@ -275,9 +307,9 @@ function stopSearchRetry() {
 
 function setInputsEnabled(enabled) {
   messageInput.disabled = !enabled;
-  sendBtn.disabled = !enabled;
-  blockBtn.disabled = !enabled;
-  gifBtn.disabled = !enabled;
+  sendBtn.disabled      = !enabled;
+  blockBtn.disabled     = !enabled;
+  gifBtn.disabled       = !enabled;
 }
 
 function showNameError(msg) {
@@ -287,7 +319,7 @@ function showNameError(msg) {
 }
 
 function clearNameError() {
-  nameError.textContent = "";
+  nameError.textContent   = "";
   nameError.style.display = "none";
   nameInput.classList.remove("error");
 }
@@ -297,36 +329,36 @@ function clearNameError() {
 function showReactionPicker(anchorEl, messageId) {
   closeReactionPicker();
 
-  const picker = document.createElement("div");
-  picker.className = "reaction-picker";
+  const picker      = document.createElement("div");
+  picker.className  = "reaction-picker";
 
-  REACTIONS.forEach(emoji => {
-    const btn = document.createElement("button");
-    btn.className = "reaction-emoji-btn";
+  // Build all buttons in a fragment to avoid repeated reflows
+  const frag = document.createDocumentFragment();
+  REACTIONS.forEach((emoji) => {
+    const btn       = document.createElement("button");
+    btn.className   = "reaction-emoji-btn";
     btn.textContent = emoji;
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       reactToMessage(messageId, emoji);
       closeReactionPicker();
     });
-    picker.appendChild(btn);
+    frag.appendChild(btn);
   });
+  picker.appendChild(frag);
 
   document.body.appendChild(picker);
   activeReactionPicker = picker;
 
   requestAnimationFrame(() => {
     const rect = anchorEl.getBoundingClientRect();
-    const pw = picker.offsetWidth;
-    const ph = picker.offsetHeight;
-    let left = rect.left;
-    let top = rect.top - ph - 8;
+    const pw   = picker.offsetWidth;
+    const ph   = picker.offsetHeight;
+    let left   = rect.left;
+    let top    = rect.top - ph - 8;
     if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
     if (top < 4) top = rect.bottom + 8;
-    picker.style.left = left + "px";
-    picker.style.top = top + "px";
-    picker.style.opacity = "1";
-    picker.style.transform = "scale(1)";
+    picker.style.cssText += `left:${left}px;top:${top}px;opacity:1;transform:scale(1)`;
   });
 }
 
@@ -348,16 +380,17 @@ function displayReaction(messageId, emoji, isMine) {
   const reactionArea = document.getElementById(`reactions_${messageId}`);
   if (!reactionArea) return;
 
-  const cls = isMine ? "reaction-mine" : "reaction-partner";
-  let pill = reactionArea.querySelector(`.${cls}`);
+  const cls  = isMine ? "reaction-mine" : "reaction-partner";
+  let pill   = reactionArea.querySelector(`.${cls}`);
 
   if (pill) {
+    // Re-trigger animation without cloning the node
     pill.classList.remove("reaction-pop");
-    void pill.offsetWidth;
+    void pill.offsetWidth; // force reflow to restart animation
     pill.textContent = emoji;
     pill.classList.add("reaction-pop");
   } else {
-    pill = document.createElement("span");
+    pill           = document.createElement("span");
     pill.className = `reaction-pill ${cls} reaction-pop`;
     pill.textContent = emoji;
     reactionArea.appendChild(pill);
@@ -368,7 +401,8 @@ function displayReaction(messageId, emoji, isMine) {
 
 function sendMessage() {
   const message = messageInput.value.trim();
-  if (message === "" || !partnerConnected || userName === "") return;
+  if (!message || !partnerConnected || !userName) return;
+
   const msgId = generateMsgId();
   addMessage(message, true, msgId);
   socket.emit("message", { text: message, messageId: msgId });
@@ -379,45 +413,41 @@ function sendMessage() {
 
 function saveName() {
   const name = nameInput.value.trim();
-  if (name === "") { showNameError("Please enter a username."); return; }
-  if (name.length < 2) { showNameError("Username must be at least 2 characters."); return; }
+  if (!name)            { showNameError("Please enter a username."); return; }
+  if (name.length < 2)  { showNameError("Username must be at least 2 characters."); return; }
   if (name.length > 20) { showNameError("Username must be 20 characters or less."); return; }
   clearNameError();
-  saveNameBtn.disabled = true;
+  saveNameBtn.disabled   = true;
   saveNameBtn.textContent = "Checking...";
   socket.emit("setName", name);
 }
 
 // ── Socket Events ─────────────────────────────────────────────────────────────
 
-// FIX: handle socket.io auto-reconnect (e.g. after a network blip)
-// Without this, the new server socket has no name and the client is stuck in broken state
+// Re-register username after a network blip / socket.io auto-reconnect
 socket.on("connect", () => {
   if (userName && !isFirstLogin) {
-    // We have a known username — re-register it silently on the new socket
     isReconnecting = true;
     socket.emit("setName", userName);
   }
 });
 
 socket.on("nameAccepted", (acceptedName) => {
-  userName = acceptedName;
+  userName                = acceptedName;
   nameModal.style.display = "none";
-  saveNameBtn.disabled = false;
+  saveNameBtn.disabled    = false;
   saveNameBtn.textContent = "Start Chatting";
   clearNameError();
 
   if (isFirstLogin) {
-    // Normal first-time flow
     isFirstLogin = false;
     clearChat();
     socket.emit("findPartner");
     startSearchRetry();
   } else if (isReconnecting) {
-    // FIX: after a reconnect, reset state and search again
-    isReconnecting = false;
+    isReconnecting   = false;
     partnerConnected = false;
-    partnerName = "";
+    partnerName      = "";
     setInputsEnabled(false);
     hideTypingIndicator();
     closeGifPickerPanel();
@@ -426,19 +456,19 @@ socket.on("nameAccepted", (acceptedName) => {
     socket.emit("findPartner");
     startSearchRetry();
   }
-  // else: user just changed their name mid-session — do nothing extra
+  // else: name change mid-session — no extra action needed
 });
 
 socket.on("nameTaken", () => {
-  saveNameBtn.disabled = false;
+  saveNameBtn.disabled    = false;
   saveNameBtn.textContent = isFirstLogin ? "Start Chatting" : "Save Name";
-  isReconnecting = false;
+  isReconnecting          = false;
   showNameError("ეს სახელი დაკავებულია. სხვა აირჩიეთ.");
   nameInput.focus();
   nameInput.select();
 });
 
-socket.on("onlineCount", (count) => updateOnlineCount(count));
+socket.on("onlineCount",    (count) => updateOnlineCount(count));
 
 socket.on("partnerFound", (partner) => {
   stopSearchRetry();
@@ -453,7 +483,7 @@ socket.on("waitingForPartner", () => {
   clearChat();
   addSystemMessage("ვეძებთ ახალ პარტნიორს...");
   partnerConnected = false;
-  partnerName = "";
+  partnerName      = "";
   setInputsEnabled(false);
   startSearchRetry();
 });
@@ -474,10 +504,9 @@ socket.on("reacted", ({ messageId, emoji }) => {
 socket.on("partnerDisconnected", (data) => {
   stopSearchRetry();
   hideTypingIndicator();
-  // FIX: typo fix — removed stray 't' at end of Georgian text
   addDisconnectMessage(`${data.name || "Anonymous"} -მ სამწუხაროდ დაგტოვათ`);
   partnerConnected = false;
-  partnerName = "";
+  partnerName      = "";
   setInputsEnabled(false);
   closeGifPickerPanel();
 });
@@ -487,7 +516,7 @@ socket.on("userBlocked", (data) => {
   clearChat();
   addSystemMessage(`You blocked ${data.name}. Searching for a new partner...`);
   partnerConnected = false;
-  partnerName = "";
+  partnerName      = "";
   setInputsEnabled(false);
   closeGifPickerPanel();
   startSearchRetry();
@@ -502,7 +531,7 @@ nextBtn.addEventListener("click", () => {
   clearChat();
   addSystemMessage("ვეძებთ ახალ პარტნიორს...");
   partnerConnected = false;
-  partnerName = "";
+  partnerName      = "";
   setInputsEnabled(false);
   closeGifPickerPanel();
   socket.emit("next");
@@ -516,6 +545,7 @@ blockBtn.addEventListener("click", () => {
 });
 
 sendBtn.addEventListener("click", sendMessage);
+
 messageInput.addEventListener("keypress", (e) => {
   if (e.key === "Enter") sendMessage();
 });
@@ -534,7 +564,7 @@ messageInput.addEventListener("input", () => {
 });
 
 changeNameBtn.addEventListener("click", () => {
-  nameInput.value = userName;
+  nameInput.value         = userName;
   saveNameBtn.textContent = "Save Name";
   clearNameError();
   nameModal.style.display = "flex";
@@ -548,14 +578,14 @@ nameInput.addEventListener("keypress", (e) => {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
-window.onload = () => {
-  userName = "";
-  isFirstLogin = true;
+document.addEventListener("DOMContentLoaded", () => {
+  userName      = "";
+  isFirstLogin  = true;
   isReconnecting = false;
   stopSearchRetry();
   nameModal.style.display = "flex";
   setInputsEnabled(false);
-  blockBtn.disabled = true;
-  saveNameBtn.textContent = "Start Chatting";
+  blockBtn.disabled        = true;
+  saveNameBtn.textContent  = "Start Chatting";
   setTimeout(() => nameInput.focus(), 100);
-};
+});
