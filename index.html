@@ -56,6 +56,33 @@
     <button id="sendBtn" disabled>SEND</button>
   </div>
 
+  <!-- ── Safety / Age-Verification Modal ───────────────────────────────────── -->
+  <div id="safetyModal" class="modal">
+    <div class="modal-content safety-modal-content">
+      <div class="safety-icon">🛡️</div>
+      <h2 class="safety-title">Safety Notice</h2>
+
+      <ul class="safety-list">
+        <li>This is an <strong>anonymous chat platform</strong></li>
+        <li>Do <strong>not</strong> share personal information<br>
+            <span class="safety-sub">(name, address, phone, social media)</span></li>
+        <li>You can <strong>disconnect at any time</strong></li>
+        <li>Leave or report immediately if you feel uncomfortable</li>
+      </ul>
+
+      <p class="safety-age-confirm">
+        By continuing, you confirm that you are <strong>18+</strong> and agree to our
+        <a href="/terms.html" target="_blank" class="safety-link">Terms of Service</a>
+        and
+        <a href="/privacy.html" target="_blank" class="safety-link">Privacy Policy</a>.
+      </p>
+
+      <button id="safetyConfirmBtn" class="safety-confirm-btn">
+        I'm 18+ — Enter Chat
+      </button>
+    </div>
+  </div>
+
   <!-- Name Modal -->
   <div id="nameModal" class="modal">
     <div class="modal-content">
