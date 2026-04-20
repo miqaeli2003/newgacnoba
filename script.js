@@ -664,7 +664,10 @@ socket.on("partnerFound", (partner) => {
 });
 
 // Reconnect grace-period events
+let partnerWasReconnecting = false;
+
 socket.on("partnerReconnecting", (data) => {
+  partnerWasReconnecting = true;
   setInputsEnabled(false);
   hideTypingIndicator();
   closeGifPickerPanel();
@@ -672,6 +675,7 @@ socket.on("partnerReconnecting", (data) => {
 });
 
 socket.on("partnerReconnected", (data) => {
+  partnerWasReconnecting = false;
   removeReconnectingMessage();
   partnerName      = data.name || partnerName;
   partnerConnected = true;
@@ -726,7 +730,10 @@ socket.on("partnerDisconnected", (data) => {
   removeReconnectingMessage();
   stopSearchRetry();
   hideTypingIndicator();
-  addDisconnectMessage(`${data.name || "Anonymous"} -მ სამწუხაროდ დაგტოვათ 😟 `);
+  if (!partnerWasReconnecting) {
+    addDisconnectMessage(`${data.name || "Anonymous"} -მ სამწუხაროდ დაგტოვათ 😟 `);
+  }
+  partnerWasReconnecting = false;
   partnerConnected = false;
   partnerName      = "";
   setInputsEnabled(false);
