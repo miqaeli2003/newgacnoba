@@ -403,6 +403,9 @@ function updateViewportOffsets() {
   // the container stays scrollable (same trick Instagram uses).
   document.body.style.height = kbH > 0 ? vv.height + "px" : "";
 
+  // Toggle a class so CSS can zoom out messages slightly when keyboard is open
+  document.body.classList.toggle("keyboard-open", kbH > 0);
+
   // Input bar is position:fixed (layout-viewport coords) so still needs
   // shifting up by the full keyboard height (accessory bar included).
   chatInputBar.style.bottom     = kbH + "px";
@@ -581,6 +584,8 @@ function sendMessage() {
   messageInput.value = "";
   charCount.textContent = "0/2000";
   charCount.classList.remove("warning");
+  // Keep focus on input so the keyboard stays open on mobile
+  messageInput.focus();
 }
 
 // ── Name modal ────────────────────────────────────────────────────────────────
