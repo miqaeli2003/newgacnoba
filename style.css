@@ -611,9 +611,9 @@ html, body {
     font-size: 0.72em;
   }
 
-  /* Hide online count on small screens to save space */
+  /* Show online count on mobile — shrink font instead of hiding */
   #onlineCount {
-    display: none;
+    font-size: 0.72em;
   }
 
   .user-name-display {
