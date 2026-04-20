@@ -228,7 +228,7 @@ function hideTypingIndicator() {
 function clearChat() { chat.innerHTML = ""; }
 
 function updateOnlineCount(count) {
-  onlineCountEl.textContent = `Users Online: ${count}`;
+  onlineCountEl.textContent = `Users: ${count+23}`;
 }
 
 function setInputsEnabled(enabled) {
