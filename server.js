@@ -70,7 +70,7 @@ const reportLog          = [];        // append-only; persist to DB in productio
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function updateOnlineCount() {
-  io.emit("onlineCount", io.engine.clientsCount);
+  io.emit("onlineCount", io.sockets.sockets.size);
 }
 
 function cleanQueue() {
