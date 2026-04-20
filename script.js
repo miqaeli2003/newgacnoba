@@ -198,7 +198,6 @@ function addMessage(text, isYou, messageId, replyToData) {
     const raw = replyToData.text;
     quoteText.textContent = raw.length > 80 ? raw.slice(0, 80) + "…" : raw;
 
-    quote.appendChild(quoteName);
     quote.appendChild(quoteText);
     wrapper.appendChild(quote);
   }
