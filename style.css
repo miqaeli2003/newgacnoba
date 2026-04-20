@@ -121,7 +121,7 @@ html, body {
   padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
   background: #1a1b1e;
 }
 
@@ -136,7 +136,7 @@ html, body {
 .message-wrapper {
   display: flex;
   flex-direction: column;
-  max-width: 75%;
+  max-width: 72%;
 }
 
 .message-wrapper.you {
@@ -153,17 +153,17 @@ html, body {
 
 .message-row {
   display: flex;
-  align-items: flex-end;
-  gap: 4px;
+  align-items: center;
+  gap: 5px;
 }
 
 /* ── BUBBLE ──────────────────────────────────────────────────────────────── */
 
 .message-content {
   max-width: 100%;
-  padding: 10px 14px;
-  border-radius: 12px;
-  font-size: 0.95em;
+  padding: 7px 11px;
+  border-radius: 18px;
+  font-size: 0.88em;
   line-height: 1.4;
   background: #5865f2;
   color: #dcddde;
@@ -208,11 +208,16 @@ html, body {
 /* ── TIMESTAMP ───────────────────────────────────────────────────────────── */
 
 .timestamp {
-  font-size: 0.7em;
-  color: #949ba4;
-  margin-top: 3px;
-  margin-left: 2px;
-  margin-right: 2px;
+  font-size: 0.62em;
+  color: #72767d;
+  white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* Inline timestamp inside message-row */
+.inline-ts {
+  margin: 0;
 }
 
 /* ── SYSTEM MESSAGES ─────────────────────────────────────────────────────── */
@@ -773,9 +778,9 @@ html, body {
     height: 380px;
   }
 
-  .message-wrapper          { max-width: 85%; }
+  .message-wrapper          { max-width: 82%; }
   .message-wrapper.gif-msg-wrapper { max-width: 200px; }
-  .question-card            { max-width: 85%; }
+  .question-card            { max-width: 82%; }
 
   .modal-content { padding: 20px 16px 18px; }
 
@@ -804,39 +809,43 @@ html, body {
 }
 
 /* ── KEYBOARD-OPEN ZOOM ───────────────────────────────────────────────────── */
-/* When the keyboard is open, slightly shrink messages so more fit on screen.  */
+/* When the keyboard is open, shrink everything so more messages are visible.  */
 
 .keyboard-open .chat-container {
-  gap: 3px;
-  padding-top: 8px;
+  gap: 1px;
+  padding-top: 6px;
 }
 
 .keyboard-open .message-content {
-  font-size: 0.82em;
-  padding: 7px 11px;
+  font-size: 0.76em;
+  padding: 5px 9px;
+  border-radius: 14px;
 }
 
 .keyboard-open .message-wrapper {
-  gap: 1px;
+  max-width: 78%;
 }
 
-.keyboard-open .timestamp {
-  font-size: 0.62em;
-  margin-top: 1px;
+.keyboard-open .inline-ts {
+  font-size: 0.56em;
 }
 
 .keyboard-open .system-message,
 .keyboard-open .system-message-disconnect,
 .keyboard-open .system-message-reconnecting {
-  font-size: 0.75em;
-  margin: 2px 0;
+  font-size: 0.7em;
+  margin: 1px 0;
 }
 
 .keyboard-open .typing-indicator {
-  padding: 7px 11px;
+  padding: 6px 10px;
 }
 
 .keyboard-open .typing-indicator span {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
+}
+
+.keyboard-open .seen-status {
+  font-size: 0.56em;
 }
