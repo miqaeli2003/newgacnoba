@@ -17,13 +17,52 @@ html, body {
 /* ── TOP BAR ────────────────────────────────────────────────────────────── */
 
 .top-bar {
-  flex: 0 0 60px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: #2b2d31;
+  border-bottom: 1px solid #1a1b1e;
+}
+
+.top-bar-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #2b2d31;
+  height: 60px;
   padding: 0 18px;
-  border-bottom: 1px solid #1a1b1e;
+}
+
+/* Mobile-only second row showing the username */
+.top-bar-user-row {
+  display: none; /* shown via JS on mobile only */
+  align-items: center;
+  gap: 6px;
+  padding: 4px 14px 6px;
+  background: #232428;
+  border-top: 1px solid #1a1b1e;
+}
+
+.user-row-label {
+  font-size: 0.72em;
+  color: #72767d;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  flex-shrink: 0;
+}
+
+.user-name-mobile {
+  font-size: 0.8em;
+  font-weight: 600;
+  color: #5865f2;
+  background: rgba(88, 101, 242, 0.12);
+  border: 1px solid rgba(88, 101, 242, 0.35);
+  border-radius: 20px;
+  padding: 2px 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
 }
 
 .left-side {
@@ -599,9 +638,19 @@ html, body {
 /* ── RESPONSIVE ──────────────────────────────────────────────────────────── */
 
 @media (max-width: 600px) {
-  .top-bar {
+  .top-bar-row {
     font-size: 0.85em;
     padding: 0 8px;
+  }
+
+  /* Hide desktop username badge on mobile — shown in the user row below instead */
+  #userNameDisplay {
+    display: none !important;
+  }
+
+  /* Show user row on mobile when JS sets it to flex */
+  #userNameRow[style*="flex"] {
+    display: flex !important;
   }
 
   .change-name-btn,
