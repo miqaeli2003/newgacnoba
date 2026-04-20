@@ -189,7 +189,7 @@ function addMessage(text, isYou, messageId, replyToData) {
   // ── Reply quote block ────────────────────────────────────────────────────
   if (replyToData && replyToData.text) {
     const quote       = document.createElement("div");
-    quote.className   = `reply-quote ${isYou ? "you" : "partner"}`;
+    quote.className   = `reply-quote ${"you" : "partner"}`;
 
     const quoteName       = document.createElement("span");
     quoteName.textContent = replyToData.senderName || "";
