@@ -378,7 +378,7 @@ function clearNameError() {
   nameInput.classList.remove("error");
 }
 
-// ── Toast popup ───────────────────────────────────────────────────────────────
+// ── Toast popup — used for name-change confirmation ───────────────────────────
 function showToast(text, duration = 3000) {
   document.querySelectorAll(".toast-popup").forEach(t => t.remove());
   const toast       = document.createElement("div");
@@ -860,8 +860,7 @@ socket.on("userBlocked", (data) => {
   setInputsEnabled(false);
   blockBtn.disabled    = true;
   closeGifPickerPanel();
-  // Show toast — do NOT auto-search
-  showToast(`„${blockedName}" - იქნა დაბლოკი`, 4000);
+  addSystemMessage(`„${blockedName}" - იქნა დაბლოკი`);
 });
 
 socket.on("reportConfirmed", () => {
