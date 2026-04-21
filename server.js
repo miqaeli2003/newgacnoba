@@ -389,8 +389,7 @@ io.on("connection", (socket) => {
     }
 
     socket.emit("userBlocked", { name: blockedDisplayName });
-    waitingQueue = waitingQueue.filter(s => s.id !== socket.id);
-    tryFindPartner();
+    // Do NOT auto-search — client will call findPartner when user presses ძებნა
   });
 
   // ── Disconnect ───────────────────────────────────────────────────────────
