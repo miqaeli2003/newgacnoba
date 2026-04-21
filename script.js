@@ -728,7 +728,7 @@ socket.on("nameAccepted", (acceptedName) => {
   }
   // else: mid-session name change — no extra action
   if (wasNameChange) {
-    showToast(`თქვენ წარმატებით შეიცვალეთ სახელი „${acceptedName}"`, 3500);
+    addSystemMessage(`თქვენ წარმატებით შეიცვალეთ სახელი „${acceptedName}"`);
   }
 });
 
