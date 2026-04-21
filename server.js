@@ -155,6 +155,7 @@ io.on("connection", (socket) => {
 
   socket.userName         = "";
   socket.partner          = null;
+  socket.lastPartnerName  = "";   // remember last partner for post-disconnect block
   socket.blockedNames     = [];
   socket.recentPartnerIds = new Set();
   socket.interests        = [];
@@ -249,6 +250,8 @@ io.on("connection", (socket) => {
 
     socket.partner        = partnerSocket;
     partnerSocket.partner = socket;
+    socket.lastPartnerName        = partnerSocket.userName;
+    partnerSocket.lastPartnerName = socket.userName;
 
     const sharedTags = (socket.interests || []).filter(t =>
       (partnerSocket.interests || []).includes(t)
@@ -350,8 +353,10 @@ io.on("connection", (socket) => {
       const oldPartner   = socket.partner;
       const oldPartnerId = oldPartner.id;
 
-      socket.partner     = null;
-      oldPartner.partner = null;
+      socket.partner              = null;
+      oldPartner.partner          = null;
+      socket.lastPartnerName      = "";
+      oldPartner.lastPartnerName  = "";
       oldPartner.emit("partnerDisconnected", { name: socket.userName });
 
       socket.recentPartnerIds.add(oldPartnerId);
@@ -368,27 +373,40 @@ io.on("connection", (socket) => {
 
   // ── Block ────────────────────────────────────────────────────────────────
   socket.on("blockUser", () => {
-    if (!socket.partner) return;
+    // Allow blocking an active partner OR one who just disconnected
+    if (!socket.partner && !socket.lastPartnerName) return;
 
-    const blockedName        = socket.partner.userName.toLowerCase();
-    const blockedDisplayName = socket.partner.userName;
-    const blockedSocket      = socket.partner;
+    if (socket.partner) {
+      // Partner still connected — normal block flow
+      const blockedName        = socket.partner.userName.toLowerCase();
+      const blockedDisplayName = socket.partner.userName;
+      const blockedSocket      = socket.partner;
 
-    if (!socket.blockedNames.includes(blockedName)) socket.blockedNames.push(blockedName);
+      if (!socket.blockedNames.includes(blockedName)) socket.blockedNames.push(blockedName);
 
-    socket.partner         = null;
-    blockedSocket.partner  = null;
-    blockedSocket.emit("partnerDisconnected", { name: socket.userName });
+      socket.partner              = null;
+      blockedSocket.partner       = null;
+      socket.lastPartnerName      = "";
+      blockedSocket.lastPartnerName = "";
+      blockedSocket.emit("partnerDisconnected", { name: socket.userName });
 
-    blockedSocket.blockedByCount = (blockedSocket.blockedByCount || 0) + 1;
-    if (blockedSocket.blockedByCount >= MAX_BLOCKS_RX) {
-      console.log(`Auto-kicking ${blockedSocket.userName}: blocked ${MAX_BLOCKS_RX}x`);
-      blockedSocket.emit("autoKicked");
-      blockedSocket.disconnect(true);
-      return;
+      blockedSocket.blockedByCount = (blockedSocket.blockedByCount || 0) + 1;
+      if (blockedSocket.blockedByCount >= MAX_BLOCKS_RX) {
+        console.log(`Auto-kicking ${blockedSocket.userName}: blocked ${MAX_BLOCKS_RX}x`);
+        blockedSocket.emit("autoKicked");
+        blockedSocket.disconnect(true);
+        return;
+      }
+
+      socket.emit("userBlocked", { name: blockedDisplayName });
+    } else {
+      // Partner already left — just add their name to blocked list
+      const blockedName        = socket.lastPartnerName.toLowerCase();
+      const blockedDisplayName = socket.lastPartnerName;
+      if (!socket.blockedNames.includes(blockedName)) socket.blockedNames.push(blockedName);
+      socket.lastPartnerName = "";
+      socket.emit("userBlocked", { name: blockedDisplayName });
     }
-
-    socket.emit("userBlocked", { name: blockedDisplayName });
     // Do NOT auto-search — client will call findPartner when user presses ძებნა
   });
 
