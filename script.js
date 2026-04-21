@@ -335,7 +335,7 @@ function hideTypingIndicator() {
 function clearChat() { chat.innerHTML = ""; clearReply(); }
 
 function updateOnlineCount(count) {
-  onlineCountEl.textContent = `Users: ${count+23}`;
+  onlineCountEl.textContent = `Users: ${count+50}`;
 }
 
 // ── Reply helpers ──────────────────────────────────────────────────────────────
