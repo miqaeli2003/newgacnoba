@@ -860,7 +860,7 @@ socket.on("userBlocked", (data) => {
   setInputsEnabled(false);
   blockBtn.disabled    = true;
   closeGifPickerPanel();
-  addSystemMessage(`„${blockedName}" - იქნა დაბლოკი`);
+  addSystemMessage(`„${blockedName}" - იქნა დაბლოკი ახალი პარტნიორის მოსაძებნათ დააჭიერ ძებნა-ს`);
 });
 
 socket.on("reportConfirmed", () => {
