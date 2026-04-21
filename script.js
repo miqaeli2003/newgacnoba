@@ -361,9 +361,15 @@ replyPreviewClose.addEventListener("click", () => clearReply());
 function setInputsEnabled(enabled) {
   messageInput.disabled = !enabled;
   sendBtn.disabled      = !enabled;
-  blockBtn.disabled     = !enabled;
   gifBtn.disabled       = !enabled;
   questionBtn.disabled  = !enabled;
+  // blockBtn is managed separately via updateBlockBtn()
+}
+
+// Block button is enabled when chatting OR when partner just left normally.
+// It stays disabled during the reconnecting grace-period ("გავიდა საიტიდან").
+function updateBlockBtn() {
+  blockBtn.disabled = !(partnerConnected || canBlockDisconnected);
 }
 
 function showNameError(msg) {
@@ -760,6 +766,7 @@ socket.on("partnerFound", (partner) => {
   canBlockDisconnected = false;
   addSystemMessage(`გილოცავთ პარტნიორი ნაპოვნია 🥳 : ${partnerName}`);
   setInputsEnabled(true);
+  updateBlockBtn();
   playNotification("partnerFound");
   incrementUnread();
 });
@@ -769,8 +776,10 @@ let partnerWasReconnecting = false;
 
 socket.on("partnerReconnecting", (data) => {
   partnerWasReconnecting = true;
+  canBlockDisconnected   = false;   // cannot block during grace period
+  partnerConnected       = false;
   setInputsEnabled(false);
-  blockBtn.disabled = true; // cannot block while partner is just temporarily gone
+  updateBlockBtn();
   hideTypingIndicator();
   closeGifPickerPanel();
   addReconnectingMessage(data.name || "Partner");
@@ -779,9 +788,11 @@ socket.on("partnerReconnecting", (data) => {
 socket.on("partnerReconnected", (data) => {
   partnerWasReconnecting = false;
   removeReconnectingMessage();
-  partnerName      = data.name || partnerName;
-  partnerConnected = true;
+  partnerName          = data.name || partnerName;
+  partnerConnected     = true;
+  canBlockDisconnected = false;
   setInputsEnabled(true);
+  updateBlockBtn();
   addSystemMessage(`${data.name} - დაბრუნდა! 🎉`);
   playNotification("partnerFound");
 });
@@ -829,23 +840,26 @@ socket.on("reacted", ({ messageId, emoji }) => {
 });
 
 socket.on("partnerDisconnected", (data) => {
-  if (!partnerWasReconnecting) {
-    // Normal disconnect — remove any leftover reconnecting msg and show goodbye
+  const wasReconnecting = partnerWasReconnecting;
+  partnerWasReconnecting = false;
+
+  if (!wasReconnecting) {
     removeReconnectingMessage();
     addDisconnectMessage(`${data.name || "Anonymous"} -მ სამწუხაროდ დაგტოვათ 😟 `);
+    // Allow blocking after a normal leave
+    lastPartnerName      = partnerName || data.name || "";
+    canBlockDisconnected = !!lastPartnerName;
+  } else {
+    // Grace-period expired — "გავიდა საიტიდან" message stays, block NOT allowed
+    canBlockDisconnected = false;
   }
-  // If partnerWasReconnecting is true the "გავიდა საიტიდან" message stays
-  // visible until the user presses ძებნა (which calls clearChat).
-  partnerWasReconnecting = false;
-  lastPartnerName  = partnerName || data.name || "";
-  canBlockDisconnected = !!lastPartnerName;
+
   partnerConnected = false;
   partnerName      = "";
   stopSearchRetry();
   hideTypingIndicator();
   setInputsEnabled(false);
-  // Keep block button enabled so user can still block the partner who left
-  if (canBlockDisconnected) blockBtn.disabled = false;
+  updateBlockBtn();
   closeGifPickerPanel();
 });
 
@@ -858,9 +872,9 @@ socket.on("userBlocked", (data) => {
   lastPartnerName      = "";
   canBlockDisconnected = false;
   setInputsEnabled(false);
-  blockBtn.disabled    = true;
+  updateBlockBtn();
   closeGifPickerPanel();
-  addSystemMessage(`„${blockedName}" - იქნა დაბლოკი , ახალი  პარტნიორის მოსაძებნათ დააჭირეთ ძებნა-ს`);
+  addSystemMessage(`„${blockedName}" - იქნა დაბლოკი`);
 });
 
 socket.on("reportConfirmed", () => {
@@ -900,6 +914,7 @@ nextBtn.addEventListener("click", () => {
   lastPartnerName      = "";
   canBlockDisconnected = false;
   setInputsEnabled(false);
+  updateBlockBtn();
   closeGifPickerPanel();
   socket.emit("next");
   startSearchRetry();
@@ -907,7 +922,7 @@ nextBtn.addEventListener("click", () => {
 
 blockBtn.addEventListener("click", () => {
   const targetName = partnerName || lastPartnerName;
-  if ((!partnerConnected && !canBlockDisconnected) || !targetName) return;
+  if (!targetName) return;
   const confirmed = confirm(
     `Block "${targetName}"? თქვენ ვეღარ შეხვდებით ამ იუზერს ბლოკის შემდეგ. 😡 `
   );
@@ -972,7 +987,7 @@ document.addEventListener("DOMContentLoaded", () => {
   wasAutoKicked  = false;
   stopSearchRetry();
   setInputsEnabled(false);
-  blockBtn.disabled        = true;
+  updateBlockBtn();
   saveNameBtn.textContent  = "თანხმობა და შესვლა";
   charCount.textContent    = "";
 
