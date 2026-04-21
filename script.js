@@ -17,6 +17,8 @@ let gifSearchTimer      = null;
 let gifPickerOpen       = false;
 let unreadCount         = 0;
 let replyTo             = null;   // { text, senderName, messageId }
+let lastPartnerName     = "";     // remember partner name after disconnect for blocking
+let canBlockDisconnected = false; // allow blocking a partner who just left
 const originalTitle     = document.title;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -376,6 +378,20 @@ function clearNameError() {
   nameInput.classList.remove("error");
 }
 
+// ── Toast popup ───────────────────────────────────────────────────────────────
+function showToast(text, duration = 3000) {
+  document.querySelectorAll(".toast-popup").forEach(t => t.remove());
+  const toast       = document.createElement("div");
+  toast.className   = "toast-popup";
+  toast.textContent = text;
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add("toast-visible"));
+  setTimeout(() => {
+    toast.classList.remove("toast-visible");
+    setTimeout(() => toast.remove(), 350);
+  }, duration);
+}
+
 // ── Search retry ──────────────────────────────────────────────────────────────
 function startSearchRetry() {
   stopSearchRetry();
@@ -678,6 +694,7 @@ socket.on("connect", () => {
 });
 
 socket.on("nameAccepted", (acceptedName) => {
+  const wasNameChange = !isFirstLogin && !isReconnecting;
   userName                = acceptedName;
   nameModal.style.display = "none";
   saveNameBtn.disabled    = false;
@@ -710,6 +727,9 @@ socket.on("nameAccepted", (acceptedName) => {
     startSearchRetry();
   }
   // else: mid-session name change — no extra action
+  if (wasNameChange) {
+    showToast(`თქვენ წარმატებით შეიცვალეთ სახელი „${acceptedName}"`, 3500);
+  }
 });
 
 socket.on("nameTaken", () => {
@@ -734,8 +754,10 @@ socket.on("queuePosition", ({ position, total }) => {
 socket.on("partnerFound", (partner) => {
   stopSearchRetry();
   clearChat();
-  partnerName      = partner.name || "Anonymous";
-  partnerConnected = true;
+  partnerName          = partner.name || "Anonymous";
+  partnerConnected     = true;
+  lastPartnerName      = "";
+  canBlockDisconnected = false;
   addSystemMessage(`გილოცავთ პარტნიორი ნაპოვნია 🥳 : ${partnerName}`);
   setInputsEnabled(true);
   playNotification("partnerFound");
@@ -748,6 +770,7 @@ let partnerWasReconnecting = false;
 socket.on("partnerReconnecting", (data) => {
   partnerWasReconnecting = true;
   setInputsEnabled(false);
+  blockBtn.disabled = true; // cannot block while partner is just temporarily gone
   hideTypingIndicator();
   closeGifPickerPanel();
   addReconnectingMessage(data.name || "Partner");
@@ -814,24 +837,31 @@ socket.on("partnerDisconnected", (data) => {
   // If partnerWasReconnecting is true the "გავიდა საიტიდან" message stays
   // visible until the user presses ძებნა (which calls clearChat).
   partnerWasReconnecting = false;
+  lastPartnerName  = partnerName || data.name || "";
+  canBlockDisconnected = !!lastPartnerName;
   partnerConnected = false;
   partnerName      = "";
   stopSearchRetry();
   hideTypingIndicator();
   setInputsEnabled(false);
+  // Keep block button enabled so user can still block the partner who left
+  if (canBlockDisconnected) blockBtn.disabled = false;
   closeGifPickerPanel();
 });
 
 socket.on("userBlocked", (data) => {
+  const blockedName = data.name || lastPartnerName || "მომხმარებელი";
   stopSearchRetry();
   clearChat();
-  addSystemMessage(`${data.name} დაბლოკილია. ვეძებთ ახალ პარტნიორს...`);
-  partnerConnected = false;
-  partnerName      = "";
+  partnerConnected     = false;
+  partnerName          = "";
+  lastPartnerName      = "";
+  canBlockDisconnected = false;
   setInputsEnabled(false);
+  blockBtn.disabled    = true;
   closeGifPickerPanel();
-  addSearchingMessage();
-  startSearchRetry();
+  // Show toast — do NOT auto-search
+  showToast(`„${blockedName}" - იქნა დაბლოკი`, 4000);
 });
 
 socket.on("reportConfirmed", () => {
@@ -866,8 +896,10 @@ nextBtn.addEventListener("click", () => {
   hideTypingIndicator();
   clearChat();
   addSearchingMessage();
-  partnerConnected = false;
-  partnerName      = "";
+  partnerConnected     = false;
+  partnerName          = "";
+  lastPartnerName      = "";
+  canBlockDisconnected = false;
   setInputsEnabled(false);
   closeGifPickerPanel();
   socket.emit("next");
@@ -875,9 +907,10 @@ nextBtn.addEventListener("click", () => {
 });
 
 blockBtn.addEventListener("click", () => {
-  if (!partnerConnected || !partnerName) return;
+  const targetName = partnerName || lastPartnerName;
+  if ((!partnerConnected && !canBlockDisconnected) || !targetName) return;
   const confirmed = confirm(
-    `Block "${partnerName}"? თქვენ ვეღარ შეხვდებით ამ იუზერს ბლოკის შემდეგ. 😡 `
+    `Block "${targetName}"? თქვენ ვეღარ შეხვდებით ამ იუზერს ბლოკის შემდეგ. 😡 `
   );
   if (confirmed) socket.emit("blockUser");
 });
