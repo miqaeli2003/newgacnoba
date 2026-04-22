@@ -113,7 +113,7 @@ html, body {
 
 .chat-container {
   flex: 1;
-  min-height: 0;        /* lets it shrink below its content size inside flex */
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -215,7 +215,6 @@ html, body {
   user-select: none;
 }
 
-/* Inline timestamp inside message-row */
 .inline-ts {
   margin: 0;
 }
@@ -359,7 +358,6 @@ html, body {
 
 .message-wrapper.partner:hover .react-btn { opacity: 1; }
 
-/* Always show react button on touch devices (no hover support) */
 @media (hover: none) {
   .react-btn { opacity: 0.55; }
 }
@@ -584,7 +582,7 @@ html, body {
 
 .chat-input {
   position: fixed;
-  bottom: 0;          /* JS overrides this on iOS via visualViewport */
+  bottom: 0;
   left: 0;
   right: 0;
   z-index: 100;
@@ -592,7 +590,7 @@ html, body {
   flex-direction: column;
   background: #2b2d31;
   border-top: 1px solid #1a1b1e;
-  will-change: bottom;  /* hint GPU layer so sliding up is smooth */
+  will-change: bottom;
 }
 
 /* ── REPLY PREVIEW BAR ───────────────────────────────────────────────────── */
@@ -828,6 +826,95 @@ html, body {
   border-radius: 20px;
 }
 
+/* ── MODAL WELCOME BLOCK ─────────────────────────────────────────────────── */
+
+.modal-welcome {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 12px 0 4px;
+  text-align: left;
+}
+
+.modal-welcome-title {
+  font-size: 1em;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 5px;
+}
+
+.modal-welcome-desc {
+  font-size: 0.83em;
+  color: #b5bac1;
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+.modal-welcome-desc strong { color: #fff; }
+
+.modal-features {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.modal-feature-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 0.82em;
+  color: #b5bac1;
+}
+
+.modal-feature-item strong { color: #fff; }
+
+.modal-feature-icon {
+  font-size: 1em;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ? button — matches the real question-btn on the site */
+.modal-feature-icon--qbtn {
+  background: #2b2d31;
+  border: 1px solid rgba(88, 101, 242, 0.5);
+  border-radius: 8px;
+  color: #848de0;
+  font-size: 0.95em;
+  font-weight: 700;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* GIF button — matches the real gif-btn on the site */
+.modal-feature-icon--gif {
+  background: #2b2d31;
+  border: 1px solid #404249;
+  border-radius: 8px;
+  color: #b5bac1;
+  font-size: 0.62em;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ── MODAL INPUT & BUTTON ─────────────────────────────────────────────────── */
+
 .modal-content input[type="text"] {
   width: 100%;
   padding: 12px;
@@ -908,12 +995,10 @@ html, body {
     font-size: 0.72em;
   }
 
-  /* Show online count on mobile — shrink font instead of hiding */
   #onlineCount {
     font-size: 0.72em;
   }
 
-  /* Grid: GAICANI spans both rows on left; onlineCount top-right; username below it */
   .left-side {
     display: grid;
     grid-template-columns: auto 1fr;
@@ -954,13 +1039,12 @@ html, body {
 
   .modal-content { padding: 20px 16px 18px; }
 
-  /* Hide char counter on mobile to keep input row compact */
   .char-count { display: none; }
 
   .chat-input input,
   .chat-input-row input {
     padding: 10px 12px;
-    font-size: 1em; /* prevents iOS auto-zoom */
+    font-size: 1em;
   }
 
   .reply-preview-text { max-width: 180px; }
@@ -982,7 +1066,6 @@ html, body {
 }
 
 /* ── KEYBOARD-OPEN ZOOM ───────────────────────────────────────────────────── */
-/* When the keyboard is open, shrink everything so more messages are visible.  */
 
 .keyboard-open .chat-container {
   gap: 1px;
@@ -990,7 +1073,6 @@ html, body {
 }
 
 .keyboard-open .message-content {
-  /* same size as normal — matches Instagram where text never changes size */
   font-size: 15px;
   padding: 10px 14px;
   border-radius: 22px;
@@ -1119,16 +1201,15 @@ html, body {
 }
 .safety-confirm-btn:active { transform: translateY(0); }
 
-/* ── LEGAL PAGE FOOTER LINKS (shown in chat footer) ─────────────────────── */
+/* ── LEGAL PAGE FOOTER LINKS ─────────────────────────────────────────────── */
 
 .legal-footer {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 99; /* below input bar z:100 */
-  /* hidden behind the chat-input bar — only visible if JS moves it */
-  display: none; /* not used in chat UI, kept for possible future use */
+  z-index: 99;
+  display: none;
 }
 
 /* ── TOAST POPUP ─────────────────────────────────────────────────────────── */
