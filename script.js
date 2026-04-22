@@ -734,7 +734,7 @@ socket.on("nameAccepted", (acceptedName) => {
   }
   // else: mid-session name change — no extra action
   if (wasNameChange) {
-    addSystemMessage(`თქვენ წარმატებით შეიცვალეთ სახელი „${acceptedName}"`);
+    addSystemMessage(`🟢 თქვენ წარმატებით შეიცვალეთ სახელი „${acceptedName}" 🟢`);
   }
 });
 
@@ -875,7 +875,7 @@ socket.on("userBlocked", (data) => {
   setInputsEnabled(false);
   updateBlockBtn();
   closeGifPickerPanel();
-  addSystemMessage(`„${blockedName}" - იქნა დაბლოკი`);
+  addSystemMessage(`🔴 „${blockedName}" - იქნა წარმატებით იქნა დაბლოკილი 🔴`);
 });
 
 socket.on("reportConfirmed", () => {
