@@ -264,6 +264,7 @@ io.on("connection", (socket) => {
 
   socket.on("findPartner", () => {
     if (!socket.userName || socket.partner) return;
+    socket.lastPartnerName = "";
     tryFindPartner();
   });
 
@@ -356,7 +357,7 @@ io.on("connection", (socket) => {
       socket.partner              = null;
       oldPartner.partner          = null;
       socket.lastPartnerName      = "";
-      oldPartner.lastPartnerName  = "";
+      // Keep oldPartner.lastPartnerName so they can still block the user who just left
       oldPartner.emit("partnerDisconnected", { name: socket.userName });
 
       socket.recentPartnerIds.add(oldPartnerId);
