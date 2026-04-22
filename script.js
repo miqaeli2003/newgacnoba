@@ -850,8 +850,9 @@ socket.on("partnerDisconnected", (data) => {
     lastPartnerName      = partnerName || data.name || "";
     canBlockDisconnected = !!lastPartnerName;
   } else {
-    // Grace-period expired — "გავიდა საიტიდან" message stays, block NOT allowed
-    canBlockDisconnected = false;
+    // Grace-period expired — partner fully left, allow block
+    lastPartnerName      = partnerName || data.name || "";
+    canBlockDisconnected = !!lastPartnerName;
   }
 
   partnerConnected = false;
