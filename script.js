@@ -878,6 +878,20 @@ socket.on("userBlocked", (data) => {
   addSystemMessage(`🔴 „${blockedName}" - იქნა წარმატებით იქნა დაბლოკილი 🔴`);
 });
 
+socket.on("youWereBlocked", (data) => {
+  const blockerName = data.name || "მომხმარებელი";
+  partnerConnected     = false;
+  partnerName          = "";
+  lastPartnerName      = "";
+  canBlockDisconnected = false;
+  stopSearchRetry();
+  hideTypingIndicator();
+  setInputsEnabled(false);
+  updateBlockBtn();
+  closeGifPickerPanel();
+  addDisconnectMessage(`${blockerName} -მა დაგბლოკათ :(`);
+});
+
 socket.on("reportConfirmed", () => {
   addSystemMessage("შეტყობინება გაგზავნილია. გმადლობთ. 🙏");
 });
