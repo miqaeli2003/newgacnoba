@@ -875,7 +875,7 @@ socket.on("userBlocked", (data) => {
   setInputsEnabled(false);
   updateBlockBtn();
   closeGifPickerPanel();
-  addSystemMessage(`🔴 „${blockedName}" - იქნა წარმატებით იქნა დაბლოკილი 🔴`);
+  addSystemMessage(`🔴 „${blockedName}" -  წარმატებით იქნა დაბლოკილი 🔴`);
 });
 
 socket.on("youWereBlocked", (data) => {
