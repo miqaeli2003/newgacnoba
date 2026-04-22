@@ -389,7 +389,7 @@ io.on("connection", (socket) => {
       blockedSocket.partner       = null;
       socket.lastPartnerName      = "";
       blockedSocket.lastPartnerName = "";
-      blockedSocket.emit("partnerDisconnected", { name: socket.userName });
+      blockedSocket.emit("youWereBlocked", { name: socket.userName });
 
       blockedSocket.blockedByCount = (blockedSocket.blockedByCount || 0) + 1;
       if (blockedSocket.blockedByCount >= MAX_BLOCKS_RX) {
