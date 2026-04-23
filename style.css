@@ -953,15 +953,25 @@ html, body {
 /* ── TYPING INDICATOR ────────────────────────────────────────────────────── */
 
 .typing-indicator {
+  position: fixed;
+  bottom: 72px;
+  left: 15px;
+  z-index: 101;
   display: flex;
   align-items: center;
   gap: 5px;
   padding: 10px 14px;
   background: #2b2d31;
-  border-radius: 12px;
+  border: 1px solid #404249;
+  border-radius: 18px;
   width: fit-content;
-  align-self: flex-start;
-  margin: 2px 0;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.35);
+  animation: typingFadeIn 0.18s ease forwards;
+}
+
+@keyframes typingFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .typing-indicator span {
@@ -1094,7 +1104,7 @@ html, body {
 }
 
 .keyboard-open .typing-indicator {
-  padding: 6px 10px;
+  padding: 7px 12px;
 }
 
 .keyboard-open .typing-indicator span {
