@@ -703,7 +703,7 @@ socket.on("nameAccepted", (acceptedName) => {
   userName                = acceptedName;
   nameModal.style.display = "none";
   saveNameBtn.disabled    = false;
-  saveNameBtn.textContent = "თანხმობა და შესვლა";
+  saveNameBtn.textContent = "საუბრის დაწყება";
   clearNameError();
 
   // Show the username in the top bar
@@ -739,7 +739,7 @@ socket.on("nameAccepted", (acceptedName) => {
 
 socket.on("nameTaken", () => {
   saveNameBtn.disabled    = false;
-  saveNameBtn.textContent = isFirstLogin ? "თანხმობა და შესვლა" : "Save Name";
+  saveNameBtn.textContent = isFirstLogin ? "საუბრის დაწყება" : "Save Name";
   isReconnecting          = false;
   showNameError("ეს სახელი დაკავებულია. სხვა აირჩიეთ. 😟 ");
   nameInput.focus();
@@ -1002,7 +1002,7 @@ document.addEventListener("DOMContentLoaded", () => {
   stopSearchRetry();
   setInputsEnabled(false);
   updateBlockBtn();
-  saveNameBtn.textContent  = "თანხმობა და შესვლა";
+  saveNameBtn.textContent  = "საუბრის დაწყება";
   charCount.textContent    = "";
 
   // Always show entry modal — nothing is stored between visits
