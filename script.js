@@ -703,7 +703,7 @@ socket.on("nameAccepted", (acceptedName) => {
   userName                = acceptedName;
   nameModal.style.display = "none";
   saveNameBtn.disabled    = false;
-  saveNameBtn.textContent = "თანხმობა და შესვლა";
+  saveNameBtn.textContent = "საუბრის დაწყება";
   clearNameError();
 
   // Show the username in the top bar
