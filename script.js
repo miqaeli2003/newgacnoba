@@ -326,7 +326,7 @@ function showTypingIndicator() {
   el.id         = "typingIndicator";
   el.className  = "typing-indicator";
   el.innerHTML  = "<span></span><span></span><span></span>";
-  document.body.appendChild(el);
+  document.querySelector(".chat-input").appendChild(el);
 }
 
 function hideTypingIndicator() {
@@ -703,7 +703,7 @@ socket.on("nameAccepted", (acceptedName) => {
   userName                = acceptedName;
   nameModal.style.display = "none";
   saveNameBtn.disabled    = false;
-  saveNameBtn.textContent = "საუბრის დაწყება";
+  saveNameBtn.textContent = "თანხმობა და შესვლა";
   clearNameError();
 
   // Show the username in the top bar
