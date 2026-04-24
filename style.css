@@ -953,10 +953,7 @@ html, body {
 /* ── TYPING INDICATOR ────────────────────────────────────────────────────── */
 
 .typing-indicator {
-  position: absolute;
-  bottom: 100%;
-  left: 15px;
-  margin-bottom: 8px;
+  align-self: flex-start;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -1104,7 +1101,7 @@ html, body {
 }
 
 .keyboard-open .typing-indicator {
-  padding: 7px 12px;
+  padding: 6px 10px;
 }
 
 .keyboard-open .typing-indicator span {
