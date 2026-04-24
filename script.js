@@ -326,7 +326,8 @@ function showTypingIndicator() {
   el.id         = "typingIndicator";
   el.className  = "typing-indicator";
   el.innerHTML  = "<span></span><span></span><span></span>";
-  document.querySelector(".chat-input").appendChild(el);
+  chat.appendChild(el);
+  scheduleScroll();
 }
 
 function hideTypingIndicator() {
