@@ -18,6 +18,7 @@
   <link rel="preconnect" href="https://media.tenor.com" />
 
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="games.css" />
 </head>
 <body>
   <div class="top-bar">
@@ -79,7 +80,7 @@
   <!-- ── Combined Entry Modal ───────────────────────────────────────────────── -->
   <div id="nameModal" class="modal">
     <div class="modal-content">
-      <button id="nameModalClose" class="modal-close-btn" style="display:none" title="დახურვა">2715</button>
+      <button id="nameModalClose" class="modal-close-btn" style="display:none" title="დახურვა">&#x2715;</button>
       <img src="/Logo2.png" alt="GAICANI" class="modal-logo" />
 
       <!-- ── Welcome info block ── -->
@@ -110,6 +111,10 @@
           <div class="modal-feature-item">
             <span class="modal-feature-icon">🔎</span>
             <span>ახალი პარტნიორის ძებნა</span>
+          </div>
+          <div class="modal-feature-item">
+            <span class="modal-feature-icon">🎮</span>
+            <span>თამაშები — ჯოჯოხეთი, ლოდინი, მათემატიკა</span>
           </div>
         </div>
       </div>
@@ -144,7 +149,24 @@
     </div>
   </div>
 
+  <!-- ── Game Overlay (managed by games.js) ────────────────────────────────── -->
+  <div id="gameOverlay" class="game-overlay" style="display:none">
+    <div id="gamePanel" class="game-panel"></div>
+  </div>
+
+  <!-- ── Game Invite Toast (managed by games.js) ───────────────────────────── -->
+  <div id="gameInviteToast" class="game-invite-toast" style="display:none">
+    <div class="game-invite-inner">
+      <span id="gameInviteText" class="game-invite-text"></span>
+      <div class="game-invite-actions">
+        <button id="gameInviteAccept" class="game-invite-btn game-invite-btn--accept">✅ დიახ</button>
+        <button id="gameInviteDecline" class="game-invite-btn game-invite-btn--decline">❌ არა</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
+  <script src="games.js"></script>
 </body>
 </html>
