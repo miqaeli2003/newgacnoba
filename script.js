@@ -19,7 +19,6 @@ let unreadCount         = 0;
 let replyTo             = null;   // { text, senderName, messageId }
 let lastPartnerName     = "";     // remember partner name after disconnect for blocking
 let canBlockDisconnected = false; // allow blocking a partner who just left
-let wasSearching        = false;  // true only when user intentionally started a search
 const originalTitle     = document.title;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -106,25 +105,10 @@ document.addEventListener("visibilitychange", () => {
 function scheduleScroll() {
   if (pendingScrollRaf) return;
   pendingScrollRaf = true;
-  // Double RAF: first frame lets the browser recalculate layout (height/padding
-  // changes after keyboard opens), second frame reads the settled scrollHeight.
   requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      chat.scrollTop   = chat.scrollHeight;
-      pendingScrollRaf = false;
-    });
+    chat.scrollTop   = chat.scrollHeight;
+    pendingScrollRaf = false;
   });
-}
-
-// Always insert new chat content BEFORE the typing indicator (if present)
-// so the "..." bubble stays pinned at the very bottom of the message list.
-function appendToChat(el) {
-  const indicator = document.getElementById("typingIndicator");
-  if (indicator) {
-    chat.insertBefore(el, indicator);
-  } else {
-    chat.appendChild(el);
-  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -145,7 +129,7 @@ function _appendInfoMessage(text, className, id) {
   el.className   = className;
   el.textContent = text;
   if (id) el.id  = id;
-  appendToChat(el);
+  chat.appendChild(el);
   scheduleScroll();
 }
 
@@ -181,7 +165,7 @@ function addSearchingMessage() {
   factCard.innerHTML   = '<span class="fact-label">💡 Random Fact</span><span class="fact-text">...</span>';
   wrapper.appendChild(factCard);
 
-  appendToChat(wrapper);
+  chat.appendChild(wrapper);
   scheduleScroll();
 
   // Fetch a random fact from the server
@@ -287,7 +271,7 @@ function addMessage(text, isYou, messageId, replyToData) {
     wrapper.appendChild(seen);
   }
 
-  appendToChat(wrapper);
+  chat.appendChild(wrapper);
   scheduleScroll();
   return id;
 }
@@ -308,7 +292,7 @@ function addGifMessage(gifUrl, isYou) {
 
   wrapper.appendChild(img);
   wrapper.appendChild(timestamp);
-  appendToChat(wrapper);
+  chat.appendChild(wrapper);
   scheduleScroll();
 }
 
@@ -332,7 +316,7 @@ function addQuestionCard(questionText, isYou) {
   card.appendChild(label);
   card.appendChild(text);
   card.appendChild(ts);
-  appendToChat(card);
+  chat.appendChild(card);
   scheduleScroll();
 }
 
@@ -344,6 +328,12 @@ function showTypingIndicator() {
   el.innerHTML  = "<span></span><span></span><span></span>";
   chat.appendChild(el);
   scheduleScroll();
+  // Second scroll after keyboard animation settles (iOS/Android keyboards
+  // animate open ~150-300 ms, causing the first rAF scroll to land wrong)
+  setTimeout(() => {
+    const indicator = document.getElementById("typingIndicator");
+    if (indicator) indicator.scrollIntoView({ block: "end", behavior: "smooth" });
+  }, 200);
 }
 
 function hideTypingIndicator() {
@@ -363,7 +353,6 @@ function setReplyTo({ text, senderName, messageId }) {
   replyPreviewText.textContent = text.length > 80 ? text.slice(0, 80) + "…" : text;
   replyPreview.style.display = "flex";
   messageInput.focus();
-  requestAnimationFrame(() => updateViewportOffsets());
 }
 
 function clearReply() {
@@ -371,7 +360,6 @@ function clearReply() {
   replyPreview.style.display = "none";
   replyPreviewName.textContent = "";
   replyPreviewText.textContent = "";
-  requestAnimationFrame(() => updateViewportOffsets());
 }
 
 replyPreviewClose.addEventListener("click", () => clearReply());
@@ -487,22 +475,15 @@ function renderGifResults(results) {
 }
 
 // ── Visual Viewport — drives BOTH the input bar and GIF picker ────────────────
-// ── Keyboard / viewport fix ────────────────────────────────────────────────────
-// Two separate problems:
-//
-// iOS Safari: keyboard shrinks the VISUAL viewport but NOT window.innerHeight.
-//   → Detect via visualViewport gap and push fixed input bar up by kbH.
-//
-// Android Chrome: keyboard shrinks BOTH window.innerHeight AND visualViewport.
-//   → kbH ≈ 0, but body height (100dvh CSS) may lag; we force-sync body height
-//     to window.innerHeight on every resize so there's no dead space at bottom.
+// On iOS Safari the keyboard (+ its accessory bar) shrinks the visual viewport
+// but NOT the layout viewport, so position:fixed elements stay hidden behind it.
+// We read the gap and push everything up by exactly that amount — the same trick
+// Instagram uses so their input sits flush above the keyboard with no extra bar.
 const chatInputBar = document.querySelector(".chat-input");
 
 function getKeyboardHeight() {
   if (!window.visualViewport) return 0;
   const vv = window.visualViewport;
-  // iOS: window.innerHeight stays large, vv.height shrinks → positive gap.
-  // Android: both shrink together → gap ≈ 0 (handled by body height sync).
   return Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
 }
 
@@ -510,45 +491,37 @@ function updateViewportOffsets() {
   const vv  = window.visualViewport;
   const kbH = getKeyboardHeight();
 
-  // CORE FIX: always pin body height to the current visible window height.
-  // On Android this shrinks when keyboard opens, eliminating the empty
-  // bottom half. On iOS kbH > 0 so we use vv.height for precision.
-  document.body.style.height = (kbH > 0 && vv ? vv.height : window.innerHeight) + "px";
+  // Clamp body to the visual viewport height so the flex chat area fills
+  // exactly the space above the keyboard — maximum messages visible and
+  // the container stays scrollable (same trick Instagram uses).
+  document.body.style.height = kbH > 0 ? vv.height + "px" : "";
 
-  // Toggle a class so CSS can compact messages slightly when keyboard is open
+  // Toggle a class so CSS can zoom out messages slightly when keyboard is open
   document.body.classList.toggle("keyboard-open", kbH > 0);
 
-  // Input bar is position:fixed. iOS needs shifting up by kbH; Android kbH=0.
+  // Input bar is position:fixed (layout-viewport coords) so still needs
+  // shifting up by the full keyboard height (accessory bar included).
   chatInputBar.style.bottom     = kbH + "px";
   chatInputBar.style.transition = kbH === 0 ? "bottom 0.22s ease" : "none";
 
-  // Keep chat padding-bottom in sync with the real input bar height
-  const barH = chatInputBar.offsetHeight;
-  chat.style.paddingBottom = (barH + kbH + 8) + "px";
-
   // GIF picker floats 8 px above the input bar
   if (gifPickerOpen) {
-    gifPicker.style.bottom = (kbH + barH + 8) + "px";
+    gifPicker.style.bottom = (kbH + chatInputBar.offsetHeight + 8) + "px";
   }
 
+  // Pin scroll to bottom whenever the viewport shifts
   scheduleScroll();
-
-  // Keyboard slides in over ~300 ms. Schedule a second scroll after it lands
-  // so messages end up fully visible once the animation finishes.
-  clearTimeout(updateViewportOffsets._scrollTimer);
-  updateViewportOffsets._scrollTimer = setTimeout(() => {
-    chat.scrollTop = chat.scrollHeight;
-  }, 350);
+  // If typing indicator is visible, keep it in view after keyboard resize
+  const indicator = document.getElementById("typingIndicator");
+  if (indicator) {
+    setTimeout(() => indicator.scrollIntoView({ block: "end", behavior: "smooth" }), 100);
+  }
 }
 
-// Android fires 'resize' on window; iOS fires on visualViewport. Listen both.
-window.addEventListener("resize", updateViewportOffsets, { passive: true });
 if (window.visualViewport) {
   window.visualViewport.addEventListener("resize", updateViewportOffsets, { passive: true });
   window.visualViewport.addEventListener("scroll", updateViewportOffsets, { passive: true });
 }
-// Run immediately so body height is correct from the first paint
-updateViewportOffsets();
 
 function updateGifPickerPosition() {
   if (!gifPickerOpen) return;
@@ -754,7 +727,6 @@ socket.on("nameAccepted", (acceptedName) => {
 
   if (isFirstLogin) {
     isFirstLogin = false;
-    wasSearching = true;
     clearChat();
     addSearchingMessage();
     socket.emit("findPartner");
@@ -766,12 +738,10 @@ socket.on("nameAccepted", (acceptedName) => {
     setInputsEnabled(false);
     hideTypingIndicator();
     closeGifPickerPanel();
-    if (wasSearching) {
-      clearChat();
-      addSearchingMessage();
-      socket.emit("findPartner");
-      startSearchRetry();
-    }
+    clearChat();
+    addSearchingMessage();
+    socket.emit("findPartner");
+    startSearchRetry();
   }
   // else: mid-session name change — no extra action
   if (wasNameChange) {
@@ -801,7 +771,6 @@ socket.on("queuePosition", ({ position, total }) => {
 socket.on("partnerFound", (partner) => {
   stopSearchRetry();
   clearChat();
-  wasSearching         = false;
   partnerName          = partner.name || "Anonymous";
   partnerConnected     = true;
   lastPartnerName      = "";
@@ -942,7 +911,7 @@ socket.on("messageFlagged", () => {
   const notice       = document.createElement("div");
   notice.className   = "system-message";
   notice.textContent = "შეტყობინება გაიფილტრა და არ გაიგზავნა.";
-  appendToChat(notice);
+  chat.appendChild(notice);
   scheduleScroll();
   setTimeout(() => notice.remove(), 3000);
 });
@@ -966,7 +935,6 @@ nextBtn.addEventListener("click", () => {
   hideTypingIndicator();
   clearChat();
   addSearchingMessage();
-  wasSearching         = true;
   partnerConnected     = false;
   partnerName          = "";
   lastPartnerName      = "";
@@ -1031,8 +999,8 @@ document.addEventListener("touchstart", (e) => {
 document.addEventListener("touchend", (e) => {
   const dx = e.changedTouches[0].clientX - touchStartX;
   const dy = Math.abs(e.changedTouches[0].clientY - touchStartY);
-  // Swipe right > 80 px, mostly horizontal, Next not disabled, and NOT currently in a chat
-  if (dx > 80 && dy < 50 && !nextBtn.disabled && !partnerConnected) {
+  // Swipe right > 80 px, mostly horizontal, Next not disabled
+  if (dx > 80 && dy < 50 && !nextBtn.disabled) {
     nextBtn.click();
   }
 }, { passive: true });
@@ -1048,9 +1016,6 @@ document.addEventListener("DOMContentLoaded", () => {
   updateBlockBtn();
   saveNameBtn.textContent  = "საუბრის დაწყება";
   charCount.textContent    = "";
-
-  // Set correct initial chat padding so nothing hides behind the input bar
-  requestAnimationFrame(() => updateViewportOffsets());
 
   // Always show entry modal — nothing is stored between visits
   nameModal.style.display = "flex";
