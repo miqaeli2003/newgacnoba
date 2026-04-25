@@ -320,24 +320,26 @@ function addQuestionCard(questionText, isYou) {
   scheduleScroll();
 }
 
+// ── Typing indicator (fixed overlay — Instagram style) ────────────────────────
+// The element lives in the HTML outside the chat scroll area so it never
+// appears between messages. We just show/hide it and update its bottom offset.
+
+function updateTypingIndicatorPosition() {
+  const kbH = getKeyboardHeight();
+  const bottom = kbH + chatInputBar.offsetHeight + 8;
+  document.documentElement.style.setProperty("--typing-bottom", bottom + "px");
+}
+
 function showTypingIndicator() {
-  if (document.getElementById("typingIndicator")) return;
-  const el      = document.createElement("div");
-  el.id         = "typingIndicator";
-  el.className  = "typing-indicator";
-  el.innerHTML  = "<span></span><span></span><span></span>";
-  chat.appendChild(el);
-  scheduleScroll();
-  // Second scroll after keyboard animation settles (iOS/Android keyboards
-  // animate open ~150-300 ms, causing the first rAF scroll to land wrong)
-  setTimeout(() => {
-    const indicator = document.getElementById("typingIndicator");
-    if (indicator) indicator.scrollIntoView({ block: "end", behavior: "smooth" });
-  }, 200);
+  const el = document.getElementById("typingIndicator");
+  if (!el) return;
+  el.style.display = "flex";
+  updateTypingIndicatorPosition();
 }
 
 function hideTypingIndicator() {
-  document.getElementById("typingIndicator")?.remove();
+  const el = document.getElementById("typingIndicator");
+  if (el) el.style.display = "none";
 }
 
 function clearChat() { chat.innerHTML = ""; clearReply(); }
@@ -511,11 +513,8 @@ function updateViewportOffsets() {
 
   // Pin scroll to bottom whenever the viewport shifts
   scheduleScroll();
-  // If typing indicator is visible, keep it in view after keyboard resize
-  const indicator = document.getElementById("typingIndicator");
-  if (indicator) {
-    setTimeout(() => indicator.scrollIntoView({ block: "end", behavior: "smooth" }), 100);
-  }
+  // Keep typing indicator pinned above the input bar
+  updateTypingIndicatorPosition();
 }
 
 if (window.visualViewport) {
