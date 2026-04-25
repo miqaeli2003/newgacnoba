@@ -112,6 +112,17 @@ function scheduleScroll() {
   });
 }
 
+// Always insert new chat content BEFORE the typing indicator (if present)
+// so the "..." bubble stays pinned at the very bottom of the message list.
+function appendToChat(el) {
+  const indicator = document.getElementById("typingIndicator");
+  if (indicator) {
+    chat.insertBefore(el, indicator);
+  } else {
+    chat.appendChild(el);
+  }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function generateMsgId() {
   return `${socket.id}_${++msgCounter}_${Date.now()}`;
@@ -130,7 +141,7 @@ function _appendInfoMessage(text, className, id) {
   el.className   = className;
   el.textContent = text;
   if (id) el.id  = id;
-  chat.appendChild(el);
+  appendToChat(el);
   scheduleScroll();
 }
 
@@ -166,7 +177,7 @@ function addSearchingMessage() {
   factCard.innerHTML   = '<span class="fact-label">💡 Random Fact</span><span class="fact-text">...</span>';
   wrapper.appendChild(factCard);
 
-  chat.appendChild(wrapper);
+  appendToChat(wrapper);
   scheduleScroll();
 
   // Fetch a random fact from the server
@@ -272,7 +283,7 @@ function addMessage(text, isYou, messageId, replyToData) {
     wrapper.appendChild(seen);
   }
 
-  chat.appendChild(wrapper);
+  appendToChat(wrapper);
   scheduleScroll();
   return id;
 }
@@ -293,7 +304,7 @@ function addGifMessage(gifUrl, isYou) {
 
   wrapper.appendChild(img);
   wrapper.appendChild(timestamp);
-  chat.appendChild(wrapper);
+  appendToChat(wrapper);
   scheduleScroll();
 }
 
@@ -317,7 +328,7 @@ function addQuestionCard(questionText, isYou) {
   card.appendChild(label);
   card.appendChild(text);
   card.appendChild(ts);
-  chat.appendChild(card);
+  appendToChat(card);
   scheduleScroll();
 }
 
@@ -904,7 +915,7 @@ socket.on("messageFlagged", () => {
   const notice       = document.createElement("div");
   notice.className   = "system-message";
   notice.textContent = "შეტყობინება გაიფილტრა და არ გაიგზავნა.";
-  chat.appendChild(notice);
+  appendToChat(notice);
   scheduleScroll();
   setTimeout(() => notice.remove(), 3000);
 });
