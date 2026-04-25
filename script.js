@@ -339,6 +339,7 @@ function showTypingIndicator() {
   el.className  = "typing-indicator";
   el.innerHTML  = "<span></span><span></span><span></span>";
   chat.appendChild(el);
+  scheduleScroll();
 }
 
 function hideTypingIndicator() {
@@ -358,6 +359,7 @@ function setReplyTo({ text, senderName, messageId }) {
   replyPreviewText.textContent = text.length > 80 ? text.slice(0, 80) + "…" : text;
   replyPreview.style.display = "flex";
   messageInput.focus();
+  requestAnimationFrame(() => updateViewportOffsets());
 }
 
 function clearReply() {
@@ -365,6 +367,7 @@ function clearReply() {
   replyPreview.style.display = "none";
   replyPreviewName.textContent = "";
   replyPreviewText.textContent = "";
+  requestAnimationFrame(() => updateViewportOffsets());
 }
 
 replyPreviewClose.addEventListener("click", () => clearReply());
@@ -509,9 +512,14 @@ function updateViewportOffsets() {
   chatInputBar.style.bottom     = kbH + "px";
   chatInputBar.style.transition = kbH === 0 ? "bottom 0.22s ease" : "none";
 
+  // Keep chat padding-bottom in sync with the real input bar height so the
+  // typing indicator (last element) is never hidden behind the input bar.
+  const barH = chatInputBar.offsetHeight;
+  chat.style.paddingBottom = (barH + kbH + 8) + "px";
+
   // GIF picker floats 8 px above the input bar
   if (gifPickerOpen) {
-    gifPicker.style.bottom = (kbH + chatInputBar.offsetHeight + 8) + "px";
+    gifPicker.style.bottom = (kbH + barH + 8) + "px";
   }
 
   // Pin scroll to bottom whenever the viewport shifts
@@ -1021,6 +1029,9 @@ document.addEventListener("DOMContentLoaded", () => {
   updateBlockBtn();
   saveNameBtn.textContent  = "საუბრის დაწყება";
   charCount.textContent    = "";
+
+  // Set correct initial chat padding so nothing hides behind the input bar
+  requestAnimationFrame(() => updateViewportOffsets());
 
   // Always show entry modal — nothing is stored between visits
   nameModal.style.display = "flex";
