@@ -109,6 +109,10 @@ html, body {
   cursor: not-allowed;
 }
 
+/* icon spans — shown only on mobile via media query */
+.btn-icon  { display: none; }
+.btn-label { display: inline; }
+
 /* ── CHAT AREA ─────────────────────────────────────────────────────────── */
 
 .chat-container {
@@ -996,49 +1000,84 @@ html, body {
 /* ── RESPONSIVE ──────────────────────────────────────────────────────────── */
 
 @media (max-width: 600px) {
+
+  /* ── TOP BAR: 2-row layout ─────────────────────────────────────────────── */
   .top-bar {
-    font-size: 0.85em;
-    padding: 0 8px;
+    flex: none;
+    height: auto;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0;
+    gap: 0;
   }
 
-  .change-name-btn,
-  .block-button,
-  .next-button {
-    padding: 6px 8px;
-    font-size: 0.72em;
-  }
-
-  #onlineCount {
-    font-size: 0.72em;
-  }
-
+  /* Row 1: logo + online count */
   .left-side {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    grid-template-rows: auto auto;
+    display: flex;
     align-items: center;
-    gap: 0 8px;
+    gap: 8px;
+    padding: 8px 12px 4px;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .site-name {
-    grid-column: 1;
-    grid-row: 1 / 3;
+    font-size: 1.05em;
+    flex-shrink: 0;
   }
 
   #onlineCount {
-    grid-column: 2;
-    grid-row: 1;
-    font-size: 0.72em;
+    font-size: 0.75em;
+    color: #72767d;
   }
 
   .user-name-display {
-    grid-column: 2;
-    grid-row: 2;
     font-size: 0.72em;
-    max-width: 140px;
-    padding: 1px 8px;
+    padding: 2px 9px;
+    max-width: 100px;
+    border-radius: 12px;
+    margin-left: auto;
   }
 
+  /* Row 2: action buttons — compact strip */
+  .right-side {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 5px;
+    padding: 4px 8px 7px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+
+  /* All buttons: icon-only on mobile */
+  .change-name-btn,
+  .block-button,
+  .next-button,
+  .interests-btn {
+    padding: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    font-size: 1em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  /* Hide the text label, show only the icon on mobile */
+  .btn-label { display: none; }
+  .btn-icon  { display: inline; line-height: 1; }
+
+  /* ── ძებნა button: slightly wider with label on mobile ─────────────────── */
+  .next-button {
+    width: auto;
+    padding: 0 14px;
+    gap: 5px;
+  }
+  .next-button .btn-label { display: inline; font-size: 0.82em; }
+
+  /* ── rest of mobile styles ─────────────────────────────────────────────── */
   .gif-picker {
     width: calc(100vw - 24px);
     right: 12px;
@@ -1075,6 +1114,18 @@ html, body {
 
   .fact-card {
     max-width: 95%;
+  }
+
+  /* bio popup snaps to full width on small screens */
+  .bio-popup {
+    padding-top: 110px;
+    padding-right: 8px;
+    padding-left: 8px;
+    align-items: flex-start;
+    justify-content: flex-end;
+  }
+  .bio-popup-content {
+    width: 100%;
   }
 }
 
@@ -1387,4 +1438,13 @@ html, body {
   margin: 2px auto;
   max-width: 85%;
   word-break: break-word;
+}
+
+/* On mobile the top bar is ~90px tall (2 rows), so account for that */
+@media (max-width: 600px) {
+  /* The top-bar is flex:none + auto height — no extra padding needed in chat
+     since it's not fixed. Just ensure the chat area still scrolls nicely. */
+  .chat-container {
+    padding-top: 10px;
+  }
 }
