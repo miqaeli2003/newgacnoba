@@ -106,9 +106,13 @@ document.addEventListener("visibilitychange", () => {
 function scheduleScroll() {
   if (pendingScrollRaf) return;
   pendingScrollRaf = true;
+  // Double RAF: first frame lets the browser recalculate layout (height/padding
+  // changes after keyboard opens), second frame reads the settled scrollHeight.
   requestAnimationFrame(() => {
-    chat.scrollTop   = chat.scrollHeight;
-    pendingScrollRaf = false;
+    requestAnimationFrame(() => {
+      chat.scrollTop   = chat.scrollHeight;
+      pendingScrollRaf = false;
+    });
   });
 }
 
@@ -528,6 +532,13 @@ function updateViewportOffsets() {
   }
 
   scheduleScroll();
+
+  // Keyboard slides in over ~300 ms. Schedule a second scroll after it lands
+  // so messages end up fully visible once the animation finishes.
+  clearTimeout(updateViewportOffsets._scrollTimer);
+  updateViewportOffsets._scrollTimer = setTimeout(() => {
+    chat.scrollTop = chat.scrollHeight;
+  }, 350);
 }
 
 // Android fires 'resize' on window; iOS fires on visualViewport. Listen both.
