@@ -18,6 +18,7 @@
   <link rel="preconnect" href="https://media.tenor.com" />
 
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="games.css" />
 </head>
 <body>
   <div class="top-bar">
@@ -49,7 +50,7 @@
     <div class="gif-powered">Powered by Tenor</div>
   </div>
 
-  <!-- Typing indicator lives OUTSIDE the chat scroll area — always bottom-left -->
+  <!-- Typing indicator -->
   <div id="typingIndicator" class="typing-indicator" style="display:none">
     <span></span><span></span><span></span>
   </div>
@@ -63,88 +64,39 @@
           <span id="replyPreviewText" class="reply-preview-text"></span>
         </div>
       </div>
-      <button id="replyPreviewClose" class="reply-preview-close" title="Cancel reply">✕</button>
+      <button id="replyPreviewClose" class="reply-preview-close">✕</button>
     </div>
+
     <div class="chat-input-row">
-      <input type="text" id="messageInput" placeholder="Type your message..."
-             autocomplete="off" autocorrect="off" autocapitalize="sentences"
-             spellcheck="false" inputmode="text" enterkeyhint="send" disabled />
+      <input type="text" id="messageInput" placeholder="Type your message..." disabled />
       <span id="charCount" class="char-count"></span>
-      <button id="questionBtn" class="question-btn" disabled title="Random question">?</button>
-      <button id="gifBtn" class="gif-btn" disabled title="Send a GIF">GIF</button>
+      <button id="questionBtn" class="question-btn" disabled>?</button>
+      <button id="gifBtn" class="gif-btn" disabled>GIF</button>
       <button id="sendBtn" disabled>SEND</button>
     </div>
   </div>
 
-  <!-- ── Combined Entry Modal ───────────────────────────────────────────────── -->
+  <!-- Name Modal -->
   <div id="nameModal" class="modal">
     <div class="modal-content">
-      <button id="nameModalClose" class="modal-close-btn" style="display:none" title="დახურვა">2715</button>
-      <img src="/Logo2.png" alt="GAICANI" class="modal-logo" />
-
-      <!-- ── Welcome info block ── -->
-      <div class="modal-welcome">
-        <p class="modal-welcome-title">👋 მოგესალმებით!</p>
-        <p class="modal-welcome-desc">ამ საიტზე შეძლებთ შემთხვევით შერჩეულ უცნობ ადამიანს ესაუბროთ <strong>ანონიმურად</strong>.</p>
-        <div class="modal-features">
-          <div class="modal-feature-item">
-            <span class="modal-feature-icon modal-feature-icon--qbtn">?</span>
-            <span><strong></strong> — საიტი გისმევთ კითხვებს</span>
-          </div>
-          <div class="modal-feature-item">
-            <span class="modal-feature-icon modal-feature-icon--gif">GIF</span>
-            <span><strong></strong> — გააგზავნეთ gif-ები</span>
-          </div>
-          <div class="modal-feature-item">
-            <span class="modal-feature-icon modal-feature-icon--int">ინტ</span>
-            <span>საკუთარი თავის გაცნობა პარტნიორისთვის</span>
-          </div>
-          <div class="modal-feature-item">
-            <span class="modal-feature-icon">✏️</span>
-            <span>სახელის შეცვლა</span>
-          </div>
-          <div class="modal-feature-item">
-            <span class="modal-feature-icon">🚫</span>
-            <span>იუზერის დაბლოკვა</span>
-          </div>
-          <div class="modal-feature-item">
-            <span class="modal-feature-icon">🔎</span>
-            <span>ახალი პარტნიორის ძებნა</span>
-          </div>
-        </div>
-      </div>
-
-      <input type="text" id="nameInput" placeholder="შეიყვანეთ სახელი..."
-             autocomplete="off" inputmode="text" enterkeyhint="go" maxlength="20" />
+      <img src="/Logo2.png" class="modal-logo" />
+      <input type="text" id="nameInput" placeholder="შეიყვანეთ სახელი..." />
       <div id="nameError" class="name-error"></div>
-      <p class="safety-age-confirm">
-        საუბრის დაწყებით ადასტურებთ რომ ხართ <strong>18+</strong> და ეთანხმებით
-        <a href="/terms.html" target="_blank" class="safety-link">Terms of Service</a>-ს
-        და
-        <a href="/privacy.html" target="_blank" class="safety-link">Privacy Policy</a>-ს.
-      </p>
       <button id="saveNameBtn">საუბრის დაწყება</button>
     </div>
   </div>
 
-  <!-- ── Bio / Interests Popup ──────────────────────────────────────────────── -->
+  <!-- Bio Popup -->
   <div id="bioPopup" class="bio-popup" style="display:none">
     <div class="bio-popup-content">
-      <button id="bioCloseBtn" class="bio-popup-close" title="დახურვა">✕</button>
-      <p class="bio-popup-title">მოკლედ მოუყევით თქვენს თავზე ახალ პარტნიორს</p>
-      <div class="bio-input-wrap">
-        <textarea id="bioInput" class="bio-textarea" maxlength="60"
-                  placeholder="მაქს. 60 სიმბოლო..." rows="2"></textarea>
-        <span id="bioCharCount" class="bio-char-count">0/60</span>
-      </div>
-      <div class="bio-popup-actions">
-        <button id="bioClearBtn" class="bio-clear-btn">გასუფთავება</button>
-        <button id="bioSaveBtn" class="bio-save-btn">შენახვა</button>
-      </div>
+      <button id="bioCloseBtn" class="bio-popup-close">✕</button>
+      <textarea id="bioInput" maxlength="60"></textarea>
+      <button id="bioSaveBtn">შენახვა</button>
     </div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
+  <script src="games.js"></script>
 </body>
 </html>
