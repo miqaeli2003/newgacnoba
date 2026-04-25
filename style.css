@@ -2,10 +2,18 @@
   box-sizing: border-box;
 }
 
-html, body {
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
   margin: 0;
   padding: 0;
-  height: 100%;
+  /* Fallback for older browsers */
+  height: 100vh;
+  /* dvh = dynamic viewport height: shrinks/grows with browser chrome & keyboard on Android */
+  height: 100dvh;
   font-family: "Segoe UI", Arial, sans-serif;
   background: #1e1f22;
   color: #fff;
