@@ -214,7 +214,7 @@ io.on("connection", (socket) => {
   // ── Bio ──────────────────────────────────────────────────────────────────
   socket.on("setBio", (bio) => {
     if (typeof bio !== "string") return;
-    socket.bio = bio.slice(0, 30).replace(/<[^>]*>/g, "").trim();
+    socket.bio = bio.slice(0, 60).replace(/<[^>]*>/g, "").trim();
   });
 
   // ── Interests ────────────────────────────────────────────────────────────
