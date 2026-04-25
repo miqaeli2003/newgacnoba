@@ -972,11 +972,6 @@ html, body {
   pointer-events: none; /* don't block taps on messages */
 }
 
-/* Extra bottom padding so the last message lifts above the typing indicator */
-.chat-container.typing-active {
-  padding-bottom: 56px !important;
-}
-
 @keyframes typingFadeIn {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
