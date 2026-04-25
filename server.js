@@ -159,6 +159,7 @@ io.on("connection", (socket) => {
   socket.blockedNames     = [];
   socket.recentPartnerIds = new Set();
   socket.interests        = [];
+  socket.bio              = "";
   socket.blockedByCount   = 0;
   socket._rl              = null;
 
@@ -210,6 +211,12 @@ io.on("connection", (socket) => {
     return false;
   }
 
+  // ── Bio ──────────────────────────────────────────────────────────────────
+  socket.on("setBio", (bio) => {
+    if (typeof bio !== "string") return;
+    socket.bio = bio.slice(0, 30).replace(/<[^>]*>/g, "").trim();
+  });
+
   // ── Interests ────────────────────────────────────────────────────────────
   socket.on("setInterests", (tags) => {
     if (!Array.isArray(tags)) return;
@@ -257,8 +264,8 @@ io.on("connection", (socket) => {
       (partnerSocket.interests || []).includes(t)
     );
 
-    socket.emit("partnerFound",        { name: partnerSocket.userName, sharedTags });
-    partnerSocket.emit("partnerFound", { name: socket.userName,        sharedTags });
+    socket.emit("partnerFound",        { name: partnerSocket.userName, sharedTags, partnerBio: partnerSocket.bio });
+    partnerSocket.emit("partnerFound", { name: socket.userName,        sharedTags, partnerBio: socket.bio });
     broadcastQueuePositions();
   }
 
