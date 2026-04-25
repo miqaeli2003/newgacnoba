@@ -1,4 +1,5 @@
 const socket = io();
+window.socket = socket; // ← added this
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let userName            = "";
