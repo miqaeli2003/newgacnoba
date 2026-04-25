@@ -750,6 +750,7 @@ function clearBio() {
 
 bioSaveBtn.addEventListener("click", saveBio);
 bioClearBtn.addEventListener("click", clearBio);
+document.getElementById("bioCloseBtn").addEventListener("click", (e) => { e.stopPropagation(); closeBioPopup(); });
 
 // Close popup when clicking outside it
 document.addEventListener("click", (e) => {
@@ -1065,6 +1066,8 @@ changeNameBtn.addEventListener("click", () => {
   saveNameBtn.textContent = "Save Name";
   clearNameError();
   nameModal.style.display = "flex";
+  const closeBtn = document.getElementById("nameModalClose");
+  if (closeBtn) closeBtn.style.display = "block";
   setTimeout(() => nameInput.focus(), 50);
 });
 
@@ -1104,4 +1107,14 @@ document.addEventListener("DOMContentLoaded", () => {
   // Always show entry modal — nothing is stored between visits
   nameModal.style.display = "flex";
   setTimeout(() => nameInput.focus(), 100);
+
+  // X button on name modal — only active during mid-session name change
+  const nameModalClose = document.getElementById("nameModalClose");
+  if (nameModalClose) {
+    nameModalClose.addEventListener("click", () => {
+      nameModal.style.display = "none";
+      nameModalClose.style.display = "none";
+      clearNameError();
+    });
+  }
 });
