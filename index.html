@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Chatting Site</title>
 
+  <!-- PWA / mobile chrome -->
   <meta name="theme-color" content="#2b2d31" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -13,10 +14,10 @@
   <link rel="apple-touch-icon" href="/logo.png" />
   <link rel="manifest" href="/manifest.json" />
 
+  <!-- Preconnect to Tenor CDN so GIF images load faster -->
   <link rel="preconnect" href="https://media.tenor.com" />
 
   <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="games.css" />
 </head>
 <body>
   <div class="top-bar">
@@ -35,6 +36,7 @@
 
   <div class="chat-container" id="chat"></div>
 
+  <!-- GIF Picker Panel -->
   <div id="gifPicker" class="gif-picker" style="display:none">
     <div class="gif-picker-header">
       <input type="text" id="gifSearch" placeholder="🔍 Search GIFs..."
@@ -47,6 +49,7 @@
     <div class="gif-powered">Powered by Tenor</div>
   </div>
 
+  <!-- Typing indicator lives OUTSIDE the chat scroll area — always bottom-left -->
   <div id="typingIndicator" class="typing-indicator" style="display:none">
     <span></span><span></span><span></span>
   </div>
@@ -73,11 +76,13 @@
     </div>
   </div>
 
+  <!-- ── Combined Entry Modal ───────────────────────────────────────────────── -->
   <div id="nameModal" class="modal">
     <div class="modal-content">
       <button id="nameModalClose" class="modal-close-btn" style="display:none" title="დახურვა">2715</button>
       <img src="/Logo2.png" alt="GAICANI" class="modal-logo" />
 
+      <!-- ── Welcome info block ── -->
       <div class="modal-welcome">
         <p class="modal-welcome-title">👋 მოგესალმებით!</p>
         <p class="modal-welcome-desc">ამ საიტზე შეძლებთ შემთხვევით შერჩეულ უცნობ ადამიანს ესაუბროთ <strong>ანონიმურად</strong>.</p>
@@ -122,6 +127,7 @@
     </div>
   </div>
 
+  <!-- ── Bio / Interests Popup ──────────────────────────────────────────────── -->
   <div id="bioPopup" class="bio-popup" style="display:none">
     <div class="bio-popup-content">
       <button id="bioCloseBtn" class="bio-popup-close" title="დახურვა">✕</button>
@@ -140,6 +146,5 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
-  <script src="games.js"></script>
 </body>
 </html>
