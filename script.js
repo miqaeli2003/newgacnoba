@@ -335,11 +335,15 @@ function showTypingIndicator() {
   if (!el) return;
   el.style.display = "flex";
   updateTypingIndicatorPosition();
+  // Push the last message up so the indicator doesn't cover it
+  chat.classList.add("typing-active");
+  scheduleScroll();
 }
 
 function hideTypingIndicator() {
   const el = document.getElementById("typingIndicator");
   if (el) el.style.display = "none";
+  chat.classList.remove("typing-active");
 }
 
 function clearChat() { chat.innerHTML = ""; clearReply(); }
