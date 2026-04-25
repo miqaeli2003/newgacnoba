@@ -79,6 +79,7 @@
   <!-- ── Combined Entry Modal ───────────────────────────────────────────────── -->
   <div id="nameModal" class="modal">
     <div class="modal-content">
+      <button id="nameModalClose" class="modal-close-btn" style="display:none" title="დახურვა">2715</button>
       <img src="/Logo2.png" alt="GAICANI" class="modal-logo" />
 
       <!-- ── Welcome info block ── -->
@@ -129,7 +130,11 @@
   <!-- ── Bio / Interests Popup ──────────────────────────────────────────────── -->
   <div id="bioPopup" class="bio-popup" style="display:none">
     <div class="bio-popup-content">
-      <p class="bio-popup-title">მოკლედ მოუყევით თქვენს თავზე ახალ პარტნიორს</p>
+      <div class="bio-popup-header">
+        <p class="bio-popup-title">მოკლედ მოუყევით თქვენს თავზე ახალ პარტნიორს</p>
+        <button id="bioCloseBtn" class="bio-popup-close" title="დახურვა">✕</button>
+      </div>
+      </div>
       <div class="bio-input-wrap">
         <textarea id="bioInput" class="bio-textarea" maxlength="30"
                   placeholder="მაქს. 30 სიმბოლო..." rows="2"></textarea>
