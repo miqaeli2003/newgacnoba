@@ -1254,3 +1254,137 @@ html, body {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+/* ── INTERESTS / BIO BUTTON ──────────────────────────────────────────────── */
+
+.interests-btn {
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  touch-action: manipulation;
+  background: #3ba55c;
+  color: #fff;
+}
+.interests-btn:hover { background: #2d8a4e; }
+.interests-btn.has-bio {
+  background: #3ba55c;
+  box-shadow: 0 0 0 2px rgba(59,165,92,0.4);
+}
+
+/* ── BIO POPUP ───────────────────────────────────────────────────────────── */
+
+.bio-popup {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 900;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding-top: 66px;
+  padding-right: 18px;
+  pointer-events: none;
+}
+
+.bio-popup[style*="flex"] { pointer-events: all; }
+
+.bio-popup-content {
+  background: #2b2d31;
+  border: 1px solid #3b3d43;
+  border-radius: 12px;
+  padding: 16px 18px;
+  width: 260px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: bioPopIn 0.18s ease;
+}
+
+@keyframes bioPopIn {
+  from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
+.bio-popup-title {
+  margin: 0;
+  font-size: 0.88em;
+  color: #dcddde;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.bio-input-wrap {
+  position: relative;
+}
+
+.bio-textarea {
+  width: 100%;
+  resize: none;
+  background: #1e1f22;
+  border: 1px solid #3b3d43;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.88em;
+  font-family: inherit;
+  padding: 8px 10px 8px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+  line-height: 1.45;
+}
+.bio-textarea:focus { border-color: #5865f2; }
+
+.bio-char-count {
+  position: absolute;
+  bottom: 5px;
+  right: 8px;
+  font-size: 0.72em;
+  color: #72767d;
+  pointer-events: none;
+}
+
+.bio-popup-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.bio-save-btn, .bio-clear-btn {
+  border: none;
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: 0.82em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.bio-save-btn {
+  background: #5865f2;
+  color: #fff;
+}
+.bio-save-btn:hover { background: #4752c4; }
+
+.bio-clear-btn {
+  background: #3b3d43;
+  color: #b5bac1;
+}
+.bio-clear-btn:hover { background: #4a4d55; }
+
+/* ── PARTNER BIO LINE ────────────────────────────────────────────────────── */
+
+.partner-bio-line {
+  text-align: center;
+  font-size: 0.82em;
+  color: #3ba55c;
+  background: rgba(59,165,92,0.1);
+  border: 1px solid rgba(59,165,92,0.25);
+  border-radius: 8px;
+  padding: 5px 14px;
+  margin: 2px auto;
+  max-width: 85%;
+  word-break: break-word;
+}
