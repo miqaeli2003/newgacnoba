@@ -483,15 +483,22 @@ function renderGifResults(results) {
 }
 
 // ── Visual Viewport — drives BOTH the input bar and GIF picker ────────────────
-// On iOS Safari the keyboard (+ its accessory bar) shrinks the visual viewport
-// but NOT the layout viewport, so position:fixed elements stay hidden behind it.
-// We read the gap and push everything up by exactly that amount — the same trick
-// Instagram uses so their input sits flush above the keyboard with no extra bar.
+// ── Keyboard / viewport fix ────────────────────────────────────────────────────
+// Two separate problems:
+//
+// iOS Safari: keyboard shrinks the VISUAL viewport but NOT window.innerHeight.
+//   → Detect via visualViewport gap and push fixed input bar up by kbH.
+//
+// Android Chrome: keyboard shrinks BOTH window.innerHeight AND visualViewport.
+//   → kbH ≈ 0, but body height (100dvh CSS) may lag; we force-sync body height
+//     to window.innerHeight on every resize so there's no dead space at bottom.
 const chatInputBar = document.querySelector(".chat-input");
 
 function getKeyboardHeight() {
   if (!window.visualViewport) return 0;
   const vv = window.visualViewport;
+  // iOS: window.innerHeight stays large, vv.height shrinks → positive gap.
+  // Android: both shrink together → gap ≈ 0 (handled by body height sync).
   return Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
 }
 
@@ -499,21 +506,19 @@ function updateViewportOffsets() {
   const vv  = window.visualViewport;
   const kbH = getKeyboardHeight();
 
-  // Clamp body to the visual viewport height so the flex chat area fills
-  // exactly the space above the keyboard — maximum messages visible and
-  // the container stays scrollable (same trick Instagram uses).
-  document.body.style.height = kbH > 0 ? vv.height + "px" : "";
+  // CORE FIX: always pin body height to the current visible window height.
+  // On Android this shrinks when keyboard opens, eliminating the empty
+  // bottom half. On iOS kbH > 0 so we use vv.height for precision.
+  document.body.style.height = (kbH > 0 && vv ? vv.height : window.innerHeight) + "px";
 
-  // Toggle a class so CSS can zoom out messages slightly when keyboard is open
+  // Toggle a class so CSS can compact messages slightly when keyboard is open
   document.body.classList.toggle("keyboard-open", kbH > 0);
 
-  // Input bar is position:fixed (layout-viewport coords) so still needs
-  // shifting up by the full keyboard height (accessory bar included).
+  // Input bar is position:fixed. iOS needs shifting up by kbH; Android kbH=0.
   chatInputBar.style.bottom     = kbH + "px";
   chatInputBar.style.transition = kbH === 0 ? "bottom 0.22s ease" : "none";
 
-  // Keep chat padding-bottom in sync with the real input bar height so the
-  // typing indicator (last element) is never hidden behind the input bar.
+  // Keep chat padding-bottom in sync with the real input bar height
   const barH = chatInputBar.offsetHeight;
   chat.style.paddingBottom = (barH + kbH + 8) + "px";
 
@@ -522,14 +527,17 @@ function updateViewportOffsets() {
     gifPicker.style.bottom = (kbH + barH + 8) + "px";
   }
 
-  // Pin scroll to bottom whenever the viewport shifts
   scheduleScroll();
 }
 
+// Android fires 'resize' on window; iOS fires on visualViewport. Listen both.
+window.addEventListener("resize", updateViewportOffsets, { passive: true });
 if (window.visualViewport) {
   window.visualViewport.addEventListener("resize", updateViewportOffsets, { passive: true });
   window.visualViewport.addEventListener("scroll", updateViewportOffsets, { passive: true });
 }
+// Run immediately so body height is correct from the first paint
+updateViewportOffsets();
 
 function updateGifPickerPosition() {
   if (!gifPickerOpen) return;
