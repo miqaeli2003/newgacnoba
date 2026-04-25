@@ -1012,8 +1012,8 @@ document.addEventListener("touchstart", (e) => {
 document.addEventListener("touchend", (e) => {
   const dx = e.changedTouches[0].clientX - touchStartX;
   const dy = Math.abs(e.changedTouches[0].clientY - touchStartY);
-  // Swipe right > 80 px, mostly horizontal, Next not disabled
-  if (dx > 80 && dy < 50 && !nextBtn.disabled) {
+  // Swipe right > 80 px, mostly horizontal, Next not disabled, and NOT currently in a chat
+  if (dx > 80 && dy < 50 && !nextBtn.disabled && !partnerConnected) {
     nextBtn.click();
   }
 }, { passive: true });
