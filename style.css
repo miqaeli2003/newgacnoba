@@ -953,7 +953,12 @@ html, body {
 /* ── TYPING INDICATOR ────────────────────────────────────────────────────── */
 
 .typing-indicator {
-  align-self: flex-start;
+  /* Fixed overlay — always bottom-left, never inside the message scroll */
+  position: fixed;
+  left: 16px;
+  bottom: var(--typing-bottom, 70px); /* updated dynamically by JS */
+  z-index: 60;
+
   display: flex;
   align-items: center;
   gap: 5px;
@@ -964,6 +969,7 @@ html, body {
   width: fit-content;
   box-shadow: 0 2px 12px rgba(0,0,0,0.35);
   animation: typingFadeIn 0.18s ease forwards;
+  pointer-events: none; /* don't block taps on messages */
 }
 
 @keyframes typingFadeIn {
