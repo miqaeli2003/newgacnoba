@@ -705,7 +705,7 @@ let bioPopupOpen = false;
 
 function openBioPopup() {
   bioInput.value       = userBio;
-  bioCharCount.textContent = `${userBio.length}/30`;
+  bioCharCount.textContent = `${userBio.length}/60`;
   bioPopup.style.display = "flex";
   bioPopupOpen = true;
   setTimeout(() => bioInput.focus(), 50);
@@ -722,7 +722,7 @@ interestsBtn.addEventListener("click", (e) => {
 });
 
 bioInput.addEventListener("input", () => {
-  bioCharCount.textContent = `${bioInput.value.length}/30`;
+  bioCharCount.textContent = `${bioInput.value.length}/60`;
 });
 
 bioInput.addEventListener("keydown", (e) => {
@@ -732,7 +732,7 @@ bioInput.addEventListener("keydown", (e) => {
 });
 
 function saveBio() {
-  const text = bioInput.value.trim().slice(0, 30);
+  const text = bioInput.value.trim().slice(0, 60);
   userBio = text;
   socket.emit("setBio", text);
   interestsBtn.classList.toggle("has-bio", text.length > 0);
@@ -742,7 +742,7 @@ function saveBio() {
 
 function clearBio() {
   bioInput.value = "";
-  bioCharCount.textContent = "0/30";
+  bioCharCount.textContent = "0/60";
   userBio = "";
   socket.emit("setBio", "");
   interestsBtn.classList.remove("has-bio");
