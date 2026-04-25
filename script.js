@@ -327,13 +327,6 @@ function showTypingIndicator() {
   el.className  = "typing-indicator";
   el.innerHTML  = "<span></span><span></span><span></span>";
   chat.appendChild(el);
-  scheduleScroll();
-  // Second scroll after keyboard animation settles (iOS/Android keyboards
-  // animate open ~150-300 ms, causing the first rAF scroll to land wrong)
-  setTimeout(() => {
-    const indicator = document.getElementById("typingIndicator");
-    if (indicator) indicator.scrollIntoView({ block: "end", behavior: "smooth" });
-  }, 200);
 }
 
 function hideTypingIndicator() {
@@ -511,11 +504,6 @@ function updateViewportOffsets() {
 
   // Pin scroll to bottom whenever the viewport shifts
   scheduleScroll();
-  // If typing indicator is visible, keep it in view after keyboard resize
-  const indicator = document.getElementById("typingIndicator");
-  if (indicator) {
-    setTimeout(() => indicator.scrollIntoView({ block: "end", behavior: "smooth" }), 100);
-  }
 }
 
 if (window.visualViewport) {
