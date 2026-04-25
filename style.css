@@ -1484,3 +1484,67 @@ html, body {
     padding-top: 10px;
   }
 }
+
+/* ── MODAL CLOSE BUTTON (სახელის შეცვლა) ──────────────────────────────────── */
+.modal-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: rgba(255,255,255,0.07);
+  color: #b5bac1;
+  border-radius: 50%;
+  font-size: 0.95em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
+}
+.modal-close-btn:hover {
+  background: rgba(242,63,66,0.18);
+  color: #f23f42;
+}
+
+/* make modal-content position:relative so the X is positioned inside it */
+.modal-content {
+  position: relative;
+}
+
+/* ── BIO POPUP HEADER with X ───────────────────────────────────────────────── */
+.bio-popup-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bio-popup-header .bio-popup-title {
+  margin: 0;
+  flex: 1;
+}
+
+.bio-popup-close {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: rgba(255,255,255,0.07);
+  color: #b5bac1;
+  border-radius: 50%;
+  font-size: 0.78em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
+  margin-top: 1px;
+}
+.bio-popup-close:hover {
+  background: rgba(242,63,66,0.18);
+  color: #f23f42;
+}
