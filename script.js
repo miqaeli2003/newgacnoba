@@ -19,6 +19,7 @@ let unreadCount         = 0;
 let replyTo             = null;   // { text, senderName, messageId }
 let lastPartnerName     = "";     // remember partner name after disconnect for blocking
 let canBlockDisconnected = false; // allow blocking a partner who just left
+let wasSearching        = false;  // true only when user intentionally started a search
 const originalTitle     = document.title;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
@@ -715,6 +716,7 @@ socket.on("nameAccepted", (acceptedName) => {
 
   if (isFirstLogin) {
     isFirstLogin = false;
+    wasSearching = true;
     clearChat();
     addSearchingMessage();
     socket.emit("findPartner");
@@ -726,10 +728,12 @@ socket.on("nameAccepted", (acceptedName) => {
     setInputsEnabled(false);
     hideTypingIndicator();
     closeGifPickerPanel();
-    clearChat();
-    addSearchingMessage();
-    socket.emit("findPartner");
-    startSearchRetry();
+    if (wasSearching) {
+      clearChat();
+      addSearchingMessage();
+      socket.emit("findPartner");
+      startSearchRetry();
+    }
   }
   // else: mid-session name change — no extra action
   if (wasNameChange) {
@@ -759,6 +763,7 @@ socket.on("queuePosition", ({ position, total }) => {
 socket.on("partnerFound", (partner) => {
   stopSearchRetry();
   clearChat();
+  wasSearching         = false;
   partnerName          = partner.name || "Anonymous";
   partnerConnected     = true;
   lastPartnerName      = "";
@@ -923,6 +928,7 @@ nextBtn.addEventListener("click", () => {
   hideTypingIndicator();
   clearChat();
   addSearchingMessage();
+  wasSearching         = true;
   partnerConnected     = false;
   partnerName          = "";
   lastPartnerName      = "";
