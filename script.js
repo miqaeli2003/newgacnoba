@@ -335,15 +335,17 @@ function showTypingIndicator() {
   if (!el) return;
   el.style.display = "flex";
   updateTypingIndicatorPosition();
-  // Push the last message up so the indicator doesn't cover it
-  chat.classList.add("typing-active");
+  // Add indicator height on top of the existing input-bar padding so the
+  // last message is never hidden behind the dots
+  chat.style.paddingBottom = "calc(72px + env(safe-area-inset-bottom, 0px) + 56px)";
   scheduleScroll();
 }
 
 function hideTypingIndicator() {
   const el = document.getElementById("typingIndicator");
   if (el) el.style.display = "none";
-  chat.classList.remove("typing-active");
+  // Restore normal padding
+  chat.style.paddingBottom = "";
 }
 
 function clearChat() { chat.innerHTML = ""; clearReply(); }
