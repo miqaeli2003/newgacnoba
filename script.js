@@ -1004,8 +1004,9 @@ document.addEventListener("touchstart", (e) => {
 document.addEventListener("touchend", (e) => {
   const dx = e.changedTouches[0].clientX - touchStartX;
   const dy = Math.abs(e.changedTouches[0].clientY - touchStartY);
-  // Swipe right > 80 px, mostly horizontal, Next not disabled
-  if (dx > 80 && dy < 50 && !nextBtn.disabled) {
+  // Swipe right > 150 px, mostly horizontal (dy < 30% of dx),
+  // AND must start from the left edge (first 30px) to avoid accidental triggers
+  if (dx > 150 && dy < dx * 0.3 && touchStartX < 30 && !nextBtn.disabled) {
     nextBtn.click();
   }
 }, { passive: true });
