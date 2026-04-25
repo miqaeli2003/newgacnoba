@@ -2,6 +2,7 @@ const socket = io();
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let userName            = "";
+let userBio             = "";
 let partnerConnected    = false;
 let partnerName         = "";
 let isFirstLogin        = true;
@@ -28,6 +29,12 @@ const sendBtn        = document.getElementById("sendBtn");
 const nextBtn        = document.getElementById("nextBtn");
 const blockBtn       = document.getElementById("blockBtn");
 const changeNameBtn  = document.getElementById("changeNameBtn");
+const interestsBtn   = document.getElementById("interestsBtn");
+const bioPopup       = document.getElementById("bioPopup");
+const bioInput       = document.getElementById("bioInput");
+const bioSaveBtn     = document.getElementById("bioSaveBtn");
+const bioClearBtn    = document.getElementById("bioClearBtn");
+const bioCharCount   = document.getElementById("bioCharCount");
 const nameModal      = document.getElementById("nameModal");
 const nameInput      = document.getElementById("nameInput");
 const saveNameBtn    = document.getElementById("saveNameBtn");
@@ -693,6 +700,64 @@ function sendMessage() {
   messageInput.focus();
 }
 
+// ── Bio / Interests popup ─────────────────────────────────────────────────────
+let bioPopupOpen = false;
+
+function openBioPopup() {
+  bioInput.value       = userBio;
+  bioCharCount.textContent = `${userBio.length}/30`;
+  bioPopup.style.display = "flex";
+  bioPopupOpen = true;
+  setTimeout(() => bioInput.focus(), 50);
+}
+
+function closeBioPopup() {
+  bioPopup.style.display = "none";
+  bioPopupOpen = false;
+}
+
+interestsBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  bioPopupOpen ? closeBioPopup() : openBioPopup();
+});
+
+bioInput.addEventListener("input", () => {
+  bioCharCount.textContent = `${bioInput.value.length}/30`;
+});
+
+bioInput.addEventListener("keydown", (e) => {
+  e.stopPropagation();
+  if (e.key === "Enter") { e.preventDefault(); saveBio(); }
+  if (e.key === "Escape") closeBioPopup();
+});
+
+function saveBio() {
+  const text = bioInput.value.trim().slice(0, 30);
+  userBio = text;
+  socket.emit("setBio", text);
+  interestsBtn.classList.toggle("has-bio", text.length > 0);
+  closeBioPopup();
+  if (text) showToast("✅ ინფო შენახულია!");
+}
+
+function clearBio() {
+  bioInput.value = "";
+  bioCharCount.textContent = "0/30";
+  userBio = "";
+  socket.emit("setBio", "");
+  interestsBtn.classList.remove("has-bio");
+}
+
+bioSaveBtn.addEventListener("click", saveBio);
+bioClearBtn.addEventListener("click", clearBio);
+
+// Close popup when clicking outside it
+document.addEventListener("click", (e) => {
+  if (bioPopupOpen && !bioPopup.contains(e.target) && e.target !== interestsBtn) {
+    closeBioPopup();
+  }
+});
+
 // ── Name modal ────────────────────────────────────────────────────────────────
 function saveName() {
   const name = nameInput.value.trim();
@@ -729,6 +794,9 @@ socket.on("nameAccepted", (acceptedName) => {
     displayEl.textContent = `👤 ${acceptedName}`;
     displayEl.style.display = "block";
   }
+
+  // Show interests/bio button
+  if (interestsBtn) interestsBtn.style.display = "inline-block";
 
   if (isFirstLogin) {
     isFirstLogin = false;
@@ -781,6 +849,16 @@ socket.on("partnerFound", (partner) => {
   lastPartnerName      = "";
   canBlockDisconnected = false;
   addSystemMessage(`გილოცავთ პარტნიორი ნაპოვნია 🥳 : ${partnerName}`);
+
+  // Show partner's bio if they set one
+  if (partner.partnerBio) {
+    const bioEl       = document.createElement("div");
+    bioEl.className   = "partner-bio-line";
+    bioEl.textContent = `💬 ${partner.partnerBio}`;
+    chat.appendChild(bioEl);
+    scheduleScroll();
+  }
+
   setInputsEnabled(true);
   updateBlockBtn();
   playNotification("partnerFound");
