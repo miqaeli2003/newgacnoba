@@ -1102,6 +1102,17 @@ html, body {
   }
   .next-button .btn-label { display: inline; font-size: 0.82em; }
 
+  /* ── ინტერესები button: full text, pushes left with margin-right: auto ── */
+  .interests-btn {
+    width: auto;
+    padding: 0 12px;
+    margin-right: auto;
+    font-size: 0.78em;
+    letter-spacing: 0.2px;
+  }
+  .interests-btn .btn-icon { display: none; }
+  .interests-btn .btn-label { display: inline; font-size: 1em; }
+
   /* ── rest of mobile styles ─────────────────────────────────────────────── */
   .gif-picker {
     width: calc(100vw - 24px);
