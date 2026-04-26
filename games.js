@@ -487,17 +487,30 @@
       if (btn) btn.disabled = !on;
     }
 
-    // These event names must match what your server emits:
-    socket.on('partnerFound', () => setGameBtnEnabled(true));
-    socket.on('matched',      () => setGameBtnEnabled(true));   // alias
-    socket.on('partnerLeft',  () => {
+    // These event names match what the server actually emits:
+    function onPartnerConnected() { setGameBtnEnabled(true); }
+    function onPartnerGone() {
       setGameBtnEnabled(false);
       clearGameBtnPulse();
       const bar = el('gameInviteBar');
       if (bar) bar.remove();
       if (currentGame) closeGame();
+    }
+
+    socket.on('partnerFound',        onPartnerConnected);
+    socket.on('partnerRestored',     onPartnerConnected);   // reconnect restored
+    socket.on('partnerReconnected',  onPartnerConnected);   // partner came back
+
+    socket.on('partnerDisconnected', onPartnerGone);
+    socket.on('partnerReconnecting', () => {
+      // partner temporarily gone — disable game btn but keep overlay if mid-game
+      setGameBtnEnabled(false);
+      clearGameBtnPulse();
+      const bar = el('gameInviteBar');
+      if (bar) bar.remove();
     });
-    socket.on('waiting', () => setGameBtnEnabled(false));
+    socket.on('youWereBlocked',      onPartnerGone);
+    socket.on('queuePosition',       () => setGameBtnEnabled(false)); // in queue → no partner
 
     // ────────────────────────────────────────────────────────────
     // 12. Utility — append system message to chat
