@@ -1035,13 +1035,33 @@ socket.on("messageFlagged", () => {
   setTimeout(() => notice.remove(), 3000);
 });
 
-socket.on("linkBlocked", () => {
-  const notice       = document.createElement("div");
-  notice.className   = "system-message";
-  notice.textContent = "⛔ ლინკების გაგზავნა დაუშვებელია.";
-  chat.appendChild(notice);
-  scheduleScroll();
-  setTimeout(() => notice.remove(), 3000);
+// Sender gets kicked for sending a link
+socket.on("linkKicked", () => {
+  partnerConnected     = false;
+  partnerName          = "";
+  lastPartnerName      = "";
+  canBlockDisconnected = false;
+  stopSearchRetry();
+  hideTypingIndicator();
+  setInputsEnabled(false);
+  updateBlockBtn();
+  closeGifPickerPanel();
+  clearChat();
+  addDisconnectMessage("🚫 ლინკების გაგზავნა აკრძალულია! თქვენ გაირიცხეთ საიტიდან.");
+});
+
+// Partner of the link-sender sees a notice and gets unlinked
+socket.on("partnerLinkKicked", () => {
+  partnerConnected     = false;
+  partnerName          = "";
+  lastPartnerName      = "";
+  canBlockDisconnected = false;
+  stopSearchRetry();
+  hideTypingIndicator();
+  setInputsEnabled(false);
+  updateBlockBtn();
+  closeGifPickerPanel();
+  addDisconnectMessage("🚫 ლინკების გაგზავნა აკრძალულია! პარტნიორი გაირიცხა საიტიდან.");
 });
 
 socket.on("autoKicked", () => {
