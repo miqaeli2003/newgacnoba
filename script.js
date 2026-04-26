@@ -1,4 +1,3 @@
-
 const socket = io();
 window.socket = socket; // exposed so games.js can reuse the same connection
 
@@ -25,9 +24,10 @@ let canBlockDisconnected = false; // allow blocking a partner who just left
 const originalTitle     = document.title;
 
 // ── Away-timer (tab hidden while in a chat) ───────────────────────────────────
-const AWAY_GRACE_MS = 60000; // 60 seconds
-let awayTimer       = null;
-let awayTimedOut    = false; // true once the 60 s fired
+const AWAY_GRACE_MS  = 60000; // 60 seconds
+let awayTimer        = null;
+let awayTimedOut     = false; // true once the 60 s fired
+let _wasInChatWhenHidden = false; // remember if we were in an active chat when tab hid
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const chat           = document.getElementById("chat");
@@ -114,6 +114,7 @@ document.addEventListener("visibilitychange", () => {
     // ── Tab hidden ──────────────────────────────────────────────────────────
     // If the user is in an active chat, start a 60-second grace timer.
     // They can switch to any app and come back without losing the chat.
+    _wasInChatWhenHidden = partnerConnected;
     if (partnerConnected && !awayTimer) {
       awayTimer = setTimeout(() => {
         awayTimer     = null;
@@ -137,7 +138,18 @@ document.addEventListener("visibilitychange", () => {
     if (awayTimedOut) {
       awayTimedOut = false;
       showAwayEndedPopup();
+      _wasInChatWhenHidden = false;
+      return;
     }
+
+    // Came back before 60 s — if we were in an active chat and the socket
+    // is healthy, make sure inputs are enabled. This recovers from the edge
+    // case where a brief socket reconnect disabled inputs mid-away.
+    if (_wasInChatWhenHidden && socket.connected && partnerConnected) {
+      setInputsEnabled(true);
+      updateBlockBtn();
+    }
+    _wasInChatWhenHidden = false;
   }
 });
 
@@ -510,18 +522,7 @@ function showAwayEndedPopup() {
   btn.className     = "away-ended-btn";
   btn.textContent   = "Welcome Page";
   btn.addEventListener("click", () => {
-    overlay.remove();
-    clearChat();
-    setInputsEnabled(false);
-    updateBlockBtn();
-    closeGifPickerPanel();
-    stopSearchRetry();
-    nameInput.value         = userName;
-    saveNameBtn.textContent = "საუბრის დაწყება";
-    clearNameError();
-    const closeBtn = document.getElementById("nameModalClose");
-    if (closeBtn) closeBtn.style.display = "none";
-    nameModal.style.display = "flex";
+    window.location.reload();
   });
 
   box.appendChild(icon);
@@ -889,6 +890,9 @@ function saveName() {
 
 socket.on("connect", () => {
   if (wasAutoKicked) return;
+  // If socket reconnected while away timer was running, cancel it —
+  // the session is fresh so the old timer is no longer valid.
+  if (awayTimer) { clearTimeout(awayTimer); awayTimer = null; }
   if (userName && !isFirstLogin) {
     isReconnecting = true;
     socket.emit("setName", userName);
@@ -1004,6 +1008,7 @@ socket.on("partnerRestored", (data) => {
   stopSearchRetry();
   partnerName      = data.name || "Anonymous";
   partnerConnected = true;
+  _wasInChatWhenHidden = false;
   // Cancel any away timer — we're back in chat
   if (awayTimer) { clearTimeout(awayTimer); awayTimer = null; }
   awayTimedOut = false;
