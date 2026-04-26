@@ -924,8 +924,7 @@ socket.on("nameAccepted", (acceptedName) => {
     setInputsEnabled(false);
     hideTypingIndicator();
     closeGifPickerPanel();
-    clearChat();
-    // Do NOT auto-search — user must press ძებნა manually
+    // Do NOT clearChat, do NOT auto-search — everything stays as-is until user presses ძებნა
   }
   // else: mid-session name change — no extra action
   if (wasNameChange) {
