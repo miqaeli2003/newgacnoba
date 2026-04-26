@@ -18,7 +18,7 @@ const TENOR_KEY          = process.env.TENOR_KEY || "LIVDSRZULELA";
 const NAME_MIN           = 2;
 const NAME_MAX           = 20;
 const MSG_MAX            = 2000;
-const RECONNECT_GRACE_MS = 4000;
+const RECONNECT_GRACE_MS = 60000; // 60 s — lets mobile users switch apps and return
 const MAX_BLOCKS_RX      = 3;
 const MAX_BLOCKS_TX      = 10;  // max users one socket can block per session
 const MSG_RATE_MAX       = 20;
@@ -596,6 +596,32 @@ io.on("connection", (socket) => {
     if (!["ttt", "rps", "math"].includes(gameType)) return;
     const target = io.sockets.sockets.get(toId);
     if (target) target.emit("game:invite", { gameType, fromId: socket.id, isRematch: true });
+  });
+
+  // ── Tab Away Timeout ─────────────────────────────────────────────────────
+  // Fired by the client after 60 s of the tab being hidden while in a chat.
+  // The socket is still alive — we just cleanly end the pairing.
+  socket.on("tabAwayTimeout", () => {
+    if (!socket.partner) return;
+
+    const partner = socket.partner;
+    const name    = socket.userName || "Anonymous";
+
+    // Cancel any active game first
+    cleanupGameForSocket(socket.id);
+
+    socket.partner         = null;
+    partner.partner        = null;
+    socket.lastPartnerName = "";
+    partner.lastPartnerName = name;
+
+    // Tell partner the chat ended (they can search for someone new)
+    partner.emit("partnerDisconnected", { name });
+    partner.lastPartnerName      = name;
+    partner.canBlockDisconnected = true;
+
+    // Tell the away user that their chat was ended due to being away
+    socket.emit("awayTimeout");
   });
 
   // ── Disconnect ───────────────────────────────────────────────────────────
