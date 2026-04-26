@@ -1072,7 +1072,7 @@ html, body {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 12px 4px;
+    padding: 8px 14px 5px;
     min-width: 0;
     overflow: hidden;
   }
@@ -1089,7 +1089,7 @@ html, body {
 
   .user-name-display {
     font-size: 0.72em;
-    padding: 2px 9px;
+    padding: 3px 10px;
     max-width: 100px;
     border-radius: 12px;
     margin-left: auto;
@@ -1100,8 +1100,8 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 5px;
-    padding: 4px 8px 7px;
+    gap: 6px;
+    padding: 5px 10px 8px;
     border-top: 1px solid rgba(255,255,255,0.05);
   }
 
@@ -1111,10 +1111,10 @@ html, body {
   .next-button,
   .interests-btn {
     padding: 0;
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    font-size: 1em;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    font-size: 1.05em;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1125,10 +1125,11 @@ html, body {
   .btn-label { display: none; }
   .btn-icon  { display: inline; line-height: 1; }
 
-  /* ── ძებნა button: slightly wider with label on mobile ─────────────────── */
+  /* ── ძებნა button: pill with label on mobile ────────────────────────────── */
   .next-button {
     width: auto;
-    padding: 0 14px;
+    padding: 0 16px;
+    border-radius: 20px;
     gap: 5px;
   }
   .next-button .btn-label { display: inline; font-size: 0.82em; }
@@ -1137,6 +1138,7 @@ html, body {
   .interests-btn {
     width: auto;
     padding: 0 12px;
+    border-radius: 20px;
     margin-right: auto;
     font-size: 0.78em;
     letter-spacing: 0.2px;
@@ -1144,55 +1146,119 @@ html, body {
   .interests-btn .btn-icon { display: none; }
   .interests-btn .btn-label { display: inline; font-size: 1em; }
 
-  /* ── rest of mobile styles ─────────────────────────────────────────────── */
+  /* ── GIF PICKER ────────────────────────────────────────────────────────── */
   .gif-picker {
-    width: calc(100vw - 24px);
-    right: 12px;
-    left: 12px;
-    height: 380px;
+    width: calc(100vw - 16px);
+    right: 8px;
+    left: 8px;
+    height: 400px;
+    bottom: 80px;
+    border-radius: 18px;
   }
 
-  .message-wrapper          { max-width: 82%; }
+  /* ── CHAT BUBBLES ──────────────────────────────────────────────────────── */
+  .message-wrapper          { max-width: 80%; }
   .message-wrapper.gif-msg-wrapper { max-width: 200px; }
   .question-card            { max-width: 82%; }
 
+  /* Slightly larger text for comfortable reading on mobile */
+  .message-content {
+    font-size: 15.5px;
+    line-height: 1.48;
+    padding: 10px 14px;
+  }
+
+  /* ── MODAL ─────────────────────────────────────────────────────────────── */
   .modal-content { padding: 20px 16px 18px; }
 
+  /* ── INPUT BAR — Instagram-style ───────────────────────────────────────── */
   .char-count { display: none; }
 
+  /* Main input row: comfortable vertical padding */
+  .chat-input-row {
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+    gap: 7px;
+    align-items: center;
+  }
+
+  /* Pill-shaped text input like Instagram DMs */
   .chat-input input,
   .chat-input-row input {
-    padding: 10px 12px;
-    font-size: 1em;
+    padding: 11px 16px;
+    font-size: 16px;          /* 16px prevents iOS auto-zoom on focus */
+    border-radius: 24px;
+    background: #3a3c42;
+    border: none;
+    line-height: 1.4;
+    -webkit-appearance: none;
   }
 
-  .reply-preview-text { max-width: 180px; }
+  /* Reply preview text: a bit wider */
+  .reply-preview-bar {
+    padding: 8px 12px 6px;
+  }
+  .reply-preview-text { max-width: 210px; }
 
-  #sendBtn {
-    padding: 0 14px;
-    font-size: 0.9em;
+  /* GIF + Question buttons: comfortable circular touch targets */
+  .gif-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    font-size: 0.75em;
   }
 
-  .gif-btn,
   .question-btn {
-    width: 40px;
-    height: 40px;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
   }
 
+  /* Send button: round pill on mobile */
+  #sendBtn {
+    padding: 0;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    font-size: 0;             /* hide "SEND" text */
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  /* Paper-plane icon via ::after — zero HTML change */
+  #sendBtn::after {
+    content: "➤";
+    font-size: 16px;
+    color: #fff;
+    display: block;
+    line-height: 1;
+    transform: translateX(1px);
+  }
+
+  /* ── FACT CARD ─────────────────────────────────────────────────────────── */
   .fact-card {
     max-width: 95%;
   }
 
-  /* bio popup snaps to full width on small screens */
+  /* ── BIO POPUP: bottom sheet style ────────────────────────────────────── */
   .bio-popup {
-    padding-top: 110px;
-    padding-right: 8px;
-    padding-left: 8px;
-    align-items: flex-start;
-    justify-content: flex-end;
+    padding-top: 0;
+    padding-right: 0;
+    padding-left: 0;
+    align-items: flex-end;
+    justify-content: center;
   }
   .bio-popup-content {
     width: 100%;
+    border-radius: 18px 18px 0 0;
+    padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* ── TYPING INDICATOR: bump up when keyboard open ─────────────────────── */
+  .typing-indicator {
+    left: 12px;
   }
 }
 
@@ -1235,6 +1301,31 @@ html, body {
 
 .keyboard-open .seen-status {
   font-size: 0.56em;
+}
+
+/* ── KEYBOARD-OPEN: mobile-only tightening ──────────────────────────────── */
+@media (max-width: 600px) {
+  .keyboard-open .chat-container {
+    padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Keep input bar flush & comfortable while keyboard is up */
+  .keyboard-open .chat-input-row {
+    padding-top: 7px;
+    padding-bottom: calc(7px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Slightly compact message bubbles so more fit on screen */
+  .keyboard-open .message-content {
+    font-size: 15px;
+    padding: 9px 13px;
+  }
+
+  /* React / reply buttons: stay visible (not hover-dependent) on mobile */
+  .keyboard-open .react-btn,
+  .keyboard-open .reply-btn {
+    opacity: 0.45;
+  }
 }
 
 /* ── SAFETY / AGE-VERIFICATION MODAL ────────────────────────────────────── */
@@ -1516,6 +1607,8 @@ html, body {
      since it's not fixed. Just ensure the chat area still scrolls nicely. */
   .chat-container {
     padding-top: 10px;
+    /* Extra bottom room so last message isn't hidden behind input bar */
+    padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px));
   }
 }
 
