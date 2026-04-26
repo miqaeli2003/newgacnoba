@@ -41,6 +41,7 @@ function showPartnerAwayCountdown() {
   _partnerAwayEl.className = "system-message-reconnecting";
   chat.appendChild(_partnerAwayEl);
   scheduleScroll();
+  setInputsEnabled(false); // block input while partner is away
 
   let remaining = 60;
   function tick() {
@@ -57,6 +58,8 @@ function showPartnerAwayCountdown() {
 function clearPartnerAwayCountdown() {
   if (_partnerAwayInterval) { clearInterval(_partnerAwayInterval); _partnerAwayInterval = null; }
   if (_partnerAwayEl)       { _partnerAwayEl.remove();             _partnerAwayEl = null; }
+  // Re-enable input only if we're still in an active chat
+  if (partnerConnected) setInputsEnabled(true);
 }
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
