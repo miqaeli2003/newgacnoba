@@ -29,7 +29,7 @@
       math: '🔢  Math Duel',
     };
     const RPS_EMOJI  = { rock: '✊', paper: '✋', scissors: '✌️' };
-    const RPS_LABELS = { rock: 'კლდე', paper: 'ქაღალდი', scissors: 'მაკრატელი' };
+    const RPS_LABELS = { rock: 'ჭა', paper: 'ქაღალდი', scissors: 'მაკრატელი' };
 
     // ────────────────────────────────────────────────────────────
     // State
@@ -316,7 +316,7 @@
         <div class="rps-choices" id="rpsChoices">
           <button class="rps-btn" data-choice="rock">
             <span class="rps-emoji">✊</span>
-            <span class="rps-label">კლდე</span>
+            <span class="rps-label">ჭა</span>
           </button>
           <button class="rps-btn" data-choice="paper">
             <span class="rps-emoji">✋</span>
