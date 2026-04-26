@@ -126,6 +126,9 @@ function hasProfanity(text) {
   return false;
 }
 
+// ── Link / URL detection ──────────────────────────────────────────────────────
+const LINK_RE = /(?:https?:\/\/|ftp:\/\/|www\.|\bt\.me\/|telegram\.me\/)[\w\-._~:/?#[\]@!$&'()*+,;=%]+|[\w\-]+\.(?:com|net|org|ge|io|ru|tv|me|gg|co|uk|us|info|biz|xyz|online|site|app|dev|ai|edu|gov|mil|int|eu|de|fr|es|it|pl|ua|by|kz|am|az|tr)(?:[/?\s]|$)/gi;
+
 // ── Game helpers ──────────────────────────────────────────────────────────────
 function rand(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -324,6 +327,8 @@ io.on("connection", (socket) => {
     text = text.slice(0, MSG_MAX).replace(/<[^>]*>/g, "").trim();
     if (!text) return;
     if (hasProfanity(text)) { socket.emit("messageFlagged"); return; }
+    if (LINK_RE.test(text)) { LINK_RE.lastIndex = 0; socket.emit("linkBlocked"); return; }
+    LINK_RE.lastIndex = 0;
     socket.partner.emit("message", { text, messageId, replyTo });
   });
 
