@@ -925,9 +925,7 @@ socket.on("nameAccepted", (acceptedName) => {
     hideTypingIndicator();
     closeGifPickerPanel();
     clearChat();
-    addSearchingMessage();
-    socket.emit("findPartner");
-    startSearchRetry();
+    // Do NOT auto-search — user must press ძებნა manually
   }
   // else: mid-session name change — no extra action
   if (wasNameChange) {
@@ -985,24 +983,19 @@ socket.on("partnerFound", (partner) => {
 let partnerWasReconnecting = false;
 
 socket.on("partnerReconnecting", (data) => {
+  // Partner stepped away — do NOTHING for up to 60 s.
+  // Inputs stay enabled, chat is untouched, no messages shown.
+  // Only partnerDisconnected (fired after 60 s) will take action.
   partnerWasReconnecting = true;
-  canBlockDisconnected   = false;   // cannot block during grace period
-  partnerConnected       = false;
-  setInputsEnabled(false);
-  updateBlockBtn();
-  hideTypingIndicator();
-  closeGifPickerPanel();
-  // No message shown — chat stays as-is during the 60 s grace window
+  canBlockDisconnected   = false;
 });
 
 socket.on("partnerReconnected", (data) => {
+  // Partner came back within 60 s — silently restore state, nothing visible.
   partnerWasReconnecting = false;
-  partnerName          = data.name || partnerName;
-  partnerConnected     = true;
-  canBlockDisconnected = false;
-  setInputsEnabled(true);
-  updateBlockBtn();
-  // No message — silently resume, user never noticed anything happened
+  partnerName            = data.name || partnerName;
+  partnerConnected       = true;
+  canBlockDisconnected   = false;
 });
 
 // Own socket restored to previous partner after reconnecting
@@ -1019,12 +1012,10 @@ socket.on("partnerRestored", (data) => {
 });
 
 socket.on("waitingForPartner", () => {
-  clearChat();
-  addSearchingMessage();
   partnerConnected = false;
   partnerName      = "";
   setInputsEnabled(false);
-  startSearchRetry();
+  // Do NOT auto-search — user must press ძებნა manually
 });
 
 socket.on("partnerTyping", (typing) => {
