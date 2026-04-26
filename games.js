@@ -302,7 +302,7 @@
       } else if (status) {
         status.innerHTML = myTurn
           ? '🟢 შენი რიგია <strong>(' + currentGame.role + ')</strong>'
-          : '⏳ მოწინааღმდეგის რიგია...';
+          : '⏳ მოწინააღმდეგის რიგია...';
       }
     }
 
@@ -340,7 +340,7 @@
             b.classList.toggle('rps-btn--selected', b === btn);
           });
           el('rpsStatus').textContent = `✅ შენ: ${RPS_EMOJI[choice]} ${RPS_LABELS[choice]}`;
-          el('rpsOpponentStatus').textContent = '⏳ ელოდება მოწინададღმდეგეს...';
+          el('rpsOpponentStatus').textContent = '⏳ ელოდება მოწინаააღმდეგეს...';
           socket.emit('game:move', { choice });
         });
       });
@@ -351,7 +351,7 @@
 
       if (opponentChose && !choices) {
         const os = el('rpsOpponentStatus');
-        if (os) os.textContent = '✅ მოწინааღმდეგემ აირჩია! — ელოდება შენ...';
+        if (os) os.textContent = '✅ მოწინააღმდეგემ აირჩია! — ელოდება შენ...';
         return;
       }
 
@@ -444,7 +444,7 @@
         const won = winnerSocketId === socket.id;
         showResult(
           won ? '🏆' : '😔',
-          won ? 'გაიმარჯვე! პირველი სწორი!' : 'წააგე! მოწინААდეგე სწრაფი იყო.'
+          won ? 'გაიმარჯვე! პირველი სწორი!' : 'წააგე! მოწინააღმდეგე სწრაფი იყო.'
         );
       }
     }
@@ -460,7 +460,7 @@
     });
 
     socket.on('game:partnerLeft', () => {
-      appendSystemMessage('🎮 მოწინааღმდეგე გათიშა — თამაში გაუქმდა.');
+      appendSystemMessage('🎮 მოწინააღმდეგე გათიშა — თამაში გაუქმდა.');
       closeGame();
     });
 
