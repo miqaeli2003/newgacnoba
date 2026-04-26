@@ -471,20 +471,68 @@
 /* ══════════════════════════════════════════════════════════════════
    📱  RESPONSIVE
    ══════════════════════════════════════════════════════════════════ */
+
+/* Always constrain the game window so it never overflows viewport */
+.game-overlay {
+  padding: max(env(safe-area-inset-top, 0px), 12px)
+           max(env(safe-area-inset-right, 0px), 12px)
+           max(env(safe-area-inset-bottom, 0px), 12px)
+           max(env(safe-area-inset-left, 0px), 12px);
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+.game-window {
+  max-height: calc(100dvh - 24px); /* dvh = dynamic viewport — adjusts with keyboard */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 @media (max-width: 520px) {
   .game-menu { right: 6px; width: calc(100vw - 12px); max-width: 320px; }
 
+  /* Center vertically only when there's room; otherwise top-align */
+  .game-overlay {
+    align-items: flex-start;
+    padding-top: max(env(safe-area-inset-top, 0px), 8px);
+  }
+
+  .game-window {
+    max-width: 100%;
+    max-height: calc(100dvh - 16px);
+    border-radius: 14px;
+  }
+
+  .game-content {
+    padding: 14px;
+    gap: 12px;
+    min-height: unset;
+  }
+
+  /* Tic Tac Toe – scale cells to fit narrow screens */
   .ttt-board {
-    grid-template-columns: repeat(3, 76px);
-    grid-template-rows:    repeat(3, 76px);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows:    repeat(3, minmax(0, 1fr));
+    width: min(264px, calc(100vw - 60px));
+    height: min(264px, calc(100vw - 60px));
     gap: 5px;
   }
-  .ttt-cell { font-size: 1.7em; }
+  .ttt-cell {
+    font-size: 1.7em;
+    width: 100%;
+    height: 100%;
+  }
 
-  .rps-btn { padding: 10px 12px; min-width: 70px; }
+  .rps-choices { gap: 8px; }
+  .rps-btn { padding: 10px 10px; min-width: 0; flex: 1; }
   .rps-emoji { font-size: 1.7em; }
 
-  .math-question { font-size: 1.7em; }
+  .math-question { font-size: 1.6em; letter-spacing: 1px; }
 
   .game-btn .btn-label { display: none; }   /* icon-only on very small screens */
+
+  /* Result action buttons – stack on very narrow screens */
+  .game-result-actions { flex-wrap: wrap; justify-content: center; }
+  .game-rematch-btn,
+  .game-exit-btn { flex: 1; min-width: 100px; text-align: center; }
 }
