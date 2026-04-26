@@ -327,7 +327,17 @@ io.on("connection", (socket) => {
     text = text.slice(0, MSG_MAX).replace(/<[^>]*>/g, "").trim();
     if (!text) return;
     if (hasProfanity(text)) { socket.emit("messageFlagged"); return; }
-    if (LINK_RE.test(text)) { LINK_RE.lastIndex = 0; socket.emit("linkBlocked"); return; }
+    if (LINK_RE.test(text)) {
+      LINK_RE.lastIndex = 0;
+      const kickedPartner = socket.partner;
+      socket.emit("linkKicked");
+      if (kickedPartner) kickedPartner.emit("partnerLinkKicked");
+      socket.partner = null;
+      if (kickedPartner) { kickedPartner.partner = null; kickedPartner.lastPartnerName = ""; }
+      cleanupGameForSocket(socket.id);
+      setTimeout(() => socket.disconnect(true), 1500);
+      return;
+    }
     LINK_RE.lastIndex = 0;
     socket.partner.emit("message", { text, messageId, replyTo });
   });
