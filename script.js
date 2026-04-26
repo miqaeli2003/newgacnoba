@@ -992,30 +992,30 @@ socket.on("partnerReconnecting", (data) => {
   updateBlockBtn();
   hideTypingIndicator();
   closeGifPickerPanel();
-  addReconnectingMessage(data.name || "Partner");
+  // No message shown — chat stays as-is during the 60 s grace window
 });
 
 socket.on("partnerReconnected", (data) => {
   partnerWasReconnecting = false;
-  removeReconnectingMessage();
   partnerName          = data.name || partnerName;
   partnerConnected     = true;
   canBlockDisconnected = false;
   setInputsEnabled(true);
   updateBlockBtn();
-  addSystemMessage(`${data.name} - დაბრუნდა! 🎉`);
-  playNotification("partnerFound");
+  // No message — silently resume, user never noticed anything happened
 });
 
 // Own socket restored to previous partner after reconnecting
 socket.on("partnerRestored", (data) => {
   stopSearchRetry();
-  clearChat();
   partnerName      = data.name || "Anonymous";
   partnerConnected = true;
-  addSystemMessage(`${partnerName}-ს კვლავ დაუკავშირდით! 🎉`);
+  // Cancel any away timer — we're back in chat
+  if (awayTimer) { clearTimeout(awayTimer); awayTimer = null; }
+  awayTimedOut = false;
   setInputsEnabled(true);
-  playNotification("partnerFound");
+  updateBlockBtn();
+  // No clearChat(), no system message — messages stay, chat resumes silently
 });
 
 socket.on("waitingForPartner", () => {
