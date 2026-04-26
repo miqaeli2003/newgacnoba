@@ -1,4 +1,5 @@
 const socket = io();
+window.socket = socket; // exposed so games.js can reuse the same connection
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let userName            = "";
