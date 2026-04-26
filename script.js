@@ -1,3 +1,4 @@
+
 const socket = io();
 window.socket = socket; // exposed so games.js can reuse the same connection
 
@@ -488,18 +489,48 @@ function showToast(text, duration = 3000) {
 // ── Away-ended popup ──────────────────────────────────────────────────────────
 // Shown when the user comes back after being away for more than 60 seconds.
 function showAwayEndedPopup() {
-  // No popup — just go back to the welcome/name screen
-  clearChat();
-  setInputsEnabled(false);
-  updateBlockBtn();
-  closeGifPickerPanel();
-  stopSearchRetry();
-  nameInput.value         = userName;
-  saveNameBtn.textContent = "საუბრის დაწყება";
-  clearNameError();
-  const closeBtn = document.getElementById("nameModalClose");
-  if (closeBtn) closeBtn.style.display = "none";
-  nameModal.style.display = "flex";
+  document.getElementById("awayEndedOverlay")?.remove();
+
+  const overlay     = document.createElement("div");
+  overlay.id        = "awayEndedOverlay";
+  overlay.className = "away-ended-overlay";
+
+  const box         = document.createElement("div");
+  box.className     = "away-ended-box";
+
+  const icon        = document.createElement("div");
+  icon.className    = "away-ended-icon";
+  icon.textContent  = "⏱️";
+
+  const msg         = document.createElement("p");
+  msg.className     = "away-ended-msg";
+  msg.textContent   = "დიდი ხნით გასვლის გამო ჩათი გაითიშა";
+
+  const btn         = document.createElement("button");
+  btn.className     = "away-ended-btn";
+  btn.textContent   = "Welcome Page";
+  btn.addEventListener("click", () => {
+    overlay.remove();
+    clearChat();
+    setInputsEnabled(false);
+    updateBlockBtn();
+    closeGifPickerPanel();
+    stopSearchRetry();
+    nameInput.value         = userName;
+    saveNameBtn.textContent = "საუბრის დაწყება";
+    clearNameError();
+    const closeBtn = document.getElementById("nameModalClose");
+    if (closeBtn) closeBtn.style.display = "none";
+    nameModal.style.display = "flex";
+  });
+
+  box.appendChild(icon);
+  box.appendChild(msg);
+  box.appendChild(btn);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  requestAnimationFrame(() => overlay.classList.add("away-ended-visible"));
 }
 
 // ── Search retry ──────────────────────────────────────────────────────────────
