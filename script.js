@@ -1035,6 +1035,15 @@ socket.on("messageFlagged", () => {
   setTimeout(() => notice.remove(), 3000);
 });
 
+socket.on("linkBlocked", () => {
+  const notice       = document.createElement("div");
+  notice.className   = "system-message";
+  notice.textContent = "⛔ ლინკების გაგზავნა დაუშვებელია.";
+  chat.appendChild(notice);
+  scheduleScroll();
+  setTimeout(() => notice.remove(), 3000);
+});
+
 socket.on("autoKicked", () => {
   wasAutoKicked    = true;
   partnerConnected = false;
