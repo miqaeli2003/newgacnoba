@@ -974,6 +974,10 @@ socket.on("userBlocked", (data) => {
   addSystemMessage(`🔴 „${blockedName}" -  წარმატებით იქნა დაბლოკილი 🔴`);
 });
 
+socket.on("blockLimitReached", () => {
+  addSystemMessage("⚠️ ბლოკირების ლიმიტს მიაღწიეთ. ამ სესიაში მეტი ბლოკი შეუძლებელია.");
+});
+
 socket.on("youWereBlocked", (data) => {
   const blockerName = data.name || "მომხმარებელი";
   partnerConnected     = false;
