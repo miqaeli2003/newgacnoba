@@ -1665,3 +1665,79 @@ html, body {
   background: rgba(242,63,66,0.18);
   color: #f23f42;
 }
+
+/* ── AWAY-ENDED POPUP ────────────────────────────────────────────────────────── */
+
+.away-ended-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.away-ended-overlay.away-ended-visible {
+  opacity: 1;
+}
+
+.away-ended-box {
+  background: #2b2d31;
+  border: 1px solid rgba(88, 101, 242, 0.35);
+  border-radius: 16px;
+  padding: 32px 28px 28px;
+  max-width: 340px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  transform: translateY(12px);
+  transition: transform 0.25s ease;
+}
+
+.away-ended-overlay.away-ended-visible .away-ended-box {
+  transform: translateY(0);
+}
+
+.away-ended-icon {
+  font-size: 2.6em;
+  line-height: 1;
+}
+
+.away-ended-msg {
+  margin: 0;
+  font-size: 1em;
+  font-weight: 600;
+  color: #dcddde;
+  line-height: 1.5;
+}
+
+.away-ended-btn {
+  margin-top: 6px;
+  width: 100%;
+  padding: 13px;
+  border-radius: 10px;
+  border: none;
+  background: #5865f2;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95em;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+.away-ended-btn:hover  { background: #4752c4; transform: translateY(-1px); }
+.away-ended-btn:active { transform: translateY(0); }
+
+@media (max-width: 600px) {
+  .away-ended-box {
+    padding: 28px 20px 24px;
+  }
+}
