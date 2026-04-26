@@ -20,6 +20,7 @@ const NAME_MAX           = 20;
 const MSG_MAX            = 2000;
 const RECONNECT_GRACE_MS = 4000;
 const MAX_BLOCKS_RX      = 3;
+const MAX_BLOCKS_TX      = 10;  // max users one socket can block per session
 const MSG_RATE_MAX       = 20;
 const MSG_RATE_WINDOW_MS = 5000;
 
@@ -187,7 +188,8 @@ io.on("connection", (socket) => {
   socket.userName         = "";
   socket.partner          = null;
   socket.lastPartnerName  = "";
-  socket.blockedNames     = [];
+  socket.blockedNames     = [];   // blocked by username (survives name-changes poorly — kept for queue filter)
+  socket.blockedIds       = new Set(); // blocked by socket ID (reliable within a session)
   socket.recentPartnerIds = new Set();
   socket.interests        = [];
   socket.bio              = "";
@@ -261,7 +263,9 @@ io.on("connection", (socket) => {
       !socket.recentPartnerIds.has(s.id) &&
       !s.recentPartnerIds.has(socket.id) &&
       !socket.blockedNames.includes(s.userName.toLowerCase()) &&
-      !s.blockedNames.includes(socket.userName.toLowerCase())
+      !s.blockedNames.includes(socket.userName.toLowerCase()) &&
+      !socket.blockedIds.has(s.id) &&
+      !s.blockedIds.has(socket.id)
     );
 
     if (!candidates.length) {
@@ -398,9 +402,14 @@ io.on("connection", (socket) => {
     tryFindPartner();
   });
 
-  // ── Block ────────────────────────────────────────────────────────────────
   socket.on("blockUser", () => {
     if (!socket.partner && !socket.lastPartnerName) return;
+
+    // Enforce per-session block limit
+    if (socket.blockedNames.length >= MAX_BLOCKS_TX) {
+      socket.emit("blockLimitReached");
+      return;
+    }
 
     if (socket.partner) {
       const blockedName        = socket.partner.userName.toLowerCase();
@@ -408,6 +417,7 @@ io.on("connection", (socket) => {
       const blockedSocket      = socket.partner;
 
       if (!socket.blockedNames.includes(blockedName)) socket.blockedNames.push(blockedName);
+      socket.blockedIds.add(blockedSocket.id); // ID-based block — immune to name changes
 
       // Cancel any active game
       cleanupGameForSocket(socket.id);
@@ -430,6 +440,7 @@ io.on("connection", (socket) => {
       const blockedName        = socket.lastPartnerName.toLowerCase();
       const blockedDisplayName = socket.lastPartnerName;
       if (!socket.blockedNames.includes(blockedName)) socket.blockedNames.push(blockedName);
+      // Note: no socket ID available after partner left — name-only block for this case
       socket.lastPartnerName = "";
       socket.emit("userBlocked", { name: blockedDisplayName });
     }
