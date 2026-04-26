@@ -29,6 +29,36 @@ let awayTimer        = null;
 let awayTimedOut     = false; // true once the 60 s fired
 let _wasInChatWhenHidden = false; // remember if we were in an active chat when tab hid
 
+// ── Partner away countdown (shown to the OTHER user while partner is away) ────
+let _partnerAwayInterval = null;
+let _partnerAwayEl       = null;
+
+function showPartnerAwayCountdown() {
+  if (_partnerAwayEl) return; // already showing — don't double-start
+
+  _partnerAwayEl           = document.createElement("div");
+  _partnerAwayEl.id        = "partnerAwayCountdown";
+  _partnerAwayEl.className = "system-message-reconnecting";
+  chat.appendChild(_partnerAwayEl);
+  scheduleScroll();
+
+  let remaining = 60;
+  function tick() {
+    if (!_partnerAwayEl) return;
+    _partnerAwayEl.textContent =
+      `📱 პარტნიორმა ჩაკეცა ბრაუზერი — შემოსასვლელად დრო: ${remaining}წმ`;
+    if (remaining <= 0) { clearPartnerAwayCountdown(); return; }
+    remaining--;
+  }
+  tick(); // paint immediately
+  _partnerAwayInterval = setInterval(tick, 1000);
+}
+
+function clearPartnerAwayCountdown() {
+  if (_partnerAwayInterval) { clearInterval(_partnerAwayInterval); _partnerAwayInterval = null; }
+  if (_partnerAwayEl)       { _partnerAwayEl.remove();             _partnerAwayEl = null; }
+}
+
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const chat           = document.getElementById("chat");
 const messageInput   = document.getElementById("messageInput");
@@ -115,13 +145,16 @@ document.addEventListener("visibilitychange", () => {
     // If the user is in an active chat, start a 60-second grace timer.
     // They can switch to any app and come back without losing the chat.
     _wasInChatWhenHidden = partnerConnected;
-    if (partnerConnected && !awayTimer) {
-      awayTimer = setTimeout(() => {
-        awayTimer     = null;
-        awayTimedOut  = true;
-        // Socket is still alive — explicitly end the chat server-side
-        socket.emit("tabAwayTimeout");
-      }, AWAY_GRACE_MS);
+    if (partnerConnected) {
+      socket.emit("tabAway"); // tell partner immediately so they see countdown
+      if (!awayTimer) {
+        awayTimer = setTimeout(() => {
+          awayTimer     = null;
+          awayTimedOut  = true;
+          // Socket is still alive — explicitly end the chat server-side
+          socket.emit("tabAwayTimeout");
+        }, AWAY_GRACE_MS);
+      }
     }
   } else {
     // ── Tab visible again ───────────────────────────────────────────────────
@@ -142,9 +175,12 @@ document.addEventListener("visibilitychange", () => {
       return;
     }
 
-    // Came back before 60 s — if we were in an active chat and the socket
-    // is healthy, make sure inputs are enabled. This recovers from the edge
-    // case where a brief socket reconnect disabled inputs mid-away.
+    // Came back before 60 s — tell partner to cancel countdown
+    if (_wasInChatWhenHidden && partnerConnected) {
+      socket.emit("tabBack");
+    }
+
+    // Ensure inputs are re-enabled if socket recovered while we were away
     if (_wasInChatWhenHidden && socket.connected && partnerConnected) {
       setInputsEnabled(true);
       updateBlockBtn();
@@ -988,19 +1024,19 @@ socket.on("partnerFound", (partner) => {
 let partnerWasReconnecting = false;
 
 socket.on("partnerReconnecting", (data) => {
-  // Partner stepped away — do NOTHING for up to 60 s.
-  // Inputs stay enabled, chat is untouched, no messages shown.
-  // Only partnerDisconnected (fired after 60 s) will take action.
+  // Partner's socket disconnected — show countdown, keep chat usable.
   partnerWasReconnecting = true;
   canBlockDisconnected   = false;
+  showPartnerAwayCountdown();
 });
 
 socket.on("partnerReconnected", (data) => {
-  // Partner came back within 60 s — silently restore state, nothing visible.
+  // Partner came back within 60 s — clear countdown, resume silently.
   partnerWasReconnecting = false;
   partnerName            = data.name || partnerName;
   partnerConnected       = true;
   canBlockDisconnected   = false;
+  clearPartnerAwayCountdown();
 });
 
 // Own socket restored to previous partner after reconnecting
@@ -1046,21 +1082,25 @@ socket.on("reacted", ({ messageId, emoji }) => {
   displayReaction(messageId, emoji, false);
 });
 
+// Partner hid their browser tab — show countdown
+socket.on("partnerTabAway", () => {
+  showPartnerAwayCountdown();
+});
+
+// Partner returned before 60 s — clear countdown silently
+socket.on("partnerTabBack", () => {
+  clearPartnerAwayCountdown();
+});
+
 socket.on("partnerDisconnected", (data) => {
   const wasReconnecting = partnerWasReconnecting;
   partnerWasReconnecting = false;
+  clearPartnerAwayCountdown(); // always clear countdown regardless of reason
 
-  if (!wasReconnecting) {
-    removeReconnectingMessage();
-    addDisconnectMessage(`${data.name || "Anonymous"} -მ სამწუხაროდ დაგტოვათ 😟 `);
-    // Allow blocking after a normal leave
-    lastPartnerName      = partnerName || data.name || "";
-    canBlockDisconnected = !!lastPartnerName;
-  } else {
-    // Grace-period expired — partner fully left, allow block
-    lastPartnerName      = partnerName || data.name || "";
-    canBlockDisconnected = !!lastPartnerName;
-  }
+  const leftName = data.name || partnerName || "Anonymous";
+  addDisconnectMessage(`${leftName} - მან გადაგტოვა 😟`);
+  lastPartnerName      = partnerName || data.name || "";
+  canBlockDisconnected = !!lastPartnerName;
 
   partnerConnected = false;
   partnerName      = "";
