@@ -117,7 +117,7 @@
 
       // Close on outside click
       document.addEventListener('click', e => {
-        if (menu.style.display !== 'none' && !menu.contains(e.target) && e.target !== el('gameBtn'))
+        const _btn = el('gameBtn'); if (menu.style.display !== 'none' && !menu.contains(e.target) && !(_btn && _btn.contains(e.target)))
           menu.style.display = 'none';
       });
     }
@@ -497,20 +497,19 @@
       if (currentGame) closeGame();
     }
 
-    socket.on('partnerFound',        onPartnerConnected);
-    socket.on('partnerRestored',     onPartnerConnected);   // reconnect restored
-    socket.on('partnerReconnected',  onPartnerConnected);   // partner came back
+    socket.on('partnerFound',       onPartnerConnected);
+    socket.on('partnerRestored',    onPartnerConnected);
+    socket.on('partnerReconnected', onPartnerConnected);
 
     socket.on('partnerDisconnected', onPartnerGone);
+    socket.on('youWereBlocked',      onPartnerGone);
+    socket.on('queuePosition', () => setGameBtnEnabled(false));
     socket.on('partnerReconnecting', () => {
-      // partner temporarily gone — disable game btn but keep overlay if mid-game
       setGameBtnEnabled(false);
       clearGameBtnPulse();
       const bar = el('gameInviteBar');
       if (bar) bar.remove();
     });
-    socket.on('youWereBlocked',      onPartnerGone);
-    socket.on('queuePosition',       () => setGameBtnEnabled(false)); // in queue → no partner
 
     // ────────────────────────────────────────────────────────────
     // 12. Utility — append system message to chat
