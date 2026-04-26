@@ -14,36 +14,28 @@ const io     = new Server(server, {
 });
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-// Store your real Tenor key in a TENOR_KEY environment variable for production.
 const TENOR_KEY          = process.env.TENOR_KEY || "LIVDSRZULELA";
 const NAME_MIN           = 2;
 const NAME_MAX           = 20;
 const MSG_MAX            = 2000;
-const RECONNECT_GRACE_MS = 4000;  // ms before partner is told you disconnected
-const MAX_BLOCKS_RX      = 3;     // auto-kick after being blocked this many times
-const MSG_RATE_MAX       = 20;    // max messages…
-const MSG_RATE_WINDOW_MS = 5000;  // …per 5 s
+const RECONNECT_GRACE_MS = 4000;
+const MAX_BLOCKS_RX      = 3;
+const MSG_RATE_MAX       = 20;
+const MSG_RATE_WINDOW_MS = 5000;
 
 const VALID_TAGS = new Set([
   "gaming","music","movies","books","sports",
   "tech","art","food","travel","memes",
 ]);
 const VALID_EMOJIS = new Set(["❤️","😂","😢"]);
-
-// Add words to this Set to enable the profanity filter.
 const BANNED_WORDS = new Set([]);
 
-// ── Load facts & questions from txt files ─────────────────────────────────────
+// ── Load facts & questions ────────────────────────────────────────────────────
 function loadLines(filename) {
   try {
-    const filePath = path.join(__dirname, filename);
-    return fs.readFileSync(filePath, "utf8")
-      .split("\n")
-      .map(l => l.trim())
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
+    return fs.readFileSync(path.join(__dirname, filename), "utf8")
+      .split("\n").map(l => l.trim()).filter(Boolean);
+  } catch { return []; }
 }
 
 let FACTS     = loadLines("facts.txt");
@@ -58,41 +50,29 @@ function randomItem(arr) {
 app.use(compression());
 app.use(express.static(path.join(__dirname)));
 
-// ── GIF Proxy — keeps the Tenor API key off the client ───────────────────────
-const gifHttpLimiter = rateLimit({
-  windowMs: 60_000,
-  max: 120,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+const gifHttpLimiter = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
 
 app.get("/api/gifs", gifHttpLimiter, async (req, res) => {
   const q = (req.query.q || "").trim().slice(0, 100);
   const endpoint = q
     ? `https://api.tenor.com/v1/search?q=${encodeURIComponent(q)}&key=${TENOR_KEY}&limit=24&media_filter=minimal&contentfilter=medium`
     : `https://api.tenor.com/v1/trending?key=${TENOR_KEY}&limit=24&media_filter=minimal&contentfilter=medium`;
-
   try {
     const response = await fetch(endpoint);
     if (!response.ok) throw new Error(`Tenor HTTP ${response.status}`);
     const data = await response.json();
-    res.set("Cache-Control", "public, max-age=300"); // browser caches 5 min
+    res.set("Cache-Control", "public, max-age=300");
     res.json(data);
-  } catch {
-    res.status(502).json({ error: "Failed to fetch GIFs" });
-  }
+  } catch { res.status(502).json({ error: "Failed to fetch GIFs" }); }
 });
 
-// ── Random Fact API ───────────────────────────────────────────────────────────
 app.get("/api/random-fact", (req, res) => {
-  // Reload file on each request so you can update facts.txt without restart
   FACTS = loadLines("facts.txt");
   const fact = randomItem(FACTS);
   if (!fact) return res.status(404).json({ error: "No facts available" });
   res.json({ fact });
 });
 
-// ── Random Question API ───────────────────────────────────────────────────────
 app.get("/api/random-question", (req, res) => {
   QUESTIONS = loadLines("questions.txt");
   const question = randomItem(QUESTIONS);
@@ -101,16 +81,17 @@ app.get("/api/random-question", (req, res) => {
 });
 
 // ── In-memory state ───────────────────────────────────────────────────────────
-let waitingQueue     = [];
+let waitingQueue         = [];
 const activeUsernames    = new Set();
-const pendingDisconnects = new Map(); // nameLower → { partner, timeout }
-const reportLog          = [];        // append-only; persist to DB in production
+const pendingDisconnects = new Map();
+const reportLog          = [];
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Game state ────────────────────────────────────────────────────────────────
+const gameBySocket = new Map(); // socketId → gameId
+const gameById     = new Map(); // gameId   → game object
 
-function updateOnlineCount() {
-  io.emit("onlineCount", io.sockets.sockets.size);
-}
+// ── General helpers ───────────────────────────────────────────────────────────
+function updateOnlineCount() { io.emit("onlineCount", io.sockets.sockets.size); }
 
 function cleanQueue() {
   waitingQueue = waitingQueue.filter(s => s.connected && !s.partner && s.userName);
@@ -123,18 +104,14 @@ function countTagOverlap(a = [], b = []) {
 
 function broadcastQueuePositions() {
   cleanQueue();
-  waitingQueue.forEach((s, i) =>
-    s.emit("queuePosition", { position: i + 1, total: waitingQueue.length })
-  );
+  waitingQueue.forEach((s, i) => s.emit("queuePosition", { position: i + 1, total: waitingQueue.length }));
 }
 
 function makeRateLimiter(max, windowMs) {
   return {
     check(socket) {
       const now = Date.now();
-      if (!socket._rl || now > socket._rl.resetAt) {
-        socket._rl = { count: 0, resetAt: now + windowMs };
-      }
+      if (!socket._rl || now > socket._rl.resetAt) socket._rl = { count: 0, resetAt: now + windowMs };
       return ++socket._rl.count <= max;
     },
   };
@@ -148,14 +125,68 @@ function hasProfanity(text) {
   return false;
 }
 
-// ── Socket handlers ───────────────────────────────────────────────────────────
+// ── Game helpers ──────────────────────────────────────────────────────────────
+function rand(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
 
+function generateMathQuestion() {
+  const ops = ["+", "-", "*"];
+  const op  = ops[rand(0, 2)];
+  let a, b, answer;
+  if (op === "+")      { a = rand(1, 50);  b = rand(1, 50); answer = a + b; }
+  else if (op === "-") { a = rand(10, 99); b = rand(1, a);  answer = a - b; }
+  else                 { a = rand(2, 12);  b = rand(2, 12); answer = a * b; }
+  const display = op === "*" ? `${a} \u00d7 ${b}` : `${a} ${op} ${b}`;
+  return { display, answer };
+}
+
+function checkTTTWinner(board) {
+  const LINES = [
+    [0,1,2],[3,4,5],[6,7,8],
+    [0,3,6],[1,4,7],[2,5,8],
+    [0,4,8],[2,4,6],
+  ];
+  for (const [a, b, c] of LINES) {
+    if (board[a] && board[a] === board[b] && board[a] === board[c])
+      return { symbol: board[a], line: [a, b, c] };
+  }
+  return null;
+}
+
+function getRPSWinner(c1, c2) {
+  if (c1 === c2) return "draw";
+  if (
+    (c1 === "rock"     && c2 === "scissors") ||
+    (c1 === "scissors" && c2 === "paper")    ||
+    (c1 === "paper"    && c2 === "rock")
+  ) return "p1";
+  return "p2";
+}
+
+function cleanupGame(game) {
+  game.players.forEach(pid => gameBySocket.delete(pid));
+  gameById.delete(game.id);
+}
+
+function cleanupGameForSocket(socketId) {
+  const gameId = gameBySocket.get(socketId);
+  if (!gameId) return;
+  const game = gameById.get(gameId);
+  if (!game) { gameBySocket.delete(socketId); return; }
+  const partnerId = game.players.find(id => id !== socketId);
+  const ps        = partnerId ? io.sockets.sockets.get(partnerId) : null;
+  if (ps) ps.emit("game:partnerLeft");
+  cleanupGame(game);
+}
+
+// ── Socket handlers ───────────────────────────────────────────────────────────
 io.on("connection", (socket) => {
   console.log("User connected", socket.id);
 
   socket.userName         = "";
   socket.partner          = null;
-  socket.lastPartnerName  = "";   // remember last partner for post-disconnect block
+  socket.lastPartnerName  = "";
   socket.blockedNames     = [];
   socket.recentPartnerIds = new Set();
   socket.interests        = [];
@@ -179,7 +210,6 @@ io.on("connection", (socket) => {
 
     if (activeUsernames.has(trimmed.toLowerCase())) {
       if (pendingDisconnects.has(trimmed.toLowerCase())) {
-        // The old socket for this name just dropped — let it be reclaimed
         activeUsernames.delete(trimmed.toLowerCase());
       } else {
         socket.emit("nameTaken");
@@ -191,7 +221,6 @@ io.on("connection", (socket) => {
     socket.userName = trimmed;
     activeUsernames.add(trimmed.toLowerCase());
     socket.emit("nameAccepted", trimmed);
-
     tryRestorePartnership(socket, trimmed.toLowerCase());
   });
 
@@ -200,7 +229,6 @@ io.on("connection", (socket) => {
     const { partner, timeout } = pendingDisconnects.get(nameLower);
     clearTimeout(timeout);
     pendingDisconnects.delete(nameLower);
-
     if (partner.connected && !partner.partner) {
       sock.partner    = partner;
       partner.partner = sock;
@@ -242,7 +270,6 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // Prefer candidate with most shared interests; fall back to first available
     let best = candidates[0];
     let bestScore = countTagOverlap(socket.interests, best.interests);
     for (let i = 1; i < candidates.length; i++) {
@@ -251,18 +278,14 @@ io.on("connection", (socket) => {
     }
 
     const partnerSocket = best;
-    waitingQueue = waitingQueue.filter(
-      s => s.id !== partnerSocket.id && s.id !== socket.id
-    );
+    waitingQueue = waitingQueue.filter(s => s.id !== partnerSocket.id && s.id !== socket.id);
 
     socket.partner        = partnerSocket;
     partnerSocket.partner = socket;
     socket.lastPartnerName        = partnerSocket.userName;
     partnerSocket.lastPartnerName = socket.userName;
 
-    const sharedTags = (socket.interests || []).filter(t =>
-      (partnerSocket.interests || []).includes(t)
-    );
+    const sharedTags = (socket.interests || []).filter(t => (partnerSocket.interests || []).includes(t));
 
     socket.emit("partnerFound",        { name: partnerSocket.userName, sharedTags, partnerBio: partnerSocket.bio });
     partnerSocket.emit("partnerFound", { name: socket.userName,        sharedTags, partnerBio: socket.bio });
@@ -278,7 +301,7 @@ io.on("connection", (socket) => {
   // ── Messaging ────────────────────────────────────────────────────────────
   socket.on("message", (msg) => {
     if (!socket.partner) return;
-    if (!msgRateLimiter.check(socket)) return; // silently drop if rate exceeded
+    if (!msgRateLimiter.check(socket)) return;
 
     let text = "", messageId = null, replyTo = null;
     if (typeof msg === "string") {
@@ -286,7 +309,6 @@ io.on("connection", (socket) => {
     } else if (msg && typeof msg.text === "string") {
       text = msg.text;
       messageId = msg.messageId;
-      // Validate and sanitise the replyTo payload
       if (msg.replyTo && typeof msg.replyTo.text === "string") {
         replyTo = {
           text:       msg.replyTo.text.slice(0, 100).replace(/<[^>]*>/g, "").trim(),
@@ -297,9 +319,7 @@ io.on("connection", (socket) => {
 
     text = text.slice(0, MSG_MAX).replace(/<[^>]*>/g, "").trim();
     if (!text) return;
-
     if (hasProfanity(text)) { socket.emit("messageFlagged"); return; }
-
     socket.partner.emit("message", { text, messageId, replyTo });
   });
 
@@ -308,21 +328,18 @@ io.on("connection", (socket) => {
     if (!socket.partner || typeof text !== "string") return;
     const safeText = text.slice(0, 300).replace(/<[^>]*>/g, "").trim();
     if (!safeText) return;
-    // Relay the question card to the partner (sender already displayed it)
     socket.partner.emit("partnerQuestion", { text: safeText, senderName: socket.userName });
   });
 
   // ── Seen indicator ───────────────────────────────────────────────────────
   socket.on("seen", ({ messageId }) => {
-    if (socket.partner && messageId) {
-      socket.partner.emit("partnerSeen", { messageId });
-    }
+    if (socket.partner && messageId) socket.partner.emit("partnerSeen", { messageId });
   });
 
   // ── GIF ──────────────────────────────────────────────────────────────────
   socket.on("gif", (data) => {
     if (!socket.partner || typeof data?.url !== "string") return;
-    if (!data.url.startsWith("https://media.tenor.com/")) return; // Tenor CDN only
+    if (!data.url.startsWith("https://media.tenor.com/")) return;
     socket.partner.emit("gif", { url: data.url, preview: data.preview });
   });
 
@@ -361,10 +378,9 @@ io.on("connection", (socket) => {
       const oldPartner   = socket.partner;
       const oldPartnerId = oldPartner.id;
 
-      socket.partner              = null;
-      oldPartner.partner          = null;
-      socket.lastPartnerName      = "";
-      // Keep oldPartner.lastPartnerName so they can still block the user who just left
+      socket.partner         = null;
+      oldPartner.partner     = null;
+      socket.lastPartnerName = "";
       oldPartner.emit("partnerDisconnected", { name: socket.userName });
 
       socket.recentPartnerIds.add(oldPartnerId);
@@ -373,6 +389,9 @@ io.on("connection", (socket) => {
         socket.recentPartnerIds.delete(oldPartnerId);
         if (oldPartner.connected) oldPartner.recentPartnerIds.delete(socket.id);
       }, 5000);
+
+      // Cancel any active game
+      cleanupGameForSocket(socket.id);
     }
 
     waitingQueue = waitingQueue.filter(s => s.id !== socket.id);
@@ -381,20 +400,21 @@ io.on("connection", (socket) => {
 
   // ── Block ────────────────────────────────────────────────────────────────
   socket.on("blockUser", () => {
-    // Allow blocking an active partner OR one who just disconnected
     if (!socket.partner && !socket.lastPartnerName) return;
 
     if (socket.partner) {
-      // Partner still connected — normal block flow
       const blockedName        = socket.partner.userName.toLowerCase();
       const blockedDisplayName = socket.partner.userName;
       const blockedSocket      = socket.partner;
 
       if (!socket.blockedNames.includes(blockedName)) socket.blockedNames.push(blockedName);
 
-      socket.partner              = null;
-      blockedSocket.partner       = null;
-      socket.lastPartnerName      = "";
+      // Cancel any active game
+      cleanupGameForSocket(socket.id);
+
+      socket.partner                = null;
+      blockedSocket.partner         = null;
+      socket.lastPartnerName        = "";
       blockedSocket.lastPartnerName = "";
       blockedSocket.emit("youWereBlocked", { name: socket.userName });
 
@@ -405,22 +425,159 @@ io.on("connection", (socket) => {
         blockedSocket.disconnect(true);
         return;
       }
-
       socket.emit("userBlocked", { name: blockedDisplayName });
     } else {
-      // Partner already left — just add their name to blocked list
       const blockedName        = socket.lastPartnerName.toLowerCase();
       const blockedDisplayName = socket.lastPartnerName;
       if (!socket.blockedNames.includes(blockedName)) socket.blockedNames.push(blockedName);
       socket.lastPartnerName = "";
       socket.emit("userBlocked", { name: blockedDisplayName });
     }
-    // Do NOT auto-search — client will call findPartner when user presses ძებნა
+  });
+
+  // ════════════════════════════════════════════════════════════════
+  //  MINI GAMES
+  // ════════════════════════════════════════════════════════════════
+
+  // Send game request to partner
+  socket.on("game:request", ({ gameType }) => {
+    if (!socket.partner) return;
+    if (!["ttt", "rps", "math"].includes(gameType)) return;
+    socket.partner.emit("game:invite", { gameType, fromId: socket.id });
+  });
+
+  // Accept or decline a game invite
+  socket.on("game:response", ({ accepted, gameType, toId }) => {
+    const requester = io.sockets.sockets.get(toId);
+    if (!requester) return;
+
+    if (!accepted) {
+      requester.emit("game:declined");
+      return;
+    }
+
+    const gameId  = `${toId}:${socket.id}`;
+    const players = [toId, socket.id]; // [requester=X/p1, accepter=O/p2]
+    let state;
+
+    if (gameType === "ttt") {
+      state = { board: Array(9).fill(null), currentTurnSocketId: toId };
+    } else if (gameType === "rps") {
+      state = { choices: {} };
+    } else if (gameType === "math") {
+      state = { question: generateMathQuestion(), answered: false };
+    } else return;
+
+    const game = { id: gameId, type: gameType, players, state };
+    gameById.set(gameId, game);
+    gameBySocket.set(toId,      gameId);
+    gameBySocket.set(socket.id, gameId);
+
+    const roles = { [toId]: "X", [socket.id]: "O" };
+    players.forEach(pid => {
+      const s = io.sockets.sockets.get(pid);
+      if (s) s.emit("game:start", {
+        gameId,
+        gameType,
+        role:       roles[pid] ?? null,
+        opponentId: pid === toId ? socket.id : toId,
+        state,
+      });
+    });
+  });
+
+  // Handle game moves
+  socket.on("game:move", (data) => {
+    const gameId = gameBySocket.get(socket.id);
+    if (!gameId) return;
+    const game = gameById.get(gameId);
+    if (!game) return;
+
+    const [p1Id, p2Id] = game.players;
+    const partnerId    = socket.id === p1Id ? p2Id : p1Id;
+    const partner      = io.sockets.sockets.get(partnerId);
+
+    // ── Tic Tac Toe ──────────────────────────────────────────────
+    if (game.type === "ttt") {
+      const { index } = data;
+      if (typeof index !== "number" || index < 0 || index > 8) return;
+      const { board, currentTurnSocketId } = game.state;
+      if (currentTurnSocketId !== socket.id) return;
+      if (board[index] !== null) return;
+
+      const symbol    = socket.id === p1Id ? "X" : "O";
+      board[index]    = symbol;
+      const winResult = checkTTTWinner(board);
+      const draw      = !winResult && board.every(Boolean);
+
+      if (!winResult && !draw) game.state.currentTurnSocketId = partnerId;
+
+      const update = {
+        board,
+        currentTurnSocketId: game.state.currentTurnSocketId,
+        winnerSocketId: winResult ? socket.id : undefined,
+        winLine:        winResult ? winResult.line : undefined,
+        draw:           draw || undefined,
+      };
+      socket.emit("game:update", update);
+      if (partner) partner.emit("game:update", update);
+      if (winResult || draw) cleanupGame(game);
+
+    // ── Rock Paper Scissors ───────────────────────────────────────
+    } else if (game.type === "rps") {
+      const { choice } = data;
+      if (!["rock", "paper", "scissors"].includes(choice)) return;
+      if (game.state.choices[socket.id]) return;
+      game.state.choices[socket.id] = choice;
+
+      if (partner) partner.emit("game:update", { opponentChose: true });
+
+      if (Object.keys(game.state.choices).length === 2) {
+        const c1     = game.state.choices[p1Id];
+        const c2     = game.state.choices[p2Id];
+        const result = getRPSWinner(c1, c2);
+        const winnerSocketId = result === "draw" ? null : result === "p1" ? p1Id : p2Id;
+        const update = { choices: game.state.choices, winnerSocketId, draw: result === "draw" };
+        socket.emit("game:update", update);
+        if (partner) partner.emit("game:update", update);
+        cleanupGame(game);
+      }
+
+    // ── Math Duel ─────────────────────────────────────────────────
+    } else if (game.type === "math") {
+      if (game.state.answered) return;
+      const submitted = parseInt(data.answer, 10);
+      if (isNaN(submitted)) return;
+
+      if (submitted === game.state.question.answer) {
+        game.state.answered = true;
+        const update = {
+          winnerSocketId: socket.id,
+          answer:         game.state.question.answer,
+          question:       game.state.question,
+        };
+        socket.emit("game:update", update);
+        if (partner) partner.emit("game:update", update);
+        cleanupGame(game);
+      } else {
+        socket.emit("game:update", { wrong: true });
+      }
+    }
+  });
+
+  // Rematch request
+  socket.on("game:rematch", ({ gameType, toId }) => {
+    if (!["ttt", "rps", "math"].includes(gameType)) return;
+    const target = io.sockets.sockets.get(toId);
+    if (target) target.emit("game:invite", { gameType, fromId: socket.id, isRematch: true });
   });
 
   // ── Disconnect ───────────────────────────────────────────────────────────
   socket.on("disconnect", () => {
     console.log("User disconnected", socket.id);
+
+    // Cancel any active game first
+    cleanupGameForSocket(socket.id);
 
     if (socket.userName) activeUsernames.delete(socket.userName.toLowerCase());
 
@@ -433,14 +590,11 @@ io.on("connection", (socket) => {
       partner.partner = null;
 
       if (socket.userName) {
-        // Grace period: give user 4 s to reconnect before telling partner
         partner.emit("partnerReconnecting", { name });
-
         const timeout = setTimeout(() => {
           pendingDisconnects.delete(nameLower);
           if (partner.connected) partner.emit("partnerDisconnected", { name });
         }, RECONNECT_GRACE_MS);
-
         pendingDisconnects.set(nameLower, { partner, timeout });
       } else {
         partner.emit("partnerDisconnected", { name: "Anonymous" });
