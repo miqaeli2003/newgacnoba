@@ -43,7 +43,7 @@ function showPartnerAwayCountdown() {
   scheduleScroll();
   setInputsEnabled(false); // block input while partner is away
 
-  let remaining = 60;
+  let remaining = 20;
   function tick() {
     if (!_partnerAwayEl) return;
     _partnerAwayEl.textContent =
