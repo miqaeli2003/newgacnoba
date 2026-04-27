@@ -968,19 +968,64 @@ document.addEventListener("click", (e) => {
 });
 
 // ── Name modal ────────────────────────────────────────────────────────────────
+let _saveNameTimeout = null; // tracks the freeze-recovery timer
+
+function _resetSaveBtn() {
+  clearTimeout(_saveNameTimeout);
+  _saveNameTimeout        = null;
+  saveNameBtn.disabled    = false;
+  saveNameBtn.textContent = isFirstLogin ? "საუბრის დაწყება" : "Save Name";
+}
+
 function saveName() {
   const name = nameInput.value.trim();
   if (!name)            { showNameError("შეიყვანეთ სახელი ..."); return; }
   if (name.length < 2)  { showNameError("სახელი უნდა შედგებოდეს მინიმუ ორი სიმბოლოსგან!"); return; }
   if (name.length > 20) { showNameError("20 სიმბოლოზე მეტი ვერ იქნება სახელი ! "); return; }
   clearNameError();
+
+  // If socket isn't connected yet, don't freeze — show a clear error
+  if (!socket.connected) {
+    showNameError("კავშირი ჯერ არ არის. ცოტა მოიცადეთ... 🔄");
+    return;
+  }
+
   saveNameBtn.disabled    = true;
   saveNameBtn.textContent = "Checking...";
+
+  // ── Token not ready yet (slow network on page load) ──────────────────────
+  // Re-fetch and retry once rather than sending null and getting a tokenInvalid loop
+  if (!_challengeToken || !_challengePow) {
+    fetch("/api/challenge")
+      .then(r => r.json())
+      .then(d => {
+        _challengeToken = d.token;
+        _challengePow   = (d.nonce * 31 + d.nonce % 97);
+        _doSetName(name);
+      })
+      .catch(() => {
+        showNameError("კავშირის შეცდომა. გთხოვთ გვერდი განაახლოთ.");
+        _resetSaveBtn();
+      });
+    return;
+  }
+
+  _doSetName(name);
+}
+
+function _doSetName(name) {
+  // Safety timeout — re-enable button if server never replies within 8 s
+  clearTimeout(_saveNameTimeout);
+  _saveNameTimeout = setTimeout(() => {
+    showNameError("სერვერი არ პასუხობს. სცადეთ ხელახლა. 🔄");
+    _resetSaveBtn();
+  }, 8000);
+
   socket.emit("setName", {
     name,
     token:     _challengeToken,
     powAnswer: _challengePow,
-    webdriver: !!navigator.webdriver,   // always honest — server disconnects on true
+    webdriver: !!navigator.webdriver,
   });
 }
 
