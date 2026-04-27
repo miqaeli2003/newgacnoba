@@ -986,7 +986,7 @@ function saveName() {
 
   // If socket isn't connected yet, don't freeze — show a clear error
   if (!socket.connected) {
-    showNameError("კავშირი ჯერ არ არის. ცოტა მოიცადეთ... 🔄");
+    showNameError("იტვირთება საიტი, კიდევ სცადეთ 🔄");
     return;
   }
 
