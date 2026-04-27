@@ -1,6 +1,15 @@
 const socket = io();
 window.socket = socket; // exposed so games.js can reuse the same connection
 
+// ── Challenge token (anti-bot) ────────────────────────────────────────────────
+// Fetched once on page load. Passed with setName to prove this is a real browser.
+let _challengeToken = null;
+
+fetch("/api/challenge")
+  .then(r => r.json())
+  .then(d => { _challengeToken = d.token; })
+  .catch(() => {}); // silently ignore — server will reject setName if missing
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let userName            = "";
 let userBio             = "";
@@ -23,8 +32,44 @@ let lastPartnerName     = "";     // remember partner name after disconnect for 
 let canBlockDisconnected = false; // allow blocking a partner who just left
 const originalTitle     = document.title;
 
-// ── Away-timer DISABLED — phone users keep chat alive when minimizing browser ─
-// No timers, no popups, no countdowns when tab is hidden.
+// ── Away-timer (tab hidden while in a chat) ───────────────────────────────────
+const AWAY_GRACE_MS  = 60000; // 60 seconds
+let awayTimer        = null;
+let awayTimedOut     = false; // true once the 60 s fired
+let _wasInChatWhenHidden = false; // remember if we were in an active chat when tab hid
+
+// ── Partner away countdown (shown to the OTHER user while partner is away) ────
+let _partnerAwayInterval = null;
+let _partnerAwayEl       = null;
+
+function showPartnerAwayCountdown() {
+  if (_partnerAwayEl) return; // already showing — don't double-start
+
+  _partnerAwayEl           = document.createElement("div");
+  _partnerAwayEl.id        = "partnerAwayCountdown";
+  _partnerAwayEl.className = "system-message-reconnecting";
+  chat.appendChild(_partnerAwayEl);
+  scheduleScroll();
+  setInputsEnabled(false); // block input while partner is away
+
+  let remaining = 60;
+  function tick() {
+    if (!_partnerAwayEl) return;
+    _partnerAwayEl.textContent =
+      `📱 პარტნიორმა ჩაკეცა ბრაუზერი — შემოსასვლელად დრო: ${remaining}წმ`;
+    if (remaining <= 0) { clearPartnerAwayCountdown(); return; }
+    remaining--;
+  }
+  tick(); // paint immediately
+  _partnerAwayInterval = setInterval(tick, 1000);
+}
+
+function clearPartnerAwayCountdown() {
+  if (_partnerAwayInterval) { clearInterval(_partnerAwayInterval); _partnerAwayInterval = null; }
+  if (_partnerAwayEl)       { _partnerAwayEl.remove();             _partnerAwayEl = null; }
+  // Re-enable input only if we're still in an active chat
+  if (partnerConnected) setInputsEnabled(true);
+}
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const chat           = document.getElementById("chat");
@@ -105,12 +150,54 @@ function incrementUnread() {
   }
 }
 
-// ── Tab visibility — only reset unread badge, NO away logic ──────────────────
-// When user minimizes the browser on phone: do nothing. Chat stays alive.
+// ── Tab visibility + away timer ───────────────────────────────────────────────
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) {
+  if (document.hidden) {
+    // ── Tab hidden ──────────────────────────────────────────────────────────
+    // If the user is in an active chat, start a 60-second grace timer.
+    // They can switch to any app and come back without losing the chat.
+    _wasInChatWhenHidden = partnerConnected;
+    if (partnerConnected) {
+      socket.emit("tabAway"); // tell partner immediately so they see countdown
+      if (!awayTimer) {
+        awayTimer = setTimeout(() => {
+          awayTimer     = null;
+          awayTimedOut  = true;
+          // Socket is still alive — explicitly end the chat server-side
+          socket.emit("tabAwayTimeout");
+        }, AWAY_GRACE_MS);
+      }
+    }
+  } else {
+    // ── Tab visible again ───────────────────────────────────────────────────
     unreadCount    = 0;
     document.title = originalTitle;
+
+    // Cancel the timer if they came back in time
+    if (awayTimer) {
+      clearTimeout(awayTimer);
+      awayTimer = null;
+    }
+
+    // If the 60 s already fired, show the end-of-chat popup
+    if (awayTimedOut) {
+      awayTimedOut = false;
+      showAwayEndedPopup();
+      _wasInChatWhenHidden = false;
+      return;
+    }
+
+    // Came back before 60 s — tell partner to cancel countdown
+    if (_wasInChatWhenHidden && partnerConnected) {
+      socket.emit("tabBack");
+    }
+
+    // Ensure inputs are re-enabled if socket recovered while we were away
+    if (_wasInChatWhenHidden && socket.connected && partnerConnected) {
+      setInputsEnabled(true);
+      updateBlockBtn();
+    }
+    _wasInChatWhenHidden = false;
   }
 });
 
@@ -459,7 +546,41 @@ function showToast(text, duration = 3000) {
   }, duration);
 }
 
-// showAwayEndedPopup — REMOVED (no pop-ups when user leaves browser on phone)
+// ── Away-ended popup ──────────────────────────────────────────────────────────
+// Shown when the user comes back after being away for more than 60 seconds.
+function showAwayEndedPopup() {
+  document.getElementById("awayEndedOverlay")?.remove();
+
+  const overlay     = document.createElement("div");
+  overlay.id        = "awayEndedOverlay";
+  overlay.className = "away-ended-overlay";
+
+  const box         = document.createElement("div");
+  box.className     = "away-ended-box";
+
+  const icon        = document.createElement("div");
+  icon.className    = "away-ended-icon";
+  icon.textContent  = "⏱️";
+
+  const msg         = document.createElement("p");
+  msg.className     = "away-ended-msg";
+  msg.textContent   = "დიდი ხნით გასვლის გამო ჩათი გაითიშა";
+
+  const btn         = document.createElement("button");
+  btn.className     = "away-ended-btn";
+  btn.textContent   = "Welcome Page";
+  btn.addEventListener("click", () => {
+    window.location.reload();
+  });
+
+  box.appendChild(icon);
+  box.appendChild(msg);
+  box.appendChild(btn);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  requestAnimationFrame(() => overlay.classList.add("away-ended-visible"));
+}
 
 // ── Search retry ──────────────────────────────────────────────────────────────
 function startSearchRetry() {
@@ -810,17 +931,35 @@ function saveName() {
   clearNameError();
   saveNameBtn.disabled    = true;
   saveNameBtn.textContent = "Checking...";
-  socket.emit("setName", name);
+  socket.emit("setName", { name, token: _challengeToken });
 }
 
 // ── Socket events ─────────────────────────────────────────────────────────────
 
 socket.on("connect", () => {
   if (wasAutoKicked) return;
+  if (awayTimer) { clearTimeout(awayTimer); awayTimer = null; }
   if (userName && !isFirstLogin) {
     isReconnecting = true;
-    socket.emit("setName", userName);
+    // On reconnect the socket is already verified — plain string is fine
+    socket.emit("setName", { name: userName, token: _challengeToken || userName });
   }
+});
+
+// Challenge token was missing or expired — silently re-fetch and retry
+socket.on("tokenInvalid", () => {
+  fetch("/api/challenge")
+    .then(r => r.json())
+    .then(d => {
+      _challengeToken = d.token;
+      const name = nameInput.value.trim() || userName;
+      if (name) socket.emit("setName", { name, token: _challengeToken });
+    })
+    .catch(() => {
+      showNameError("კავშირის შეცდომა. გთხოვთ გვერდი განაახლოთ.");
+      saveNameBtn.disabled    = false;
+      saveNameBtn.textContent = "საუბრის დაწყება";
+    });
 });
 
 socket.on("nameAccepted", (acceptedName) => {
@@ -888,6 +1027,9 @@ socket.on("partnerFound", (partner) => {
   partnerConnected     = true;
   lastPartnerName      = "";
   canBlockDisconnected = false;
+  // Cancel any leftover away timer from a previous chat
+  if (awayTimer) { clearTimeout(awayTimer); awayTimer = null; }
+  awayTimedOut = false;
   addSystemMessage(`გილოცავთ პარტნიორი ნაპოვნია 🥳 : ${partnerName}`);
 
   // Show partner's bio if they set one
@@ -909,21 +1051,19 @@ socket.on("partnerFound", (partner) => {
 let partnerWasReconnecting = false;
 
 socket.on("partnerReconnecting", (data) => {
-  // Partner's socket disconnected (network drop) — wait silently, disable input
+  // Partner's socket disconnected — show countdown, keep chat usable.
   partnerWasReconnecting = true;
   canBlockDisconnected   = false;
-  setInputsEnabled(false);
-  addReconnectingMessage(partnerName || "პარტნიორი");
+  showPartnerAwayCountdown();
 });
 
 socket.on("partnerReconnected", (data) => {
-  // Partner came back — resume silently
+  // Partner came back within 60 s — clear countdown, resume silently.
   partnerWasReconnecting = false;
   partnerName            = data.name || partnerName;
   partnerConnected       = true;
   canBlockDisconnected   = false;
-  removeReconnectingMessage();
-  setInputsEnabled(true);
+  clearPartnerAwayCountdown();
 });
 
 // Own socket restored to previous partner after reconnecting
@@ -931,6 +1071,10 @@ socket.on("partnerRestored", (data) => {
   stopSearchRetry();
   partnerName      = data.name || "Anonymous";
   partnerConnected = true;
+  _wasInChatWhenHidden = false;
+  // Cancel any away timer — we're back in chat
+  if (awayTimer) { clearTimeout(awayTimer); awayTimer = null; }
+  awayTimedOut = false;
   setInputsEnabled(true);
   updateBlockBtn();
   // No clearChat(), no system message — messages stay, chat resumes silently
@@ -965,14 +1109,20 @@ socket.on("reacted", ({ messageId, emoji }) => {
   displayReaction(messageId, emoji, false);
 });
 
-// partnerTabAway / partnerTabBack — DISABLED (no countdown when partner minimizes)
-socket.on("partnerTabAway", () => { /* do nothing */ });
-socket.on("partnerTabBack", () => { /* do nothing */ });
+// Partner hid their browser tab — show countdown
+socket.on("partnerTabAway", () => {
+  showPartnerAwayCountdown();
+});
+
+// Partner returned before 60 s — clear countdown silently
+socket.on("partnerTabBack", () => {
+  clearPartnerAwayCountdown();
+});
 
 socket.on("partnerDisconnected", (data) => {
   const wasReconnecting = partnerWasReconnecting;
   partnerWasReconnecting = false;
-  removeReconnectingMessage();
+  clearPartnerAwayCountdown(); // always clear countdown regardless of reason
 
   const leftName = data.name || partnerName || "Anonymous";
   addDisconnectMessage(`${leftName} - მან გადაგტოვა 😟`);
@@ -1068,8 +1218,28 @@ socket.on("autoKicked", () => {
   socket.disconnect();
 });
 
-// awayTimeout — DISABLED (server may emit this but client ignores it)
-socket.on("awayTimeout", () => { /* do nothing — chat stays active */ });
+// ── Away timeout — server confirmed chat ended because user was away > 60 s ──
+socket.on("awayTimeout", () => {
+  partnerConnected     = false;
+  partnerName          = "";
+  lastPartnerName      = "";
+  canBlockDisconnected = false;
+  stopSearchRetry();
+  setInputsEnabled(false);
+  updateBlockBtn();
+  hideTypingIndicator();
+  closeGifPickerPanel();
+  clearChat();
+
+  if (document.hidden) {
+    // Tab still hidden — popup shown when user comes back (visibilitychange)
+    awayTimedOut = true;
+  } else {
+    // Already visible (desktop / came back at exact same ms) — show now
+    awayTimedOut = false;
+    showAwayEndedPopup();
+  }
+});
 
 // ── Button handlers ───────────────────────────────────────────────────────────
 
