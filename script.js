@@ -77,44 +77,7 @@ let lastPartnerName     = "";     // remember partner name after disconnect for 
 let canBlockDisconnected = false; // allow blocking a partner who just left
 const originalTitle     = document.title;
 
-// ── Away-timer (tab hidden while in a chat) ───────────────────────────────────
-const AWAY_GRACE_MS  = 60000; // 60 seconds
-let awayTimer        = null;
-let awayTimedOut     = false; // true once the 60 s fired
-let _wasInChatWhenHidden = false; // remember if we were in an active chat when tab hid
-
-// ── Partner away countdown (shown to the OTHER user while partner is away) ────
-let _partnerAwayInterval = null;
-let _partnerAwayEl       = null;
-
-function showPartnerAwayCountdown() {
-  if (_partnerAwayEl) return; // already showing — don't double-start
-
-  _partnerAwayEl           = document.createElement("div");
-  _partnerAwayEl.id        = "partnerAwayCountdown";
-  _partnerAwayEl.className = "system-message-reconnecting";
-  chat.appendChild(_partnerAwayEl);
-  scheduleScroll();
-  setInputsEnabled(false); // block input while partner is away
-
-  let remaining = 60;
-  function tick() {
-    if (!_partnerAwayEl) return;
-    _partnerAwayEl.textContent =
-      `📱 პარტნიორმა ჩაკეცა ბრაუზერი — შემოსასვლელად დრო: ${remaining}წმ`;
-    if (remaining <= 0) { clearPartnerAwayCountdown(); return; }
-    remaining--;
-  }
-  tick(); // paint immediately
-  _partnerAwayInterval = setInterval(tick, 1000);
-}
-
-function clearPartnerAwayCountdown() {
-  if (_partnerAwayInterval) { clearInterval(_partnerAwayInterval); _partnerAwayInterval = null; }
-  if (_partnerAwayEl)       { _partnerAwayEl.remove();             _partnerAwayEl = null; }
-  // Re-enable input only if we're still in an active chat
-  if (partnerConnected) setInputsEnabled(true);
-}
+// Tab-away feature intentionally disabled — nothing happens when partner hides tab
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const chat           = document.getElementById("chat");
@@ -195,54 +158,11 @@ function incrementUnread() {
   }
 }
 
-// ── Tab visibility + away timer ───────────────────────────────────────────────
+// ── Tab visibility — only used to reset unread badge when user returns ────────
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) {
-    // ── Tab hidden ──────────────────────────────────────────────────────────
-    // If the user is in an active chat, start a 60-second grace timer.
-    // They can switch to any app and come back without losing the chat.
-    _wasInChatWhenHidden = partnerConnected;
-    if (partnerConnected) {
-      socket.emit("tabAway"); // tell partner immediately so they see countdown
-      if (!awayTimer) {
-        awayTimer = setTimeout(() => {
-          awayTimer     = null;
-          awayTimedOut  = true;
-          // Socket is still alive — explicitly end the chat server-side
-          socket.emit("tabAwayTimeout");
-        }, AWAY_GRACE_MS);
-      }
-    }
-  } else {
-    // ── Tab visible again ───────────────────────────────────────────────────
+  if (!document.hidden) {
     unreadCount    = 0;
     document.title = originalTitle;
-
-    // Cancel the timer if they came back in time
-    if (awayTimer) {
-      clearTimeout(awayTimer);
-      awayTimer = null;
-    }
-
-    // If the 60 s already fired, show the end-of-chat popup
-    if (awayTimedOut) {
-      awayTimedOut = false;
-      showAwayEndedPopup();
-      _wasInChatWhenHidden = false;
-      return;
-    }
-
-    // Came back before 60 s — tell partner to cancel countdown
-    if (_wasInChatWhenHidden && partnerConnected) {
-      socket.emit("tabBack");
-    }
-
-    // Ensure inputs are re-enabled if socket recovered while we were away
-    if (_wasInChatWhenHidden && socket.connected && partnerConnected) {
-      setInputsEnabled(true);
-      updateBlockBtn();
-    }
-    _wasInChatWhenHidden = false;
   }
 });
 
@@ -1122,9 +1042,6 @@ socket.on("partnerFound", (partner) => {
   partnerConnected     = true;
   lastPartnerName      = "";
   canBlockDisconnected = false;
-  // Cancel any leftover away timer from a previous chat
-  if (awayTimer) { clearTimeout(awayTimer); awayTimer = null; }
-  awayTimedOut = false;
   addSystemMessage(`გილოცავთ პარტნიორი ნაპოვნია 🥳 : ${partnerName}`);
 
   // Show partner's bio if they set one
@@ -1146,10 +1063,9 @@ socket.on("partnerFound", (partner) => {
 let partnerWasReconnecting = false;
 
 socket.on("partnerReconnecting", (data) => {
-  // Partner's socket disconnected — show countdown, keep chat usable.
+  // Partner's socket dropped — stay silent, keep chat as-is
   partnerWasReconnecting = true;
   canBlockDisconnected   = false;
-  showPartnerAwayCountdown();
 });
 
 socket.on("partnerReconnected", (data) => {
@@ -1167,9 +1083,6 @@ socket.on("partnerRestored", (data) => {
   partnerName      = data.name || "Anonymous";
   partnerConnected = true;
   _wasInChatWhenHidden = false;
-  // Cancel any away timer — we're back in chat
-  if (awayTimer) { clearTimeout(awayTimer); awayTimer = null; }
-  awayTimedOut = false;
   setInputsEnabled(true);
   updateBlockBtn();
   // No clearChat(), no system message — messages stay, chat resumes silently
@@ -1204,20 +1117,13 @@ socket.on("reacted", ({ messageId, emoji }) => {
   displayReaction(messageId, emoji, false);
 });
 
-// Partner hid their browser tab — show countdown
-socket.on("partnerTabAway", () => {
-  showPartnerAwayCountdown();
-});
-
-// Partner returned before 60 s — clear countdown silently
-socket.on("partnerTabBack", () => {
-  clearPartnerAwayCountdown();
-});
+// Tab-away events disabled — intentionally ignored
+socket.on("partnerTabAway", () => {});
+socket.on("partnerTabBack", () => {});
 
 socket.on("partnerDisconnected", (data) => {
   const wasReconnecting = partnerWasReconnecting;
   partnerWasReconnecting = false;
-  clearPartnerAwayCountdown(); // always clear countdown regardless of reason
 
   const leftName = data.name || partnerName || "Anonymous";
   addDisconnectMessage(`${leftName} - მან გადაგტოვა 😟`);
@@ -1313,28 +1219,8 @@ socket.on("autoKicked", () => {
   socket.disconnect();
 });
 
-// ── Away timeout — server confirmed chat ended because user was away > 60 s ──
-socket.on("awayTimeout", () => {
-  partnerConnected     = false;
-  partnerName          = "";
-  lastPartnerName      = "";
-  canBlockDisconnected = false;
-  stopSearchRetry();
-  setInputsEnabled(false);
-  updateBlockBtn();
-  hideTypingIndicator();
-  closeGifPickerPanel();
-  clearChat();
-
-  if (document.hidden) {
-    // Tab still hidden — popup shown when user comes back (visibilitychange)
-    awayTimedOut = true;
-  } else {
-    // Already visible (desktop / came back at exact same ms) — show now
-    awayTimedOut = false;
-    showAwayEndedPopup();
-  }
-});
+// awayTimeout disabled — intentionally ignored
+socket.on("awayTimeout", () => {});
 
 // ── Button handlers ───────────────────────────────────────────────────────────
 
