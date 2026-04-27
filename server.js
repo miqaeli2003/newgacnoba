@@ -29,7 +29,21 @@ const VALID_TAGS = new Set([
   "tech","art","food","travel","memes",
 ]);
 const VALID_EMOJIS = new Set(["❤️","😂","😢"]);
-const BANNED_WORDS = new Set([]);
+const BANNED_WORDS = new Set([
+  // common spam/commercial phrases (lower-case, partial match)
+  "subscribe", "subscribers", "telegram", "whatsapp", "viber",
+  "onlyfans", "only fans", "follow me", "follow us",
+  "join our", "join my", "join now", "click here", "click the link",
+  "check out", "check my", "check our",
+  "buy now", "buy here", "sale", "discount", "promo", "coupon",
+  "free money", "earn money", "make money", "investment", "crypto",
+  "casino", "betting", "gamble", "jackpot",
+  "კარგი შემოსავალი", "გამოიმუშავე", "ჩვენი არხი", "ჩვენი ჯგუფი",
+  "მოგვყვანი",
+]);
+
+// Phone number pattern — bots often drop numbers when links are blocked
+const PHONE_RE = /(?:\+?[0-9]{1,3}[\s\-.]?)?(?:\(?\d{3}\)?[\s\-.]?)[\d\s\-.]{6,}/g;
 
 // ── Load facts & questions ────────────────────────────────────────────────────
 function loadLines(filename) {
@@ -79,6 +93,24 @@ app.get("/api/random-question", (req, res) => {
   const question = randomItem(QUESTIONS);
   if (!question) return res.status(404).json({ error: "No questions available" });
   res.json({ question });
+});
+
+// ── Challenge Token (anti-bot) ────────────────────────────────────────────────
+// Client must fetch this token and pass it with setName.
+// Bots connecting directly via socket.io-client won't have it.
+const challengeTokens = new Map(); // token → expiry ms
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [t, exp] of challengeTokens) if (now > exp) challengeTokens.delete(t);
+}, 60_000);
+
+app.get("/api/challenge", (req, res) => {
+  const token = Math.random().toString(36).slice(2) +
+                Math.random().toString(36).slice(2) +
+                Math.random().toString(36).slice(2);
+  challengeTokens.set(token, Date.now() + 5 * 60_000); // 5-minute window
+  res.json({ token });
 });
 
 // ── In-memory state ───────────────────────────────────────────────────────────
@@ -191,18 +223,48 @@ io.on("connection", (socket) => {
   socket.userName         = "";
   socket.partner          = null;
   socket.lastPartnerName  = "";
-  socket.blockedNames     = [];   // blocked by username (survives name-changes poorly — kept for queue filter)
-  socket.blockedIds       = new Set(); // blocked by socket ID (reliable within a session)
+  socket.blockedNames     = [];
+  socket.blockedIds       = new Set();
   socket.recentPartnerIds = new Set();
   socket.interests        = [];
   socket.bio              = "";
   socket.blockedByCount   = 0;
   socket._rl              = null;
+  // ── Anti-bot tracking ──────────────────────────────────────────────────────
+  socket.verified         = false;   // passed challenge token
+  socket.hasTyped         = false;   // fired typing event before sending
+  socket.chatStartedAt    = 0;       // timestamp when current partner was found
+  socket.lastMessages     = [];      // ring buffer — detect copy-paste spam
+  socket.spamStrikes      = 0;       // repeated violations → kick
 
   updateOnlineCount();
 
   // ── Username registration ────────────────────────────────────────────────
-  socket.on("setName", (name) => {
+  socket.on("setName", (data) => {
+    // Accept either plain string (legacy) or { name, token } object
+    let name, token;
+    if (typeof data === "string") {
+      name  = data;
+      token = null;
+    } else if (data && typeof data === "object") {
+      name  = data.name;
+      token = data.token;
+    } else return;
+
+    // ── Challenge token check ──────────────────────────────────────────────
+    if (!socket.verified) {
+      const validToken = token && challengeTokens.has(token) && Date.now() <= challengeTokens.get(token);
+      if (!validToken) {
+        console.warn(`[BOT-TOKEN] setName rejected — no valid token. id=${socket.id}`);
+        socket.emit("tokenInvalid");
+        // Give 5 s grace then disconnect if they never validate
+        setTimeout(() => { if (!socket.verified) socket.disconnect(true); }, 5000);
+        return;
+      }
+      challengeTokens.delete(token); // one-time use
+      socket.verified = true;
+    }
+
     if (typeof name !== "string") return;
     const trimmed = name.trim();
     if (trimmed.length < NAME_MIN || trimmed.length > NAME_MAX) return;
@@ -296,6 +358,11 @@ io.on("connection", (socket) => {
 
     socket.emit("partnerFound",        { name: partnerSocket.userName, sharedTags, partnerBio: partnerSocket.bio });
     partnerSocket.emit("partnerFound", { name: socket.userName,        sharedTags, partnerBio: socket.bio });
+
+    // ── Reset anti-bot state for both users ────────────────────────────────
+    const now = Date.now();
+    socket.hasTyped      = false;  socket.chatStartedAt = now;
+    partnerSocket.hasTyped = false; partnerSocket.chatStartedAt = now;
     broadcastQueuePositions();
   }
 
@@ -309,6 +376,29 @@ io.on("connection", (socket) => {
   socket.on("message", (msg) => {
     if (!socket.partner) return;
     if (!msgRateLimiter.check(socket)) return;
+
+    // ── Anti-bot layer 1: typing gate ─────────────────────────────────────
+    // Real users always trigger the 'input' event which emits typing:true.
+    // Bots sending via socket.io-client skip this entirely.
+    if (!socket.hasTyped) {
+      console.warn(`[BOT-TYPING] No typing event before message — ${socket.userName}`);
+      socket.spamStrikes++;
+      if (socket.spamStrikes >= 2) {
+        socket.emit("autoKicked");
+        socket.disconnect(true);
+      }
+      return;
+    }
+    socket.hasTyped = false; // reset — must type again for next message
+
+    // ── Anti-bot layer 2: minimum time gate ───────────────────────────────
+    // Bots message within milliseconds of partner matching. Real users take
+    // at least a second to read the partner name and start typing.
+    const MIN_MSG_DELAY_MS = 1200;
+    if (Date.now() - socket.chatStartedAt < MIN_MSG_DELAY_MS) {
+      console.warn(`[BOT-SPEED] Message too fast after match — ${socket.userName}`);
+      return; // silently drop — not worth striking, could be very fast human
+    }
 
     let text = "", messageId = null, replyTo = null;
     if (typeof msg === "string") {
@@ -327,6 +417,29 @@ io.on("connection", (socket) => {
     text = text.slice(0, MSG_MAX).replace(/<[^>]*>/g, "").trim();
     if (!text) return;
     if (hasProfanity(text)) { socket.emit("messageFlagged"); return; }
+
+    // ── Anti-bot layer 3: phone number detection ──────────────────────────
+    PHONE_RE.lastIndex = 0;
+    if (PHONE_RE.test(text)) {
+      console.warn(`[BOT-PHONE] Phone number in message — ${socket.userName}: ${text.slice(0,60)}`);
+      socket.emit("messageFlagged");
+      socket.spamStrikes++;
+      if (socket.spamStrikes >= 2) { socket.emit("autoKicked"); socket.disconnect(true); }
+      return;
+    }
+
+    // ── Anti-bot layer 4: copy-paste repetition detection ─────────────────
+    // Bots send the same pre-written message to every matched partner.
+    const normalised = text.toLowerCase().replace(/\s+/g, " ").trim();
+    if (socket.lastMessages.includes(normalised)) {
+      console.warn(`[BOT-REPEAT] Repeated message — ${socket.userName}: ${normalised.slice(0,60)}`);
+      socket.spamStrikes++;
+      if (socket.spamStrikes >= 2) { socket.emit("autoKicked"); socket.disconnect(true); }
+      return; // silently drop
+    }
+    socket.lastMessages.push(normalised);
+    if (socket.lastMessages.length > 6) socket.lastMessages.shift(); // keep last 6
+
     if (LINK_RE.test(text)) {
       LINK_RE.lastIndex = 0;
       const kickedPartner = socket.partner;
@@ -371,6 +484,7 @@ io.on("connection", (socket) => {
 
   // ── Typing ───────────────────────────────────────────────────────────────
   socket.on("typing", (isTyping) => {
+    if (isTyping) socket.hasTyped = true;   // ← anti-bot gate
     if (socket.partner) socket.partner.emit("partnerTyping", Boolean(isTyping));
   });
 
@@ -598,11 +712,44 @@ io.on("connection", (socket) => {
     if (target) target.emit("game:invite", { gameType, fromId: socket.id, isRematch: true });
   });
 
-  // ── Tab Away / Back — DISABLED ────────────────────────────────────────────
-  // Phone users minimizing the browser should not affect the chat at all.
-  socket.on("tabAway",        () => { /* do nothing */ });
-  socket.on("tabBack",        () => { /* do nothing */ });
-  socket.on("tabAwayTimeout", () => { /* do nothing */ });
+  // ── Tab Away / Back (notify partner of tab visibility changes) ──────────────
+  // Fired immediately when the client's tab is hidden or shown again.
+  // Lets the partner display a live countdown without waiting for socket drop.
+  socket.on("tabAway", () => {
+    if (!socket.partner) return;
+    socket.partner.emit("partnerTabAway");
+  });
+
+  socket.on("tabBack", () => {
+    if (!socket.partner) return;
+    socket.partner.emit("partnerTabBack");
+  });
+
+  // ── Tab Away Timeout ─────────────────────────────────────────────────────
+  // Fired by the client after 60 s of the tab being hidden while in a chat.
+  // The socket is still alive — we just cleanly end the pairing.
+  socket.on("tabAwayTimeout", () => {
+    if (!socket.partner) return;
+
+    const partner = socket.partner;
+    const name    = socket.userName || "Anonymous";
+
+    // Cancel any active game first
+    cleanupGameForSocket(socket.id);
+
+    socket.partner         = null;
+    partner.partner        = null;
+    socket.lastPartnerName = "";
+    partner.lastPartnerName = name;
+
+    // Tell partner the chat ended (they can search for someone new)
+    partner.emit("partnerDisconnected", { name });
+    partner.lastPartnerName      = name;
+    partner.canBlockDisconnected = true;
+
+    // Tell the away user that their chat was ended due to being away
+    socket.emit("awayTimeout");
+  });
 
   // ── Disconnect ───────────────────────────────────────────────────────────
   socket.on("disconnect", () => {
