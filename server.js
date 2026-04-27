@@ -598,44 +598,11 @@ io.on("connection", (socket) => {
     if (target) target.emit("game:invite", { gameType, fromId: socket.id, isRematch: true });
   });
 
-  // ── Tab Away / Back (notify partner of tab visibility changes) ──────────────
-  // Fired immediately when the client's tab is hidden or shown again.
-  // Lets the partner display a live countdown without waiting for socket drop.
-  socket.on("tabAway", () => {
-    if (!socket.partner) return;
-    socket.partner.emit("partnerTabAway");
-  });
-
-  socket.on("tabBack", () => {
-    if (!socket.partner) return;
-    socket.partner.emit("partnerTabBack");
-  });
-
-  // ── Tab Away Timeout ─────────────────────────────────────────────────────
-  // Fired by the client after 60 s of the tab being hidden while in a chat.
-  // The socket is still alive — we just cleanly end the pairing.
-  socket.on("tabAwayTimeout", () => {
-    if (!socket.partner) return;
-
-    const partner = socket.partner;
-    const name    = socket.userName || "Anonymous";
-
-    // Cancel any active game first
-    cleanupGameForSocket(socket.id);
-
-    socket.partner         = null;
-    partner.partner        = null;
-    socket.lastPartnerName = "";
-    partner.lastPartnerName = name;
-
-    // Tell partner the chat ended (they can search for someone new)
-    partner.emit("partnerDisconnected", { name });
-    partner.lastPartnerName      = name;
-    partner.canBlockDisconnected = true;
-
-    // Tell the away user that their chat was ended due to being away
-    socket.emit("awayTimeout");
-  });
+  // ── Tab Away / Back — DISABLED ────────────────────────────────────────────
+  // Phone users minimizing the browser should not affect the chat at all.
+  socket.on("tabAway",        () => { /* do nothing */ });
+  socket.on("tabBack",        () => { /* do nothing */ });
+  socket.on("tabAwayTimeout", () => { /* do nothing */ });
 
   // ── Disconnect ───────────────────────────────────────────────────────────
   socket.on("disconnect", () => {
