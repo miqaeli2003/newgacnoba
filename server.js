@@ -25,6 +25,11 @@ const MAX_BLOCKS_TX      = 10;  // max users one socket can block per session
 const MSG_RATE_MAX       = 20;
 const MSG_RATE_WINDOW_MS = 5000;
 
+// ── Admin ─────────────────────────────────────────────────────────────────────
+// Set ADMIN_SECRET in your environment: e.g. export ADMIN_SECRET=mypassword123
+const ADMIN_SECRET = process.env.ADMIN_SECRET || "change-this-secret";
+const bannedIPs    = new Set(); // persists for server lifetime
+
 const VALID_TAGS = new Set([
   "gaming","music","movies","books","sports",
   "tech","art","food","travel","memes",
@@ -94,6 +99,61 @@ app.get("/api/random-question", (req, res) => {
   const question = randomItem(QUESTIONS);
   if (!question) return res.status(404).json({ error: "No questions available" });
   res.json({ question });
+});
+
+// ── Admin middleware ──────────────────────────────────────────────────────────
+function adminAuth(req, res, next) {
+  const key = req.query.key || req.headers["x-admin-key"];
+  if (key !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+  next();
+}
+
+// GET /admin/users?key=SECRET  — list all connected users with IPs
+app.get("/admin/users", adminAuth, (req, res) => {
+  const users = [];
+  for (const [, socket] of io.sockets.sockets) {
+    users.push({
+      id:        socket.id,
+      name:      socket.userName || "(no name)",
+      ip:        socket.clientIP || "unknown",
+      partner:   socket.partner ? socket.partner.userName : null,
+      connected: socket.connected,
+    });
+  }
+  // Sort: chatting first, then waiting
+  users.sort((a, b) => (b.partner ? 1 : 0) - (a.partner ? 1 : 0));
+  res.json({ count: users.length, users });
+});
+
+// POST /admin/ban?key=SECRET&ip=1.2.3.4  — ban an IP and kick all matching sockets
+app.post("/admin/ban", adminAuth, (req, res) => {
+  const ip = (req.query.ip || "").trim();
+  if (!ip) return res.status(400).json({ error: "ip param required" });
+
+  bannedIPs.add(ip);
+  let kicked = 0;
+  for (const [, socket] of io.sockets.sockets) {
+    if (socket.clientIP === ip) {
+      socket.emit("autoKicked");
+      setTimeout(() => socket.disconnect(true), 500);
+      kicked++;
+    }
+  }
+  console.log(`[ADMIN] Banned IP ${ip} — kicked ${kicked} socket(s)`);
+  res.json({ ok: true, ip, kicked });
+});
+
+// POST /admin/unban?key=SECRET&ip=1.2.3.4  — remove an IP ban
+app.post("/admin/unban", adminAuth, (req, res) => {
+  const ip = (req.query.ip || "").trim();
+  if (!ip) return res.status(400).json({ error: "ip param required" });
+  const existed = bannedIPs.delete(ip);
+  res.json({ ok: true, ip, wasBanned: existed });
+});
+
+// GET /admin/bans?key=SECRET  — list all currently banned IPs
+app.get("/admin/bans", adminAuth, (req, res) => {
+  res.json({ count: bannedIPs.size, ips: [...bannedIPs] });
 });
 
 // ── Challenge Token + Proof-of-Work (anti-bot) ───────────────────────────────
@@ -225,7 +285,20 @@ function cleanupGameForSocket(socketId) {
 
 // ── Socket handlers ───────────────────────────────────────────────────────────
 io.on("connection", (socket) => {
-  console.log("User connected", socket.id);
+  // ── Capture real IP (works behind proxies like nginx/Render/Railway) ────────
+  const rawIP =
+    socket.handshake.headers["x-forwarded-for"]?.split(",")[0].trim() ||
+    socket.handshake.address ||
+    "unknown";
+  socket.clientIP = rawIP;
+
+  // ── Drop banned IPs immediately ─────────────────────────────────────────────
+  if (bannedIPs.has(rawIP)) {
+    socket.disconnect(true);
+    return;
+  }
+
+  console.log("User connected", socket.id, rawIP);
 
   socket.userName         = "";
   socket.partner          = null;
@@ -754,44 +827,7 @@ io.on("connection", (socket) => {
     if (target) target.emit("game:invite", { gameType, fromId: socket.id, isRematch: true });
   });
 
-  // ── Tab Away / Back (notify partner of tab visibility changes) ──────────────
-  // Fired immediately when the client's tab is hidden or shown again.
-  // Lets the partner display a live countdown without waiting for socket drop.
-  socket.on("tabAway", () => {
-    if (!socket.partner) return;
-    socket.partner.emit("partnerTabAway");
-  });
-
-  socket.on("tabBack", () => {
-    if (!socket.partner) return;
-    socket.partner.emit("partnerTabBack");
-  });
-
-  // ── Tab Away Timeout ─────────────────────────────────────────────────────
-  // Fired by the client after 60 s of the tab being hidden while in a chat.
-  // The socket is still alive — we just cleanly end the pairing.
-  socket.on("tabAwayTimeout", () => {
-    if (!socket.partner) return;
-
-    const partner = socket.partner;
-    const name    = socket.userName || "Anonymous";
-
-    // Cancel any active game first
-    cleanupGameForSocket(socket.id);
-
-    socket.partner         = null;
-    partner.partner        = null;
-    socket.lastPartnerName = "";
-    partner.lastPartnerName = name;
-
-    // Tell partner the chat ended (they can search for someone new)
-    partner.emit("partnerDisconnected", { name });
-    partner.lastPartnerName      = name;
-    partner.canBlockDisconnected = true;
-
-    // Tell the away user that their chat was ended due to being away
-    socket.emit("awayTimeout");
-  });
+  // Tab-away events disabled — no action taken when user hides browser tab
 
   // ── Disconnect ───────────────────────────────────────────────────────────
   socket.on("disconnect", () => {
