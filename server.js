@@ -95,22 +95,28 @@ app.get("/api/random-question", (req, res) => {
   res.json({ question });
 });
 
-// ── Challenge Token (anti-bot) ────────────────────────────────────────────────
-// Client must fetch this token and pass it with setName.
-// Bots connecting directly via socket.io-client won't have it.
-const challengeTokens = new Map(); // token → expiry ms
+// ── Challenge Token + Proof-of-Work (anti-bot) ───────────────────────────────
+// 1. Client fetches /api/challenge  → { token, nonce }
+// 2. Client computes powAnswer = (nonce * 31 + nonce % 97)  [done in real browser JS]
+// 3. Client sends { name, token, powAnswer } with setName
+// 4. Server checks powAnswer matches — Selenium bots are blocked client-side
+//    before they even reach this step (navigator.webdriver check in script.js)
+const challengeTokens = new Map(); // token → { expiry, powAnswer }
 
 setInterval(() => {
   const now = Date.now();
-  for (const [t, exp] of challengeTokens) if (now > exp) challengeTokens.delete(t);
+  for (const [t, v] of challengeTokens) if (now > v.expiry) challengeTokens.delete(t);
 }, 60_000);
 
 app.get("/api/challenge", (req, res) => {
-  const token = Math.random().toString(36).slice(2) +
-                Math.random().toString(36).slice(2) +
-                Math.random().toString(36).slice(2);
-  challengeTokens.set(token, Date.now() + 5 * 60_000); // 5-minute window
-  res.json({ token });
+  const token     = Math.random().toString(36).slice(2) +
+                    Math.random().toString(36).slice(2) +
+                    Math.random().toString(36).slice(2);
+  const nonce     = Math.floor(Math.random() * 90000) + 10000; // 5-digit random
+  const powAnswer = (nonce * 31 + nonce % 97);                 // expected client answer
+
+  challengeTokens.set(token, { expiry: Date.now() + 5 * 60_000, powAnswer });
+  res.json({ token, nonce });
 });
 
 // ── In-memory state ───────────────────────────────────────────────────────────
@@ -241,23 +247,34 @@ io.on("connection", (socket) => {
 
   // ── Username registration ────────────────────────────────────────────────
   socket.on("setName", (data) => {
-    // Accept either plain string (legacy) or { name, token } object
-    let name, token;
+    // Accept either plain string (legacy) or { name, token, powAnswer } object
+    let name, token, powAnswer, webdriver;
     if (typeof data === "string") {
       name  = data;
       token = null;
     } else if (data && typeof data === "object") {
-      name  = data.name;
-      token = data.token;
+      name      = data.name;
+      token     = data.token;
+      powAnswer = data.powAnswer;
+      webdriver = data.webdriver; // client reports navigator.webdriver
     } else return;
 
-    // ── Challenge token check ──────────────────────────────────────────────
+    // ── Hard block: client self-reported as WebDriver ──────────────────────
+    if (webdriver === true) {
+      console.warn(`[BOT-WEBDRIVER] WebDriver flag detected — ${socket.id}`);
+      socket.disconnect(true);
+      return;
+    }
+
+    // ── Challenge token + proof-of-work check ─────────────────────────────
     if (!socket.verified) {
-      const validToken = token && challengeTokens.has(token) && Date.now() <= challengeTokens.get(token);
-      if (!validToken) {
-        console.warn(`[BOT-TOKEN] setName rejected — no valid token. id=${socket.id}`);
+      const entry = token ? challengeTokens.get(token) : null;
+      const tokenOk  = entry && Date.now() <= entry.expiry;
+      const powOk    = tokenOk && (Number(powAnswer) === entry.powAnswer);
+
+      if (!tokenOk || !powOk) {
+        console.warn(`[BOT-TOKEN] Rejected — tokenOk=${tokenOk} powOk=${powOk} id=${socket.id}`);
         socket.emit("tokenInvalid");
-        // Give 5 s grace then disconnect if they never validate
         setTimeout(() => { if (!socket.verified) socket.disconnect(true); }, 5000);
         return;
       }
