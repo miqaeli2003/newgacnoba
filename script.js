@@ -34,25 +34,7 @@ let _partnerAwayInterval = null;
 let _partnerAwayEl       = null;
 
 function showPartnerAwayCountdown() {
-  if (_partnerAwayEl) return; // already showing — don't double-start
-
-  _partnerAwayEl           = document.createElement("div");
-  _partnerAwayEl.id        = "partnerAwayCountdown";
-  _partnerAwayEl.className = "system-message-reconnecting";
-  chat.appendChild(_partnerAwayEl);
-  scheduleScroll();
-  setInputsEnabled(false); // block input while partner is away
-
-  let remaining = 20;
-  function tick() {
-    if (!_partnerAwayEl) return;
-    _partnerAwayEl.textContent =
-      `📱 პარტნიორმა ჩაკეცა ბრაუზერი — შემოსასვლელად დრო: ${remaining}წმ`;
-    if (remaining <= 0) { clearPartnerAwayCountdown(); return; }
-    remaining--;
-  }
-  tick(); // paint immediately
-  _partnerAwayInterval = setInterval(tick, 1000);
+  // Intentionally disabled — no popup shown when partner minimises browser
 }
 
 function clearPartnerAwayCountdown() {
@@ -998,6 +980,7 @@ socket.on("queuePosition", ({ position, total }) => {
 
 socket.on("partnerFound", (partner) => {
   stopSearchRetry();
+  if (_partnerLeftTimer) { clearTimeout(_partnerLeftTimer); _partnerLeftTimer = null; }
   clearChat();
   partnerName          = partner.name || "Anonymous";
   partnerConnected     = true;
@@ -1095,13 +1078,13 @@ socket.on("partnerTabBack", () => {
   clearPartnerAwayCountdown();
 });
 
+let _partnerLeftTimer = null;
+
 socket.on("partnerDisconnected", (data) => {
-  const wasReconnecting = partnerWasReconnecting;
   partnerWasReconnecting = false;
-  clearPartnerAwayCountdown(); // always clear countdown regardless of reason
+  clearPartnerAwayCountdown();
 
   const leftName = data.name || partnerName || "Anonymous";
-  addDisconnectMessage(`${leftName} - მან გადაგტოვა 😟`);
   lastPartnerName      = partnerName || data.name || "";
   canBlockDisconnected = !!lastPartnerName;
 
@@ -1112,6 +1095,13 @@ socket.on("partnerDisconnected", (data) => {
   setInputsEnabled(false);
   updateBlockBtn();
   closeGifPickerPanel();
+
+  // Show the "partner left" notice only after 30 seconds — no immediate popup
+  if (_partnerLeftTimer) clearTimeout(_partnerLeftTimer);
+  _partnerLeftTimer = setTimeout(() => {
+    _partnerLeftTimer = null;
+    addDisconnectMessage(`პარტნიორმა დაგტოვა 😟`);
+  }, 30000);
 });
 
 socket.on("userBlocked", (data) => {
@@ -1220,20 +1210,9 @@ socket.on("awayTimeout", () => {
 // ── Button handlers ───────────────────────────────────────────────────────────
 
 nextBtn.addEventListener("click", () => {
-  nextBtn.disabled = true;
-  setTimeout(() => { nextBtn.disabled = false; }, 1000);
-  hideTypingIndicator();
-  clearChat();
-  addSearchingMessage();
-  partnerConnected     = false;
-  partnerName          = "";
-  lastPartnerName      = "";
-  canBlockDisconnected = false;
-  setInputsEnabled(false);
-  updateBlockBtn();
-  closeGifPickerPanel();
+  // The person who leaves goes back to the main page (fresh start)
   socket.emit("next");
-  startSearchRetry();
+  window.location.reload();
 });
 
 blockBtn.addEventListener("click", () => {
