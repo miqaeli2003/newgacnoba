@@ -435,6 +435,24 @@ io.on("connection", (socket) => {
     if (!text) return;
     if (hasProfanity(text)) { socket.emit("messageFlagged"); return; }
 
+    // ── @ mention kick ────────────────────────────────────────────────────
+    // Messages starting with @word are a common spam/bot pattern.
+    // Kick and disconnect immediately.
+    if (/^@\w/.test(text)) {
+      console.warn(`[BOT-AT] @ mention message — ${socket.userName}: ${text.slice(0, 60)}`);
+      const kickedPartner = socket.partner;
+      socket.emit("linkKicked");          // reuse the existing "you were kicked" event
+      if (kickedPartner) {
+        kickedPartner.emit("partnerLinkKicked");
+        kickedPartner.partner        = null;
+        kickedPartner.lastPartnerName = "";
+      }
+      socket.partner = null;
+      cleanupGameForSocket(socket.id);
+      setTimeout(() => socket.disconnect(true), 1500);
+      return;
+    }
+
     // ── Anti-bot layer 3: phone number detection ──────────────────────────
     PHONE_RE.lastIndex = 0;
     if (PHONE_RE.test(text)) {
