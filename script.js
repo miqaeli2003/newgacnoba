@@ -62,7 +62,7 @@ let partnerConnected    = false;
 let partnerName         = "";
 let isFirstLogin        = true;
 let isReconnecting      = false;
-let wasAutoKicked       = false;
+
 let msgCounter          = 0;
 let typingTimeout       = null;
 let isTyping            = false;
@@ -511,42 +511,6 @@ function showToast(text, duration = 3000) {
   }, duration);
 }
 
-// ── Away-ended popup ──────────────────────────────────────────────────────────
-// Shown when the user comes back after being away for more than 60 seconds.
-function showAwayEndedPopup() {
-  document.getElementById("awayEndedOverlay")?.remove();
-
-  const overlay     = document.createElement("div");
-  overlay.id        = "awayEndedOverlay";
-  overlay.className = "away-ended-overlay";
-
-  const box         = document.createElement("div");
-  box.className     = "away-ended-box";
-
-  const icon        = document.createElement("div");
-  icon.className    = "away-ended-icon";
-  icon.textContent  = "⏱️";
-
-  const msg         = document.createElement("p");
-  msg.className     = "away-ended-msg";
-  msg.textContent   = "დიდი ხნით გასვლის გამო ჩათი გაითიშა";
-
-  const btn         = document.createElement("button");
-  btn.className     = "away-ended-btn";
-  btn.textContent   = "Welcome Page";
-  btn.addEventListener("click", () => {
-    window.location.reload();
-  });
-
-  box.appendChild(icon);
-  box.appendChild(msg);
-  box.appendChild(btn);
-  overlay.appendChild(box);
-  document.body.appendChild(overlay);
-
-  requestAnimationFrame(() => overlay.classList.add("away-ended-visible"));
-}
-
 // ── Search retry ──────────────────────────────────────────────────────────────
 function startSearchRetry() {
   stopSearchRetry();
@@ -952,11 +916,8 @@ function _doSetName(name) {
 // ── Socket events ─────────────────────────────────────────────────────────────
 
 socket.on("connect", () => {
-  if (wasAutoKicked) return;
-  if (awayTimer) { clearTimeout(awayTimer); awayTimer = null; }
   if (userName && !isFirstLogin) {
     isReconnecting = true;
-    // On reconnect the socket is already verified — plain string is fine
     socket.emit("setName", { name: userName, token: _challengeToken || "", powAnswer: _challengePow || 0 });
   }
 });
@@ -1082,7 +1043,6 @@ socket.on("partnerRestored", (data) => {
   stopSearchRetry();
   partnerName      = data.name || "Anonymous";
   partnerConnected = true;
-  _wasInChatWhenHidden = false;
   setInputsEnabled(true);
   updateBlockBtn();
   // No clearChat(), no system message — messages stay, chat resumes silently
@@ -1210,13 +1170,9 @@ socket.on("partnerLinkKicked", () => {
 });
 
 socket.on("autoKicked", () => {
-  partnerConnected = false;
-  partnerName      = "";
-  stopSearchRetry();
-  clearChat();
-  setInputsEnabled(false);
-  addDisconnectMessage("თქვენ დაბლოკილი ხართ განმეორებადი დარღვევების გამო.");
+  // Silently reload — user sees the entry modal again with no error message
   socket.disconnect();
+  window.location.reload();
 });
 
 // awayTimeout disabled — intentionally ignored
@@ -1308,7 +1264,6 @@ document.addEventListener("DOMContentLoaded", () => {
   userName       = "";
   isFirstLogin   = true;
   isReconnecting = false;
-  wasAutoKicked  = false;
   stopSearchRetry();
   setInputsEnabled(false);
   updateBlockBtn();
