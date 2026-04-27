@@ -1,14 +1,59 @@
 const socket = io();
-window.socket = socket; // exposed so games.js can reuse the same connection
+window.socket = socket;
 
-// ── Challenge token (anti-bot) ────────────────────────────────────────────────
-// Fetched once on page load. Passed with setName to prove this is a real browser.
-let _challengeToken = null;
+// ── Bot Detection + Challenge Token ──────────────────────────────────────────
+// Runs silently on page load. Checks for Selenium/WebDriver/headless signals.
+// If detected: token is never fetched → setName fails → bot disconnected.
 
-fetch("/api/challenge")
-  .then(r => r.json())
-  .then(d => { _challengeToken = d.token; })
-  .catch(() => {}); // silently ignore — server will reject setName if missing
+let _challengeToken  = null;
+let _challengePow    = null; // computed proof-of-work answer
+let _isBotDetected   = false;
+
+function _detectBot() {
+  try {
+    // #1 — navigator.webdriver is TRUE in ALL WebDriver sessions
+    //      (Selenium, Playwright, Puppeteer default mode). This is spec-mandated.
+    if (navigator.webdriver === true) return true;
+
+    // #2 — No plugins: headless Chrome / most bots have zero plugins
+    if (!navigator.plugins || navigator.plugins.length === 0) return true;
+
+    // #3 — No language list: automation tools often skip this
+    if (!navigator.languages || navigator.languages.length === 0) return true;
+
+    // #4 — Real Chrome always has window.chrome; modified/headless builds don't
+    if (/Chrome/.test(navigator.userAgent) && !window.chrome) return true;
+
+    // #5 — Selenium leaves traces in window properties
+    if ('__webdriver_evaluate'        in window) return true;
+    if ('__selenium_evaluate'         in window) return true;
+    if ('__webdriver_script_function' in window) return true;
+    if ('__fxdriver_evaluate'         in window) return true;
+    if ('_phantom'                    in window) return true;
+    if ('callPhantom'                 in window) return true;
+    if ('__nightmare'                 in window) return true;
+    if ('domAutomation'               in window) return true;
+    if ('domAutomationController'     in window) return true;
+
+    return false;
+  } catch {
+    return true; // if the check itself throws, treat as bot
+  }
+}
+
+_isBotDetected = _detectBot();
+
+if (!_isBotDetected) {
+  // Fetch challenge token and compute proof-of-work
+  fetch("/api/challenge")
+    .then(r => r.json())
+    .then(d => {
+      _challengeToken = d.token;
+      // POW: same formula as server expects — (nonce * 31 + nonce % 97)
+      _challengePow   = (d.nonce * 31 + d.nonce % 97);
+    })
+    .catch(() => {});
+}
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let userName            = "";
@@ -931,7 +976,12 @@ function saveName() {
   clearNameError();
   saveNameBtn.disabled    = true;
   saveNameBtn.textContent = "Checking...";
-  socket.emit("setName", { name, token: _challengeToken });
+  socket.emit("setName", {
+    name,
+    token:     _challengeToken,
+    powAnswer: _challengePow,
+    webdriver: !!navigator.webdriver,   // always honest — server disconnects on true
+  });
 }
 
 // ── Socket events ─────────────────────────────────────────────────────────────
@@ -942,7 +992,7 @@ socket.on("connect", () => {
   if (userName && !isFirstLogin) {
     isReconnecting = true;
     // On reconnect the socket is already verified — plain string is fine
-    socket.emit("setName", { name: userName, token: _challengeToken || userName });
+    socket.emit("setName", { name: userName, token: _challengeToken || "", powAnswer: _challengePow || 0 });
   }
 });
 
