@@ -19,7 +19,8 @@ const NAME_MIN           = 2;
 const NAME_MAX           = 20;
 const MSG_MAX            = 2000;
 const RECONNECT_GRACE_MS = 60000; // 60 s — lets mobile users switch apps and return
-const MAX_BLOCKS_RX      = 3;
+const MAX_BLOCKS_RX      = 3;    // max blocks within the time window
+const BLOCKS_RX_WINDOW_MS = 5 * 60 * 1000; // 5-minute sliding window
 const MAX_BLOCKS_TX      = 10;  // max users one socket can block per session
 const MSG_RATE_MAX       = 20;
 const MSG_RATE_WINDOW_MS = 5000;
@@ -234,7 +235,7 @@ io.on("connection", (socket) => {
   socket.recentPartnerIds = new Set();
   socket.interests        = [];
   socket.bio              = "";
-  socket.blockedByCount   = 0;
+  socket.blockedByTimes   = []; // timestamps of recent blocks received
   socket._rl              = null;
   // ── Anti-bot tracking ──────────────────────────────────────────────────────
   socket.verified         = false;   // passed challenge token
@@ -592,9 +593,15 @@ io.on("connection", (socket) => {
       blockedSocket.lastPartnerName = "";
       blockedSocket.emit("youWereBlocked", { name: socket.userName });
 
-      blockedSocket.blockedByCount = (blockedSocket.blockedByCount || 0) + 1;
-      if (blockedSocket.blockedByCount >= MAX_BLOCKS_RX) {
-        console.log(`Auto-kicking ${blockedSocket.userName}: blocked ${MAX_BLOCKS_RX}x`);
+      // Time-windowed block counter — only count blocks within the last 5 minutes.
+      // Bots get blocked rapidly in succession; real users don't hit this threshold.
+      const now5 = Date.now();
+      blockedSocket.blockedByTimes.push(now5);
+      blockedSocket.blockedByTimes = blockedSocket.blockedByTimes.filter(
+        t => now5 - t < BLOCKS_RX_WINDOW_MS
+      );
+      if (blockedSocket.blockedByTimes.length >= MAX_BLOCKS_RX) {
+        console.log(`Auto-kicking ${blockedSocket.userName}: blocked ${MAX_BLOCKS_RX}x within 5 min`);
         blockedSocket.emit("autoKicked");
         blockedSocket.disconnect(true);
         return;
