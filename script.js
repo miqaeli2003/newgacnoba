@@ -924,6 +924,7 @@ function _doSetName(name) {
 // ── Socket events ─────────────────────────────────────────────────────────────
 
 socket.on("connect", () => {
+  _reconnectNameRetries = 0; // reset on every fresh connect
   if (userName && !isFirstLogin) {
     isReconnecting = true;
     // Hide the name modal — silently reconnecting, not asking for a new name
@@ -993,6 +994,7 @@ socket.on("nameAccepted", (acceptedName) => {
     startSearchRetry();
   } else if (isReconnecting) {
     isReconnecting = false;
+    _reconnectNameRetries = 0; // reset retry counter on success
     removeReconnectingMessage();
     // Keep inputs and chat as-is — server follows with partnerRestored or partnerDisconnected
   }
@@ -1002,29 +1004,49 @@ socket.on("nameAccepted", (acceptedName) => {
   }
 });
 
+// Tracks how many times we've retried the original name after a reconnect collision
+let _reconnectNameRetries = 0;
+const _RECONNECT_NAME_MAX_RETRIES = 5;
+
 socket.on("nameTaken", () => {
   saveNameBtn.disabled    = false;
   saveNameBtn.textContent = isFirstLogin ? "საუბრის დაწყება" : "Save Name";
 
   if (isReconnecting) {
-    // Reconnecting mid-session — name was grabbed by someone else while we were offline.
-    // Try appending a number suffix silently instead of popping up the modal.
+    // The server still has our old socket registered under our name.
+    // Wait a short moment and retry with the SAME original name — the old
+    // socket entry will be cleaned up within a second or two.
+    if (_reconnectNameRetries < _RECONNECT_NAME_MAX_RETRIES) {
+      _reconnectNameRetries++;
+      const delay = 800 + _reconnectNameRetries * 400; // back off slightly each attempt
+      setTimeout(() => {
+        if (!socket.connected) return; // don't retry if socket dropped again
+        const originalName = userName || nameInput.value.trim();
+        fetch("/api/challenge")
+          .then(r => r.json())
+          .then(d => {
+            _challengeToken = d.token;
+            _challengePow   = (d.nonce * 31 + d.nonce % 97);
+            socket.emit("setName", { name: originalName, token: _challengeToken, powAnswer: _challengePow });
+          })
+          .catch(() => {
+            // Network error — give up silently, user is still logged in with old name
+            isReconnecting = false;
+            _reconnectNameRetries = 0;
+          });
+      }, delay);
+      return; // still reconnecting — do not reset isReconnecting yet
+    }
+
+    // Exhausted retries — name is genuinely taken by someone else.
+    // Keep the user's existing session intact without renaming them.
     isReconnecting = false;
-    const suffix   = Math.floor(Math.random() * 90) + 10; // 10-99
-    const newName  = (userName || nameInput.value.trim()).slice(0, 18) + suffix;
-    fetch("/api/challenge")
-      .then(r => r.json())
-      .then(d => {
-        _challengeToken = d.token;
-        _challengePow   = (d.nonce * 31 + d.nonce % 97);
-        socket.emit("setName", { name: newName, token: _challengeToken, powAnswer: _challengePow });
-      })
-      .catch(() => {
-        // Give up silently — user can press ძებნა to retry manually
-      });
+    _reconnectNameRetries = 0;
+    // Don't show modal or change name — just continue as-is
     return;
   }
 
+  _reconnectNameRetries = 0;
   isReconnecting = false;
   showNameError("ეს სახელი დაკავებულია. სხვა აირჩიეთ. 😟 ");
   nameInput.focus();
