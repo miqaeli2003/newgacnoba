@@ -164,12 +164,8 @@ document.addEventListener("visibilitychange", () => {
     unreadCount    = 0;
     document.title = originalTitle;
 
-    // If socket dropped while backgrounded, reconnect silently — do NOT show
-    // the name modal or reload the page. The socket "connect" handler will
-    // re-emit setName automatically so the session resumes.
+    // If socket dropped while backgrounded, kick it to reconnect immediately
     if (!socket.connected && userName) {
-      // Make sure the name modal stays hidden during reconnect
-      if (nameModal) nameModal.style.display = "none";
       socket.connect();
     }
   }
@@ -457,6 +453,9 @@ function hideTypingIndicator() {
 }
 
 function clearChat() { chat.innerHTML = ""; clearReply(); }
+
+// Stub — countdown was removed but the call site still references this
+function clearPartnerAwayCountdown() {}
 
 function updateOnlineCount(count) {
   onlineCountEl.textContent = `Users: ${count+50}`;
@@ -927,9 +926,20 @@ function _doSetName(name) {
 socket.on("connect", () => {
   if (userName && !isFirstLogin) {
     isReconnecting = true;
-    // Hide the name modal — we are silently reconnecting, not asking for a new name
+    // Hide the name modal — silently reconnecting, not asking for a new name
     if (nameModal) nameModal.style.display = "none";
-    socket.emit("setName", { name: userName, token: _challengeToken || "", powAnswer: _challengePow || 0 });
+    // Fetch a fresh token — the previous one was one-time-use and already consumed
+    fetch("/api/challenge")
+      .then(r => r.json())
+      .then(d => {
+        _challengeToken = d.token;
+        _challengePow   = (d.nonce * 31 + d.nonce % 97);
+        socket.emit("setName", { name: userName, token: _challengeToken, powAnswer: _challengePow });
+      })
+      .catch(() => {
+        // Token fetch failed — send empty so server replies tokenInvalid → retry loop
+        socket.emit("setName", { name: userName, token: "", powAnswer: 0 });
+      });
   }
 });
 
@@ -939,13 +949,18 @@ socket.on("tokenInvalid", () => {
     .then(r => r.json())
     .then(d => {
       _challengeToken = d.token;
-      const name = nameInput.value.trim() || userName;
-      if (name) socket.emit("setName", { name, token: _challengeToken });
+      _challengePow   = (d.nonce * 31 + d.nonce % 97);
+      const name = userName || nameInput.value.trim();
+      if (name) {
+        socket.emit("setName", { name, token: _challengeToken, powAnswer: _challengePow });
+      }
     })
     .catch(() => {
-      showNameError("კავშირის შეცდომა. გთხოვთ გვერდი განაახლოთ.");
-      saveNameBtn.disabled    = false;
-      saveNameBtn.textContent = "საუბრის დაწყება";
+      if (!isReconnecting) {
+        showNameError("კავშირის შეცდომა. გთხოვთ გვერდი განაახლოთ.");
+        saveNameBtn.disabled    = false;
+        saveNameBtn.textContent = isFirstLogin ? "საუბრის დაწყება" : "Save Name";
+      }
     });
 });
 
@@ -994,7 +1009,27 @@ socket.on("nameAccepted", (acceptedName) => {
 socket.on("nameTaken", () => {
   saveNameBtn.disabled    = false;
   saveNameBtn.textContent = isFirstLogin ? "საუბრის დაწყება" : "Save Name";
-  isReconnecting          = false;
+
+  if (isReconnecting) {
+    // Reconnecting mid-session — name was grabbed by someone else while we were offline.
+    // Try appending a number suffix silently instead of popping up the modal.
+    isReconnecting = false;
+    const suffix   = Math.floor(Math.random() * 90) + 10; // 10-99
+    const newName  = (userName || nameInput.value.trim()).slice(0, 18) + suffix;
+    fetch("/api/challenge")
+      .then(r => r.json())
+      .then(d => {
+        _challengeToken = d.token;
+        _challengePow   = (d.nonce * 31 + d.nonce % 97);
+        socket.emit("setName", { name: newName, token: _challengeToken, powAnswer: _challengePow });
+      })
+      .catch(() => {
+        // Give up silently — user can press ძებნა to retry manually
+      });
+    return;
+  }
+
+  isReconnecting = false;
   showNameError("ეს სახელი დაკავებულია. სხვა აირჩიეთ. 😟 ");
   nameInput.focus();
   nameInput.select();
@@ -1127,6 +1162,10 @@ socket.on("userBlocked", (data) => {
   addSystemMessage(`🔴 „${blockedName}" -  წარმატებით იქნა დაბლოკილი 🔴`);
 });
 
+socket.on("blockLimitReached", () => {
+  addSystemMessage("🚫 ბლოკირების ლიმიტს მიაღწიეთ ამ სესიისთვის.");
+});
+
 socket.on("youWereBlocked", (data) => {
   const blockerName = data.name || "მომხმარებელი";
   partnerConnected     = false;
@@ -1184,16 +1223,10 @@ socket.on("partnerLinkKicked", () => {
 });
 
 socket.on("autoKicked", () => {
-  // Only reload if user hasn't started chatting yet (no userName set).
-  // If mid-session (userName exists), silently reconnect instead of kicking to main page.
-  if (!userName) {
-    try { sessionStorage.removeItem("gaicani_username"); } catch (_) {}
-    socket.disconnect();
-    window.location.reload();
-  } else {
-    // Mid-session: reconnect gracefully without reloading the page
-    if (!socket.connected) socket.connect();
-  }
+  // Clear saved session so the user is not auto-reconnected after kick
+  try { sessionStorage.removeItem("gaicani_username"); } catch (_) {}
+  socket.disconnect();
+  window.location.reload();
 });
 
 // awayTimeout disabled — intentionally ignored
