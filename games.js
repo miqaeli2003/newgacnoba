@@ -340,7 +340,7 @@
             b.classList.toggle('rps-btn--selected', b === btn);
           });
           el('rpsStatus').textContent = `✅ შენ: ${RPS_EMOJI[choice]} ${RPS_LABELS[choice]}`;
-          el('rpsOpponentStatus').textContent = '⏳ ელოდება მოწინаააღმდეგეს...';
+          el('rpsOpponentStatus').textContent = '⏳ ელოდება მოწინააღმდეგეს...';
           socket.emit('game:move', { choice });
         });
       });
