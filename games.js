@@ -219,7 +219,12 @@
         socket.emit('game:response', { accepted: false, gameType, toId: fromId });
       });
 
-      setTimeout(() => { if (el('gameInviteBar')) el('gameInviteBar').remove(); }, 30000);
+      setTimeout(() => {
+        if (el('gameInviteBar')) {
+          el('gameInviteBar').remove();
+          clearGameBtnPulse();
+        }
+      }, 30000);
     }
 
     function clearGameBtnPulse() {
@@ -229,11 +234,6 @@
 
     socket.on('game:declined', () => {
       appendSystemMessage('❌ თამაშის მოთხოვნა უარყოფილ იქნა.');
-    });
-
-    socket.on('game:cancelled', () => {
-      appendSystemMessage('🎮 თამაში გაუქმდა.');
-      closeGame();
     });
 
     // ────────────────────────────────────────────────────────────
