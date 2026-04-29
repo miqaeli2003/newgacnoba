@@ -9,8 +9,10 @@ const rateLimit     = require("express-rate-limit");
 const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server, {
-  pingTimeout:  20000,
+  pingTimeout:  60000,  // 60 s — mobile browsers can freeze JS for 30 s+
   pingInterval: 25000,
+  // Allow both polling and websocket so mobile fallback works
+  transports: ["websocket", "polling"],
 });
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -18,7 +20,7 @@ const TENOR_KEY          = process.env.TENOR_KEY || "LIVDSRZULELA";
 const NAME_MIN           = 2;
 const NAME_MAX           = 20;
 const MSG_MAX            = 2000;
-const RECONNECT_GRACE_MS = 60000; // 60 s — lets mobile users switch apps and return
+const RECONNECT_GRACE_MS = 180000; // 3 min — lets mobile users switch apps and return
 const MAX_BLOCKS_RX      = 3;    // max blocks within the time window
 const BLOCKS_RX_WINDOW_MS = 5 * 60 * 1000; // 5-minute sliding window
 const MAX_BLOCKS_TX      = 10;  // max users one socket can block per session
