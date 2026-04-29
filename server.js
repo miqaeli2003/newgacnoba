@@ -551,6 +551,7 @@ io.on("connection", (socket) => {
     socket.lastMessages.push(normalised);
     if (socket.lastMessages.length > 6) socket.lastMessages.shift(); // keep last 6
 
+    LINK_RE.lastIndex = 0; // reset before test — global regex retains lastIndex between calls
     if (LINK_RE.test(text)) {
       LINK_RE.lastIndex = 0;
       const kickedPartner = socket.partner;
