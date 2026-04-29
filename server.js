@@ -20,7 +20,7 @@ const TENOR_KEY          = process.env.TENOR_KEY || "LIVDSRZULELA";
 const NAME_MIN           = 2;
 const NAME_MAX           = 20;
 const MSG_MAX            = 2000;
-const RECONNECT_GRACE_MS = 1800000; // 30 min — chat keeps going even if partner closes browser
+const RECONNECT_GRACE_MS = 1800000; // 30 min — keep chat alive when partner closes/minimizes
 const MAX_BLOCKS_RX      = 3;    // max blocks within the time window
 const BLOCKS_RX_WINDOW_MS = 5 * 60 * 1000; // 5-minute sliding window
 const MAX_BLOCKS_TX      = 10;  // max users one socket can block per session
@@ -389,28 +389,25 @@ io.on("connection", (socket) => {
   });
 
   function tryRestorePartnership(sock, nameLower) {
-    // sock = the socket that just reconnected
     if (!pendingDisconnects.has(nameLower)) return false;
     const { partner, timeout, ghostSocket } = pendingDisconnects.get(nameLower);
     clearTimeout(timeout);
     pendingDisconnects.delete(nameLower);
     // Re-register the username (it was kept reserved during grace period)
     activeUsernames.add(nameLower);
-    // partner.partner may still point to the old ghost socket — that's fine.
-    // We accept reconnect if partner is still connected and hasn't found a new partner.
-    const partnerStillWaiting = partner.connected &&
+    // partner.partner may still point to the old ghost socket — accept reconnect
+    // as long as partner hasn't moved on to someone new.
+    const partnerAvailable = partner.connected &&
       (!partner.partner || partner.partner === ghostSocket || partner.partner === sock);
-    if (partnerStillWaiting) {
-      // Clear ghost flag on the reconnecting socket
-      sock._isGhost = false;
-      sock.partner    = partner;
-      partner.partner = sock;
-      // Flush any messages the partner sent while we were away
+    if (partnerAvailable) {
+      sock._isGhost    = false;
+      sock.partner     = partner;
+      partner.partner  = sock;
+      // Flush any messages the staying user sent while we were away
       const queue = sock._messageQueue || [];
       sock._messageQueue = [];
       queue.forEach(m => sock.emit("message", m));
-      // Silent reconnect — no events needed since neither side showed a disconnect
-      // (partnerRestored for the reconnecting side, partnerReconnected for the staying side)
+      // Silent reconnect — no disruptive events
       sock.emit("partnerRestored",       { name: partner.userName });
       partner.emit("partnerReconnected", { name: sock.userName });
       return true;
@@ -584,6 +581,7 @@ io.on("connection", (socket) => {
     }
     LINK_RE.lastIndex = 0;
     if (socket.partner._isGhost) {
+      // Partner is temporarily disconnected — queue the message for delivery on reconnect
       socket.partner._messageQueue = socket.partner._messageQueue || [];
       socket.partner._messageQueue.push({ text, messageId, replyTo });
     } else {
@@ -868,23 +866,19 @@ io.on("connection", (socket) => {
       const name      = socket.userName || "Anonymous";
       const nameLower = name.toLowerCase();
 
-      socket.partner  = null;
-      // NOTE: we intentionally do NOT set partner.partner = null during grace period.
-      // This lets the staying user keep sending messages (they queue on their socket
-      // until the disconnected user reconnects). The server message handler already
-      // checks socket.partner — by keeping partner.partner pointing to the (now
-      // disconnected) socket, messages from the staying side will still pass the
-      // guard. We mark the socket as a ghost so we know not to actually deliver yet.
-      socket._isGhost = true;
-      socket._messageQueue = socket._messageQueue || [];
+      socket.partner = null;
+      // Do NOT set partner.partner = null during grace period.
+      // The staying user's partner reference stays live so message guards pass
+      // and messages can be buffered. Mark this socket as a ghost.
+      socket._isGhost       = true;
+      socket._messageQueue  = [];
 
       if (socket.userName) {
-        // partner.partner still points to socket (ghost) — staying user can keep typing.
-        // No partnerReconnecting event sent — chat continues silently.
+        // No partnerReconnecting event — chat continues silently on the client.
         const timeout = setTimeout(() => {
           pendingDisconnects.delete(nameLower);
           activeUsernames.delete(nameLower);
-          // Now truly end the partnership
+          // Grace period over — truly end the partnership
           if (partner.partner === socket) partner.partner = null;
           if (partner.connected) partner.emit("partnerDisconnected", { name });
         }, RECONNECT_GRACE_MS);
