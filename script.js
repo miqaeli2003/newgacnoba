@@ -994,8 +994,7 @@ socket.on("nameAccepted", (acceptedName) => {
   } else if (isReconnecting) {
     isReconnecting = false;
     removeReconnectingMessage();
-    // Keep chat and inputs as-is — server will emit partnerRestored
-    // or partnerDisconnected. Either way no visible interruption.
+    // Keep inputs and chat as-is — server follows with partnerRestored or partnerDisconnected
   }
   // else: mid-session name change — no extra action
   if (wasNameChange) {
@@ -1070,13 +1069,11 @@ socket.on("partnerFound", (partner) => {
 let partnerWasReconnecting = false;
 
 socket.on("partnerReconnecting", (data) => {
-  // Partner's connection dropped temporarily — keep everything running silently.
   partnerWasReconnecting = true;
-  // Do NOT disable inputs, do NOT show any message — chat continues.
+  // Silent — keep chat and inputs running
 });
 
 socket.on("partnerReconnected", (data) => {
-  // Partner came back — seamless since we never disabled anything.
   partnerWasReconnecting = false;
   partnerName            = data.name || partnerName;
   partnerConnected       = true;
@@ -1098,12 +1095,10 @@ socket.on("partnerRestored", (data) => {
 });
 
 socket.on("waitingForPartner", () => {
-  // Only disable if we weren't already actively chatting
   if (!partnerConnected) {
     partnerName = "";
     setInputsEnabled(false);
   }
-  // Do NOT auto-search — user must press ძებნა manually
 });
 
 socket.on("partnerTyping", (typing) => {
@@ -1133,15 +1128,12 @@ socket.on("partnerTabAway", () => {});
 socket.on("partnerTabBack", () => {});
 
 socket.on("partnerDisconnected", (data) => {
-  // Grace period ended. Keep chat open and inputs enabled — no message shown.
-  // The user can keep typing; if partner comes back messages will be there.
   partnerWasReconnecting = false;
   removeReconnectingMessage();
   lastPartnerName      = data.name || partnerName || "";
   canBlockDisconnected = !!lastPartnerName;
   updateBlockBtn();
-  // Intentionally NOT disabling inputs, NOT showing disconnect message,
-  // NOT clearing chat — everything stays as-is.
+  // No message, no disable — chat stays open
 });
 
 socket.on("userBlocked", (data) => {
@@ -1219,10 +1211,19 @@ socket.on("partnerLinkKicked", () => {
 });
 
 socket.on("autoKicked", () => {
-  // Clear saved session so the user is not auto-reconnected after kick
   try { sessionStorage.removeItem("gaicani_username"); } catch (_) {}
-  socket.disconnect();
-  window.location.reload();
+  partnerConnected     = false;
+  partnerName          = "";
+  lastPartnerName      = "";
+  canBlockDisconnected = false;
+  stopSearchRetry();
+  hideTypingIndicator();
+  setInputsEnabled(false);
+  updateBlockBtn();
+  closeGifPickerPanel();
+  clearChat();
+  addSystemMessage("🚫 თქვენ გაირიცხეთ. გვერდი განაახლეთ თუ გსურთ დაბრუნება.");
+  // Do NOT reload — just show message
 });
 
 // awayTimeout disabled — intentionally ignored
