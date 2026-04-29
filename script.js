@@ -158,11 +158,16 @@ function incrementUnread() {
   }
 }
 
-// ── Tab visibility — only used to reset unread badge when user returns ────────
+// ── Tab visibility — reset unread badge + reconnect on foreground ─────────────
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) {
     unreadCount    = 0;
     document.title = originalTitle;
+
+    // If socket dropped while backgrounded, kick it to reconnect immediately
+    if (!socket.connected && userName) {
+      socket.connect();
+    }
   }
 });
 
@@ -946,6 +951,9 @@ socket.on("nameAccepted", (acceptedName) => {
   saveNameBtn.textContent = "საუბრის დაწყება";
   clearNameError();
 
+  // Persist username so a page reload (iOS background kill) auto-reconnects
+  try { sessionStorage.setItem("gaicani_username", acceptedName); } catch (_) {}
+
   // Show the username in the top bar
   const displayEl = document.getElementById("userNameDisplay");
   if (displayEl) {
@@ -1170,7 +1178,8 @@ socket.on("partnerLinkKicked", () => {
 });
 
 socket.on("autoKicked", () => {
-  // Silently reload — user sees the entry modal again with no error message
+  // Clear saved session so the user is not auto-reconnected after kick
+  try { sessionStorage.removeItem("gaicani_username"); } catch (_) {}
   socket.disconnect();
   window.location.reload();
 });
@@ -1270,7 +1279,47 @@ document.addEventListener("DOMContentLoaded", () => {
   saveNameBtn.textContent  = "საუბრის დაწყება";
   charCount.textContent    = "";
 
-  // Always show entry modal — nothing is stored between visits
+  // ── Auto-reconnect after iOS page kill ───────────────────────────────────
+  // iOS Safari can fully unload the page when the app is backgrounded.
+  // If we have a saved username, skip the modal and reconnect silently.
+  const savedName = (() => { try { return sessionStorage.getItem("gaicani_username"); } catch(_) { return null; } })();
+
+  if (savedName) {
+    // Pre-fill the modal but don't show it — submit automatically once socket connects
+    nameInput.value = savedName;
+    nameModal.style.display = "none";
+
+    const autoReconnect = () => {
+      if (socket.connected) {
+        // Fetch a fresh challenge token then set name
+        fetch("/api/challenge")
+          .then(r => r.json())
+          .then(d => {
+            _challengeToken = d.token;
+            _challengePow   = (d.nonce * 31 + d.nonce % 97);
+            isFirstLogin    = true; // triggers findPartner if partner is gone
+            socket.emit("setName", {
+              name:      savedName,
+              token:     _challengeToken,
+              powAnswer: _challengePow,
+              webdriver: !!navigator.webdriver,
+            });
+          })
+          .catch(() => {
+            // Token fetch failed — fall back to showing the modal
+            nameModal.style.display = "flex";
+            setTimeout(() => nameInput.focus(), 100);
+          });
+      } else {
+        // Socket not yet connected — wait for the connect event
+        socket.once("connect", autoReconnect);
+      }
+    };
+    autoReconnect();
+    return; // don't show the modal
+  }
+
+  // Normal first visit — show entry modal
   nameModal.style.display = "flex";
   setTimeout(() => nameInput.focus(), 100);
 
