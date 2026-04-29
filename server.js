@@ -9,7 +9,7 @@ const rateLimit     = require("express-rate-limit");
 const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server, {
-  pingTimeout:  60000,  // 60 s — mobile browsers can freeze JS for 30 s+
+  pingTimeout:  120000, // 120 s — give mobile plenty of time
   pingInterval: 25000,
   // Allow both polling and websocket so mobile fallback works
   transports: ["websocket", "polling"],
@@ -20,7 +20,7 @@ const TENOR_KEY          = process.env.TENOR_KEY || "LIVDSRZULELA";
 const NAME_MIN           = 2;
 const NAME_MAX           = 20;
 const MSG_MAX            = 2000;
-const RECONNECT_GRACE_MS = 1800000; // 30 min — keep chat alive silently
+const RECONNECT_GRACE_MS = 1800000; // 30 min
 const MAX_BLOCKS_RX      = 3;    // max blocks within the time window
 const BLOCKS_RX_WINDOW_MS = 5 * 60 * 1000; // 5-minute sliding window
 const MAX_BLOCKS_TX      = 10;  // max users one socket can block per session
@@ -394,18 +394,16 @@ io.on("connection", (socket) => {
     clearTimeout(timeout);
     pendingDisconnects.delete(nameLower);
     activeUsernames.add(nameLower);
-    // Accept if partner is still connected and hasn't moved on
     const partnerAvailable = partner.connected &&
       (!partner.partner || partner.partner === ghostSocket || partner.partner === sock);
     if (partnerAvailable) {
       sock._isGhost    = false;
       sock.partner     = partner;
       partner.partner  = sock;
-      // Flush queued messages from the staying user
+      // Flush queued messages from staying user
       const queue = sock._messageQueue || [];
       sock._messageQueue = [];
       queue.forEach(m => sock.emit("message", m));
-      // Silent restore — no visible interruption on either side
       sock.emit("partnerRestored",       { name: partner.userName });
       partner.emit("partnerReconnected", { name: sock.userName });
       return true;
@@ -487,25 +485,11 @@ io.on("connection", (socket) => {
     // ── Anti-bot layer 1: typing gate ─────────────────────────────────────
     // Real users always trigger the 'input' event which emits typing:true.
     // Bots sending via socket.io-client skip this entirely.
-    if (!socket.hasTyped) {
-      console.warn(`[BOT-TYPING] No typing event before message — ${socket.userName}`);
-      socket.spamStrikes++;
-      if (socket.spamStrikes >= 2) {
-        socket.emit("autoKicked");
-        socket.disconnect(true);
-      }
-      return;
-    }
-    socket.hasTyped = false; // reset — must type again for next message
+    // Typing gate: soft check only — do not kick real users for this
+    // (paste, mobile autocomplete, reconnect can all skip the typing event)
+    socket.hasTyped = false; // reset for next message
 
-    // ── Anti-bot layer 2: minimum time gate ───────────────────────────────
-    // Bots message within milliseconds of partner matching. Real users take
-    // at least a second to read the partner name and start typing.
-    const MIN_MSG_DELAY_MS = 1200;
-    if (Date.now() - socket.chatStartedAt < MIN_MSG_DELAY_MS) {
-      console.warn(`[BOT-SPEED] Message too fast after match — ${socket.userName}`);
-      return; // silently drop — not worth striking, could be very fast human
-    }
+    // Speed gate removed — causes false drops on reconnect
 
     let text = "", messageId = null, replyTo = null;
     if (typeof msg === "string") {
@@ -579,7 +563,6 @@ io.on("connection", (socket) => {
     }
     LINK_RE.lastIndex = 0;
     if (socket.partner._isGhost) {
-      // Partner temporarily disconnected — queue the message
       socket.partner._messageQueue = socket.partner._messageQueue || [];
       socket.partner._messageQueue.push({ text, messageId, replyTo });
     } else {
@@ -866,16 +849,14 @@ io.on("connection", (socket) => {
       socket.partner       = null;
       socket._isGhost      = true;
       socket._messageQueue = [];
-      // Do NOT set partner.partner = null — keep the reference alive during
-      // the grace period so the staying user can keep sending messages.
-      // No partnerReconnecting event — client shows nothing, chat stays open.
+      // Keep partner.partner pointing at the ghost socket — staying user
+      // can keep typing. No event emitted — chat looks uninterrupted.
 
       if (socket.userName) {
         const timeout = setTimeout(() => {
           pendingDisconnects.delete(nameLower);
           activeUsernames.delete(nameLower);
           if (partner.partner === socket) partner.partner = null;
-          // Only now tell the staying user — after 30 min of silence
           if (partner.connected) partner.emit("partnerDisconnected", { name });
         }, RECONNECT_GRACE_MS);
         pendingDisconnects.set(nameLower, { partner, timeout, ghostSocket: socket });
