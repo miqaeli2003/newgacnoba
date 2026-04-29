@@ -20,7 +20,7 @@ const TENOR_KEY          = process.env.TENOR_KEY || "LIVDSRZULELA";
 const NAME_MIN           = 2;
 const NAME_MAX           = 20;
 const MSG_MAX            = 2000;
-const RECONNECT_GRACE_MS = 1800000; // 30 min — keep chat alive when partner closes/minimizes
+const RECONNECT_GRACE_MS = 1800000; // 30 min — keep chat alive silently
 const MAX_BLOCKS_RX      = 3;    // max blocks within the time window
 const BLOCKS_RX_WINDOW_MS = 5 * 60 * 1000; // 5-minute sliding window
 const MAX_BLOCKS_TX      = 10;  // max users one socket can block per session
@@ -393,21 +393,19 @@ io.on("connection", (socket) => {
     const { partner, timeout, ghostSocket } = pendingDisconnects.get(nameLower);
     clearTimeout(timeout);
     pendingDisconnects.delete(nameLower);
-    // Re-register the username (it was kept reserved during grace period)
     activeUsernames.add(nameLower);
-    // partner.partner may still point to the old ghost socket — accept reconnect
-    // as long as partner hasn't moved on to someone new.
+    // Accept if partner is still connected and hasn't moved on
     const partnerAvailable = partner.connected &&
       (!partner.partner || partner.partner === ghostSocket || partner.partner === sock);
     if (partnerAvailable) {
       sock._isGhost    = false;
       sock.partner     = partner;
       partner.partner  = sock;
-      // Flush any messages the staying user sent while we were away
+      // Flush queued messages from the staying user
       const queue = sock._messageQueue || [];
       sock._messageQueue = [];
       queue.forEach(m => sock.emit("message", m));
-      // Silent reconnect — no disruptive events
+      // Silent restore — no visible interruption on either side
       sock.emit("partnerRestored",       { name: partner.userName });
       partner.emit("partnerReconnected", { name: sock.userName });
       return true;
@@ -581,7 +579,7 @@ io.on("connection", (socket) => {
     }
     LINK_RE.lastIndex = 0;
     if (socket.partner._isGhost) {
-      // Partner is temporarily disconnected — queue the message for delivery on reconnect
+      // Partner temporarily disconnected — queue the message
       socket.partner._messageQueue = socket.partner._messageQueue || [];
       socket.partner._messageQueue.push({ text, messageId, replyTo });
     } else {
@@ -858,7 +856,6 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     console.log("User disconnected", socket.id);
 
-    // Cancel any active game first
     cleanupGameForSocket(socket.id);
 
     if (socket.partner) {
@@ -866,31 +863,28 @@ io.on("connection", (socket) => {
       const name      = socket.userName || "Anonymous";
       const nameLower = name.toLowerCase();
 
-      socket.partner = null;
-      // Do NOT set partner.partner = null during grace period.
-      // The staying user's partner reference stays live so message guards pass
-      // and messages can be buffered. Mark this socket as a ghost.
-      socket._isGhost       = true;
-      socket._messageQueue  = [];
+      socket.partner       = null;
+      socket._isGhost      = true;
+      socket._messageQueue = [];
+      // Do NOT set partner.partner = null — keep the reference alive during
+      // the grace period so the staying user can keep sending messages.
+      // No partnerReconnecting event — client shows nothing, chat stays open.
 
       if (socket.userName) {
-        // No partnerReconnecting event — chat continues silently on the client.
         const timeout = setTimeout(() => {
           pendingDisconnects.delete(nameLower);
           activeUsernames.delete(nameLower);
-          // Grace period over — truly end the partnership
           if (partner.partner === socket) partner.partner = null;
+          // Only now tell the staying user — after 30 min of silence
           if (partner.connected) partner.emit("partnerDisconnected", { name });
         }, RECONNECT_GRACE_MS);
         pendingDisconnects.set(nameLower, { partner, timeout, ghostSocket: socket });
-        // Do NOT delete from activeUsernames yet — reserved for reconnect
       } else {
         activeUsernames.delete(socket.userName?.toLowerCase() || "");
         partner.partner = null;
         partner.emit("partnerDisconnected", { name: "Anonymous" });
       }
     } else {
-      // Not in a chat — release username immediately
       if (socket.userName) activeUsernames.delete(socket.userName.toLowerCase());
     }
 
