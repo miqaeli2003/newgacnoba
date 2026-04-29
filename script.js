@@ -208,7 +208,7 @@ function addDisconnectMessage(text)        { _appendInfoMessage(text, "system-me
 function addReconnectingMessage(name)      {
   document.getElementById("reconnectingMsg")?.remove();
   _appendInfoMessage(
-    `${name} - გავიდა საიტიდან  ... 😟 `,
+    `${name} - კავშირი გაწყდა, ველოდებით... ⏳`,
     "system-message-reconnecting",
     "reconnectingMsg"
   );
@@ -996,9 +996,14 @@ socket.on("nameAccepted", (acceptedName) => {
     partnerConnected = false;
     partnerName      = "";
     setInputsEnabled(false);
+    updateBlockBtn();
     hideTypingIndicator();
     closeGifPickerPanel();
-    // Do NOT clearChat, do NOT auto-search — everything stays as-is until user presses ძებნა
+    removeReconnectingMessage();
+    // Do NOT clearChat — keep conversation history visible.
+    // Server will emit partnerRestored if partner is still there,
+    // or partnerDisconnected if the grace period ended.
+    // User can press ძებნა manually if they want a new partner.
   }
   // else: mid-session name change — no extra action
   if (wasNameChange) {
@@ -1073,18 +1078,28 @@ socket.on("partnerFound", (partner) => {
 let partnerWasReconnecting = false;
 
 socket.on("partnerReconnecting", (data) => {
-  // Partner's socket dropped — stay silent, keep chat as-is
+  // Partner's socket dropped — disable inputs but keep chat intact.
+  // Do NOT clear chat, do NOT show disconnect message yet.
   partnerWasReconnecting = true;
   canBlockDisconnected   = false;
+  partnerConnected       = false;  // can't send while partner is gone
+  setInputsEnabled(false);
+  updateBlockBtn();
+  hideTypingIndicator();
+  closeGifPickerPanel();
+  addReconnectingMessage(data && data.name ? data.name : (partnerName || "პარტნიორი"));
 });
 
 socket.on("partnerReconnected", (data) => {
-  // Partner came back within 60 s — clear countdown, resume silently.
+  // Partner came back within grace period — resume silently, no clearChat.
   partnerWasReconnecting = false;
   partnerName            = data.name || partnerName;
   partnerConnected       = true;
   canBlockDisconnected   = false;
+  removeReconnectingMessage();
   clearPartnerAwayCountdown();
+  setInputsEnabled(true);   // re-enable inputs so user can keep chatting
+  updateBlockBtn();
 });
 
 // Own socket restored to previous partner after reconnecting
@@ -1133,6 +1148,8 @@ socket.on("partnerTabBack", () => {});
 socket.on("partnerDisconnected", (data) => {
   const wasReconnecting = partnerWasReconnecting;
   partnerWasReconnecting = false;
+
+  removeReconnectingMessage();  // remove "კავშირი გაწყდა..." if it was shown
 
   const leftName = data.name || partnerName || "Anonymous";
   addDisconnectMessage(`${leftName} - მან გადაგტოვა 😟`);
@@ -1342,7 +1359,9 @@ document.addEventListener("DOMContentLoaded", () => {
           .then(d => {
             _challengeToken = d.token;
             _challengePow   = (d.nonce * 31 + d.nonce % 97);
-            isFirstLogin    = true; // triggers findPartner if partner is gone
+            // Do NOT set isFirstLogin=true here — we are reconnecting, not a fresh start.
+            // If partner is gone, server sends waitingForPartner; user presses ძებნა manually.
+            isReconnecting  = true;
             socket.emit("setName", {
               name:      savedName,
               token:     _challengeToken,
