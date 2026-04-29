@@ -994,10 +994,8 @@ socket.on("nameAccepted", (acceptedName) => {
   } else if (isReconnecting) {
     isReconnecting = false;
     removeReconnectingMessage();
-    // Do NOT reset partnerConnected or disable inputs.
-    // If we were in a chat, keep it alive — server will emit partnerRestored
-    // (chat resumes) or partnerDisconnected (grace period ended).
-    // Either way, the user sees no interruption.
+    // Keep chat and inputs as-is — server will emit partnerRestored
+    // or partnerDisconnected. Either way no visible interruption.
   }
   // else: mid-session name change — no extra action
   if (wasNameChange) {
@@ -1072,19 +1070,20 @@ socket.on("partnerFound", (partner) => {
 let partnerWasReconnecting = false;
 
 socket.on("partnerReconnecting", (data) => {
-  // Partner's socket dropped temporarily — keep chat fully active.
-  // No message, no disable — chat continues as if nothing happened.
+  // Partner's connection dropped temporarily — keep everything running silently.
   partnerWasReconnecting = true;
+  // Do NOT disable inputs, do NOT show any message — chat continues.
 });
 
 socket.on("partnerReconnected", (data) => {
-  // Partner came back — already seamless since we never disabled anything.
+  // Partner came back — seamless since we never disabled anything.
   partnerWasReconnecting = false;
   partnerName            = data.name || partnerName;
   partnerConnected       = true;
   canBlockDisconnected   = false;
   removeReconnectingMessage();
   clearPartnerAwayCountdown();
+  setInputsEnabled(true);
   updateBlockBtn();
 });
 
@@ -1099,12 +1098,9 @@ socket.on("partnerRestored", (data) => {
 });
 
 socket.on("waitingForPartner", () => {
-  // Only disable inputs if we weren't already in a chat.
-  // If partnerConnected was true, server will follow up with
-  // partnerRestored or partnerDisconnected — don't jump the gun.
+  // Only disable if we weren't already actively chatting
   if (!partnerConnected) {
-    partnerConnected = false;
-    partnerName      = "";
+    partnerName = "";
     setInputsEnabled(false);
   }
   // Do NOT auto-search — user must press ძებნა manually
@@ -1137,14 +1133,15 @@ socket.on("partnerTabAway", () => {});
 socket.on("partnerTabBack", () => {});
 
 socket.on("partnerDisconnected", (data) => {
-  // Grace period ended — partner didn't come back.
-  // Still keep chat open and inputs enabled — no message, no kick.
+  // Grace period ended. Keep chat open and inputs enabled — no message shown.
+  // The user can keep typing; if partner comes back messages will be there.
   partnerWasReconnecting = false;
   removeReconnectingMessage();
   lastPartnerName      = data.name || partnerName || "";
   canBlockDisconnected = !!lastPartnerName;
   updateBlockBtn();
-  // Intentionally NOT disabling inputs or showing a disconnect message.
+  // Intentionally NOT disabling inputs, NOT showing disconnect message,
+  // NOT clearing chat — everything stays as-is.
 });
 
 socket.on("userBlocked", (data) => {
