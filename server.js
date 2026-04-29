@@ -368,9 +368,13 @@ io.on("connection", (socket) => {
       return;
     }
 
-    if (activeUsernames.has(trimmed.toLowerCase())) {
-      if (pendingDisconnects.has(trimmed.toLowerCase())) {
-        activeUsernames.delete(trimmed.toLowerCase());
+    const lowerTrimmed = trimmed.toLowerCase();
+
+    // Allow reclaiming a name that is pending reconnect (user's own name during grace period)
+    if (activeUsernames.has(lowerTrimmed)) {
+      if (pendingDisconnects.has(lowerTrimmed)) {
+        // This is the user reconnecting with their own name — allowed
+        // (activeUsernames will be re-confirmed inside tryRestorePartnership)
       } else {
         socket.emit("nameTaken");
         return;
@@ -379,9 +383,9 @@ io.on("connection", (socket) => {
 
     if (socket.userName) activeUsernames.delete(socket.userName.toLowerCase());
     socket.userName = trimmed;
-    activeUsernames.add(trimmed.toLowerCase());
+    activeUsernames.add(lowerTrimmed);
     socket.emit("nameAccepted", trimmed);
-    tryRestorePartnership(socket, trimmed.toLowerCase());
+    tryRestorePartnership(socket, lowerTrimmed);
   });
 
   function tryRestorePartnership(sock, nameLower) {
@@ -389,6 +393,8 @@ io.on("connection", (socket) => {
     const { partner, timeout } = pendingDisconnects.get(nameLower);
     clearTimeout(timeout);
     pendingDisconnects.delete(nameLower);
+    // Re-register the username (it was kept reserved during grace period)
+    activeUsernames.add(nameLower);
     if (partner.connected && !partner.partner) {
       sock.partner    = partner;
       partner.partner = sock;
@@ -839,8 +845,6 @@ io.on("connection", (socket) => {
     // Cancel any active game first
     cleanupGameForSocket(socket.id);
 
-    if (socket.userName) activeUsernames.delete(socket.userName.toLowerCase());
-
     if (socket.partner) {
       const partner   = socket.partner;
       const name      = socket.userName || "Anonymous";
@@ -850,15 +854,25 @@ io.on("connection", (socket) => {
       partner.partner = null;
 
       if (socket.userName) {
+        // Keep the username reserved during the grace period so the user
+        // can reclaim it when they reconnect (prevents "nameTaken" on return).
+        // activeUsernames.delete is called inside the timeout if they don't come back.
         partner.emit("partnerReconnecting", { name });
         const timeout = setTimeout(() => {
           pendingDisconnects.delete(nameLower);
+          // Now release the username — they didn't come back in time
+          activeUsernames.delete(nameLower);
           if (partner.connected) partner.emit("partnerDisconnected", { name });
         }, RECONNECT_GRACE_MS);
         pendingDisconnects.set(nameLower, { partner, timeout });
+        // Do NOT delete from activeUsernames yet — reserved for reconnect
       } else {
+        activeUsernames.delete(socket.userName?.toLowerCase() || "");
         partner.emit("partnerDisconnected", { name: "Anonymous" });
       }
+    } else {
+      // Not in a chat — release username immediately
+      if (socket.userName) activeUsernames.delete(socket.userName.toLowerCase());
     }
 
     waitingQueue = waitingQueue.filter(s => s.id !== socket.id);
