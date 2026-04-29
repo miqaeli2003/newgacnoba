@@ -400,9 +400,9 @@ io.on("connection", (socket) => {
       sock._isGhost    = false;
       sock.partner     = partner;
       partner.partner  = sock;
-      // Flush queued messages from staying user
-      const queue = sock._messageQueue || [];
-      sock._messageQueue = [];
+      // Flush queued messages from staying user (stored on the ghost socket)
+      const queue = ghostSocket._messageQueue || [];
+      ghostSocket._messageQueue = [];
       queue.forEach(m => sock.emit("message", m));
       sock.emit("partnerRestored",       { name: partner.userName });
       partner.emit("partnerReconnected", { name: sock.userName });
@@ -861,7 +861,6 @@ io.on("connection", (socket) => {
         }, RECONNECT_GRACE_MS);
         pendingDisconnects.set(nameLower, { partner, timeout, ghostSocket: socket });
       } else {
-        activeUsernames.delete(socket.userName?.toLowerCase() || "");
         partner.partner = null;
         partner.emit("partnerDisconnected", { name: "Anonymous" });
       }
