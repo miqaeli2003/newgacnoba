@@ -164,8 +164,12 @@ document.addEventListener("visibilitychange", () => {
     unreadCount    = 0;
     document.title = originalTitle;
 
-    // If socket dropped while backgrounded, kick it to reconnect immediately
+    // If socket dropped while backgrounded, reconnect silently — do NOT show
+    // the name modal or reload the page. The socket "connect" handler will
+    // re-emit setName automatically so the session resumes.
     if (!socket.connected && userName) {
+      // Make sure the name modal stays hidden during reconnect
+      if (nameModal) nameModal.style.display = "none";
       socket.connect();
     }
   }
@@ -923,6 +927,8 @@ function _doSetName(name) {
 socket.on("connect", () => {
   if (userName && !isFirstLogin) {
     isReconnecting = true;
+    // Hide the name modal — we are silently reconnecting, not asking for a new name
+    if (nameModal) nameModal.style.display = "none";
     socket.emit("setName", { name: userName, token: _challengeToken || "", powAnswer: _challengePow || 0 });
   }
 });
@@ -1178,10 +1184,16 @@ socket.on("partnerLinkKicked", () => {
 });
 
 socket.on("autoKicked", () => {
-  // Clear saved session so the user is not auto-reconnected after kick
-  try { sessionStorage.removeItem("gaicani_username"); } catch (_) {}
-  socket.disconnect();
-  window.location.reload();
+  // Only reload if user hasn't started chatting yet (no userName set).
+  // If mid-session (userName exists), silently reconnect instead of kicking to main page.
+  if (!userName) {
+    try { sessionStorage.removeItem("gaicani_username"); } catch (_) {}
+    socket.disconnect();
+    window.location.reload();
+  } else {
+    // Mid-session: reconnect gracefully without reloading the page
+    if (!socket.connected) socket.connect();
+  }
 });
 
 // awayTimeout disabled — intentionally ignored
