@@ -1078,27 +1078,21 @@ socket.on("partnerFound", (partner) => {
 let partnerWasReconnecting = false;
 
 socket.on("partnerReconnecting", (data) => {
-  // Partner's socket dropped — disable inputs but keep chat intact.
-  // Do NOT clear chat, do NOT show disconnect message yet.
+  // Partner's socket dropped temporarily (browser minimized / closed).
+  // Keep chat fully active — inputs stay on, no message shown.
+  // If they don't come back the server will send partnerDisconnected later.
   partnerWasReconnecting = true;
-  canBlockDisconnected   = false;
-  partnerConnected       = false;  // can't send while partner is gone
-  setInputsEnabled(false);
-  updateBlockBtn();
-  hideTypingIndicator();
-  closeGifPickerPanel();
-  addReconnectingMessage(data && data.name ? data.name : (partnerName || "პარტნიორი"));
+  // intentionally do NOT disable inputs or show any message
 });
 
 socket.on("partnerReconnected", (data) => {
-  // Partner came back within grace period — resume silently, no clearChat.
+  // Partner came back — already seamless because we never disabled inputs.
   partnerWasReconnecting = false;
   partnerName            = data.name || partnerName;
   partnerConnected       = true;
   canBlockDisconnected   = false;
   removeReconnectingMessage();
   clearPartnerAwayCountdown();
-  setInputsEnabled(true);   // re-enable inputs so user can keep chatting
   updateBlockBtn();
 });
 
@@ -1146,23 +1140,19 @@ socket.on("partnerTabAway", () => {});
 socket.on("partnerTabBack", () => {});
 
 socket.on("partnerDisconnected", (data) => {
-  const wasReconnecting = partnerWasReconnecting;
+  // Grace period ended — partner didn't come back.
+  // We still do NOT show a disconnect message or disable inputs.
+  // The user can keep typing; messages will be delivered if partner reconnects,
+  // or silently dropped. Chat continues uninterrupted.
   partnerWasReconnecting = false;
+  removeReconnectingMessage();
 
-  removeReconnectingMessage();  // remove "კავშირი გაწყდა..." if it was shown
-
-  const leftName = data.name || partnerName || "Anonymous";
-  addDisconnectMessage(`${leftName} - მან გადაგტოვა 😟`);
-  lastPartnerName      = partnerName || data.name || "";
+  // Remember the name for block functionality
+  lastPartnerName      = data.name || partnerName || "";
   canBlockDisconnected = !!lastPartnerName;
-
-  partnerConnected = false;
-  partnerName      = "";
-  stopSearchRetry();
-  hideTypingIndicator();
-  setInputsEnabled(false);
   updateBlockBtn();
-  closeGifPickerPanel();
+  // NOTE: intentionally NOT calling addDisconnectMessage, setInputsEnabled(false),
+  // or clearChat — chat keeps going as if nothing happened.
 });
 
 socket.on("userBlocked", (data) => {
