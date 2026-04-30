@@ -196,7 +196,12 @@ const gameById     = new Map(); // gameId   → game object
 function updateOnlineCount() { io.emit("onlineCount", io.sockets.sockets.size); }
 
 function cleanQueue() {
-  waitingQueue = waitingQueue.filter(s => s.connected && !s.partner && s.userName);
+  waitingQueue = waitingQueue.filter(s =>
+    s.connected &&
+    !s.partner &&
+    s.userName &&
+    !s._isGhost   // exclude ghost sockets that are mid-reconnect
+  );
 }
 
 function countTagOverlap(a = [], b = []) {
@@ -400,6 +405,7 @@ io.on("connection", (socket) => {
       sock._isGhost    = false;
       sock.partner     = partner;
       partner.partner  = sock;
+      ghostSocket.partner = null;   // clear stale partner ref on the ghost so it can't be reused
       // Flush queued messages from staying user (stored on the ghost socket)
       const queue = ghostSocket._messageQueue || [];
       ghostSocket._messageQueue = [];
@@ -452,6 +458,15 @@ io.on("connection", (socket) => {
     }
 
     const partnerSocket = best;
+
+    // Double-check partner is still free — race condition guard
+    // (partner could disconnect or get matched between cleanQueue() and now)
+    if (!partnerSocket.connected || partnerSocket.partner || partnerSocket._isGhost) {
+      if (!waitingQueue.some(s => s.id === socket.id)) waitingQueue.push(socket);
+      broadcastQueuePositions();
+      return;
+    }
+
     waitingQueue = waitingQueue.filter(s => s.id !== partnerSocket.id && s.id !== socket.id);
 
     socket.partner        = partnerSocket;
@@ -626,9 +641,10 @@ io.on("connection", (socket) => {
       const oldPartner   = socket.partner;
       const oldPartnerId = oldPartner.id;
 
-      socket.partner         = null;
-      oldPartner.partner     = null;
-      socket.lastPartnerName = "";
+      socket.partner              = null;
+      oldPartner.partner          = null;
+      socket.lastPartnerName      = "";
+      oldPartner.lastPartnerName  = "";   // prevent stale block target on the skipped side
       oldPartner.emit("partnerDisconnected", { name: socket.userName });
 
       socket.recentPartnerIds.add(oldPartnerId);
@@ -856,8 +872,11 @@ io.on("connection", (socket) => {
         const timeout = setTimeout(() => {
           pendingDisconnects.delete(nameLower);
           activeUsernames.delete(nameLower);
-          if (partner.partner === socket) partner.partner = null;
-          if (partner.connected) partner.emit("partnerDisconnected", { name });
+          // Only break the partner link if the staying partner hasn't moved on yet
+          if (partner.partner === socket || partner.partner === null) {
+            if (partner.partner === socket) partner.partner = null;
+            if (partner.connected) partner.emit("partnerDisconnected", { name });
+          }
         }, RECONNECT_GRACE_MS);
         pendingDisconnects.set(nameLower, { partner, timeout, ghostSocket: socket });
       } else {
