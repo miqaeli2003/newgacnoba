@@ -122,8 +122,7 @@ app.get("/admin/users", adminAuth, (req, res) => {
       connected: socket.connected,
     });
   }
-  // Sort: chatting first, then waiting
-  users.sort((a, b) => (b.partner ? 1 : 0) - (a.partner ? 1 : 0));
+  users.sort((a, b) => (b.partner ? 1 : 0) - (a.partner ? 1 : 0)); // chatting first
   res.json({ count: users.length, users });
 });
 
@@ -577,6 +576,7 @@ io.on("connection", (socket) => {
       return;
     }
     LINK_RE.lastIndex = 0;
+    if (!socket.partner) return; // partner left between link check and ghost check
     if (socket.partner._isGhost) {
       socket.partner._messageQueue = socket.partner._messageQueue || [];
       socket.partner._messageQueue.push({ text, messageId, replyTo });
@@ -588,6 +588,7 @@ io.on("connection", (socket) => {
   // ── Question card ─────────────────────────────────────────────────────────
   socket.on("sendQuestion", ({ text }) => {
     if (!socket.partner || typeof text !== "string") return;
+    if (socket.partner._isGhost) return; // partner is mid-reconnect, skip
     const safeText = text.slice(0, 300).replace(/<[^>]*>/g, "").trim();
     if (!safeText) return;
     socket.partner.emit("partnerQuestion", { text: safeText, senderName: socket.userName });
@@ -602,6 +603,7 @@ io.on("connection", (socket) => {
   socket.on("gif", (data) => {
     if (!socket.partner || typeof data?.url !== "string") return;
     if (!data.url.startsWith("https://media.tenor.com/")) return;
+    if (socket.partner._isGhost) return; // partner mid-reconnect
     socket.partner.emit("gif", { url: data.url, preview: data.preview });
   });
 
