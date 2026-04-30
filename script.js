@@ -219,6 +219,8 @@ function removeReconnectingMessage()       { document.getElementById("reconnecti
 function addSearchingMessage() {
   // Remove any existing searching block
   document.getElementById("searchingMsg")?.remove();
+  // Ensure inputs are disabled while searching so user can't type into a non-existent chat
+  setInputsEnabled(false);
 
   const wrapper     = document.createElement("div");
   wrapper.id        = "searchingMsg";
@@ -1173,7 +1175,8 @@ socket.on("partnerDisconnected", (data) => {
   canBlockDisconnected = !!lastPartnerName;
   setInputsEnabled(false);
   updateBlockBtn();
-  // No message, no clearChat — chat stays visible so they can block
+  // Show a visible notice that partner left — chat stays visible so they can block
+  addDisconnectMessage(`❌ ${lastPartnerName || "პარტნიორი"} გათიშა.`);
 });
 
 socket.on("userBlocked", (data) => {
