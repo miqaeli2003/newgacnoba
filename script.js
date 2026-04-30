@@ -1084,6 +1084,8 @@ socket.on("partnerFound", (partner) => {
   updateBlockBtn();
   playNotification("partnerFound");
   incrementUnread();
+  // Focus the input so the user can start typing immediately (especially on mobile)
+  setTimeout(() => messageInput.focus(), 100);
 });
 
 // Reconnect grace-period events
@@ -1114,14 +1116,18 @@ socket.on("partnerRestored", (data) => {
   canBlockDisconnected = false;
   setInputsEnabled(true);
   updateBlockBtn();
+  setTimeout(() => messageInput.focus(), 100);
   // No clearChat(), no system message — messages stay, chat resumes silently
 });
 
 socket.on("waitingForPartner", () => {
+  // Guard: never disable inputs if partnerConnected is already true
+  // (race condition: partnerFound can arrive just before waitingForPartner)
   if (!partnerConnected) {
     partnerName = "";
     setInputsEnabled(false);
   }
+  // If partnerConnected is true, partnerFound already won the race — do nothing
 });
 
 socket.on("partnerTyping", (typing) => {
@@ -1170,10 +1176,14 @@ socket.on("userBlocked", (data) => {
   partnerName          = "";
   lastPartnerName      = "";
   canBlockDisconnected = false;
-  setInputsEnabled(false);
   updateBlockBtn();
   closeGifPickerPanel();
   addSystemMessage(`🔴 „${blockedName}" -  წარმატებით იქნა დაბლოკილი 🔴`);
+  // Automatically search for a new partner after blocking
+  addSearchingMessage();
+  setInputsEnabled(false);
+  socket.emit("findPartner");
+  startSearchRetry();
 });
 
 socket.on("blockLimitReached", () => {
@@ -1188,10 +1198,16 @@ socket.on("youWereBlocked", (data) => {
   canBlockDisconnected = false;
   stopSearchRetry();
   hideTypingIndicator();
-  setInputsEnabled(false);
   updateBlockBtn();
   closeGifPickerPanel();
   addDisconnectMessage(`${blockerName} -მა დაგბლოკათ :(`);
+  // Automatically search for a new partner
+  setTimeout(() => {
+    addSearchingMessage();
+    setInputsEnabled(false);
+    socket.emit("findPartner");
+    startSearchRetry();
+  }, 1500);
 });
 
 socket.on("reportConfirmed", () => {
@@ -1270,6 +1286,7 @@ nextBtn.addEventListener("click", () => {
   setInputsEnabled(false);
   updateBlockBtn();
   closeGifPickerPanel();
+  clearReply();
   socket.emit("next");
   startSearchRetry();
 });
