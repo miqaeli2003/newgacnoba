@@ -523,7 +523,14 @@ function showToast(text, duration = 3000) {
 function startSearchRetry() {
   stopSearchRetry();
   searchRetryInterval = setInterval(() => {
-    if (!partnerConnected && userName) socket.emit("findPartner");
+    // Double-check both flags before re-emitting — partnerFound can arrive
+    // between ticks and set partnerConnected=true; we must not clobber that.
+    if (!partnerConnected && !isReconnecting && userName) {
+      socket.emit("findPartner");
+    } else if (partnerConnected) {
+      // Already matched — clean up the interval immediately
+      stopSearchRetry();
+    }
   }, 2000);
 }
 
@@ -1097,6 +1104,7 @@ socket.on("partnerReconnecting", (data) => {
 });
 
 socket.on("partnerReconnected", (data) => {
+  stopSearchRetry();
   partnerWasReconnecting = false;
   partnerName            = data.name || partnerName;
   partnerConnected       = true;
