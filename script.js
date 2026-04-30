@@ -872,7 +872,7 @@ function _resetSaveBtn() {
 function saveName() {
   const name = nameInput.value.trim();
   if (!name)            { showNameError("შეიყვანეთ სახელი ..."); return; }
-  if (name.length < 2)  { showNameError("სახელი უნდა შედგებოდეს მინიმუ ორი სიმბოლოსგან!"); return; }
+  if (name.length < 2)  { showNameError("სახელი უნდა შედგებოდეს მინიმუმ ორი სიმბოლოსგან!"); return; }
   if (name.length > 20) { showNameError("20 სიმბოლოზე მეტი ვერ იქნება სახელი ! "); return; }
   clearNameError();
 
@@ -1292,7 +1292,7 @@ messageInput.addEventListener("keypress", (e) => {
 messageInput.addEventListener("input", () => {
   // Character counter
   const len = messageInput.value.length;
-  charCount.textContent = ``;
+  charCount.textContent = len > 0 ? `${len}/2000` : ``;
   charCount.classList.toggle("warning", len > 1800);
 
   // Typing indicator
