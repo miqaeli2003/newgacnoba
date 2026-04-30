@@ -1226,12 +1226,7 @@ socket.on("reportConfirmed", () => {
 });
 
 socket.on("messageFlagged", () => {
-  const notice       = document.createElement("div");
-  notice.className   = "system-message";
-  notice.textContent = "შეტყობინება გაიფილტრა და არ გაიგზავნა.";
-  chat.appendChild(notice);
-  scheduleScroll();
-  setTimeout(() => notice.remove(), 3000);
+  // silently drop — no notice shown to user
 });
 
 // Sender gets kicked for sending a link
@@ -1281,7 +1276,6 @@ socket.on("autoKicked", () => {
   updateBlockBtn();
   closeGifPickerPanel();
   clearChat();
-  addSystemMessage("🚫 თქვენ გაირიცხეთ. გვერდი განაახლეთ თუ გსურთ დაბრუნება.");
   // Do NOT reload — just show message
 });
 
