@@ -458,7 +458,7 @@ function clearChat() { chat.innerHTML = ""; clearReply(); }
 function clearPartnerAwayCountdown() {}
 
 function updateOnlineCount(count) {
-  onlineCountEl.textContent = `Users: ${count}`;
+  onlineCountEl.textContent = `Users: ${count + 25}`;
 }
 
 // ── Reply helpers ──────────────────────────────────────────────────────────────
