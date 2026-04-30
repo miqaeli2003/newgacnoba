@@ -274,7 +274,7 @@
         </div>
         <div class="ttt-board" id="tttBoard">
           ${Array(9).fill(null).map((_, i) => `
-            <button class="ttt-cell" data-index="${i}" ${!myTurn ? 'disabled' : ''}></button>
+            <button class="ttt-cell" data-index="${i}" ${(!myTurn || state.board[i]) ? 'disabled' : ''}>${state.board[i] || ''}</button>
           `).join('')}
         </div>
         <div class="ttt-role-badge">შენ ხარ: <strong class="ttt-role-symbol">${role}</strong></div>`;
