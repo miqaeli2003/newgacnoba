@@ -458,7 +458,7 @@ function clearChat() { chat.innerHTML = ""; clearReply(); }
 function clearPartnerAwayCountdown() {}
 
 function updateOnlineCount(count) {
-  onlineCountEl.textContent = `Users: ${count+50}`;
+  onlineCountEl.textContent = `Users: ${count}`;
 }
 
 // ── Reply helpers ──────────────────────────────────────────────────────────────
@@ -967,10 +967,9 @@ socket.on("tokenInvalid", () => {
 
 socket.on("nameAccepted", (acceptedName) => {
   const wasNameChange = !isFirstLogin && !isReconnecting;
+  _resetSaveBtn(); // cancel the 8-second safety timeout and re-enable button
   userName                = acceptedName;
   nameModal.style.display = "none";
-  saveNameBtn.disabled    = false;
-  saveNameBtn.textContent = "საუბრის დაწყება";
   clearNameError();
 
   // Persist username so a page reload (iOS background kill) auto-reconnects
@@ -1059,7 +1058,7 @@ socket.on("queuePosition", ({ position, total }) => {
   const wrapper = document.getElementById("searchingMsg");
   if (wrapper) {
     const msg = wrapper.querySelector(".system-message");
-    if (msg) msg.textContent = `ვეძებთ ახალ პარტნიორს... 🔎`;
+    if (msg) msg.textContent = `ვეძებთ ახალ პარტნიორს... 🔎 (${position}/${total})`;
   }
 });
 
@@ -1109,8 +1108,10 @@ socket.on("partnerReconnected", (data) => {
 // Own socket restored to previous partner after reconnecting
 socket.on("partnerRestored", (data) => {
   stopSearchRetry();
-  partnerName      = data.name || "Anonymous";
-  partnerConnected = true;
+  partnerName          = data.name || "Anonymous";
+  partnerConnected     = true;
+  lastPartnerName      = "";
+  canBlockDisconnected = false;
   setInputsEnabled(true);
   updateBlockBtn();
   // No clearChat(), no system message — messages stay, chat resumes silently
@@ -1132,8 +1133,8 @@ socket.on("message", (msg) => {
   addMessage(msg.text, false, msg.messageId, msg.replyTo || null);
   playNotification("message");
   incrementUnread();
-  // Tell sender we received/read the message
-  if (msg.messageId) socket.emit("seen", { messageId: msg.messageId });
+  // Only send seen receipt if the tab is actually visible
+  if (msg.messageId && !document.hidden) socket.emit("seen", { messageId: msg.messageId });
 });
 
 socket.on("partnerSeen", ({ messageId }) => {
@@ -1152,10 +1153,13 @@ socket.on("partnerTabBack", () => {});
 socket.on("partnerDisconnected", (data) => {
   partnerWasReconnecting = false;
   removeReconnectingMessage();
-  lastPartnerName      = data.name || partnerName || "";
+  partnerConnected     = false;
+  partnerName          = "";
+  lastPartnerName      = data.name || lastPartnerName || "";
   canBlockDisconnected = !!lastPartnerName;
+  setInputsEnabled(false);
   updateBlockBtn();
-  // No message, no disable — chat stays open
+  // No message, no clearChat — chat stays visible so they can block
 });
 
 socket.on("userBlocked", (data) => {
