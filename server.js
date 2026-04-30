@@ -722,6 +722,7 @@ io.on("connection", (socket) => {
   // Send game request to partner
   socket.on("game:request", ({ gameType }) => {
     if (!socket.partner) return;
+    if (socket.partner._isGhost) return; // partner mid-reconnect, can't start game
     if (!["ttt", "rps", "math"].includes(gameType)) return;
     socket.partner.emit("game:invite", { gameType, fromId: socket.id });
   });
@@ -776,6 +777,13 @@ io.on("connection", (socket) => {
     const [p1Id, p2Id] = game.players;
     const partnerId    = socket.id === p1Id ? p2Id : p1Id;
     const partner      = io.sockets.sockets.get(partnerId);
+
+    // If partner is a ghost (mid-reconnect) we can't relay moves — end the game
+    if (!partner || partner._isGhost) {
+      socket.emit("game:partnerLeft");
+      cleanupGame(game);
+      return;
+    }
 
     // ── Tic Tac Toe ──────────────────────────────────────────────
     if (game.type === "ttt") {
@@ -849,7 +857,7 @@ io.on("connection", (socket) => {
   socket.on("game:rematch", ({ gameType, toId }) => {
     if (!["ttt", "rps", "math"].includes(gameType)) return;
     const target = io.sockets.sockets.get(toId);
-    if (target) target.emit("game:invite", { gameType, fromId: socket.id, isRematch: true });
+    if (target && !target._isGhost) target.emit("game:invite", { gameType, fromId: socket.id, isRematch: true });
   });
 
   // Tab-away events disabled — no action taken when user hides browser tab
