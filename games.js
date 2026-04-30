@@ -125,7 +125,7 @@
     function toggleGameMenu() {
       const menu = el('gameMenu');
       if (!menu) return;
-      menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+      menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
     }
 
     // ────────────────────────────────────────────────────────────
@@ -159,8 +159,10 @@
       el('gameExitBtn') .addEventListener('click',  closeGame);
       el('gameRematchBtn').addEventListener('click', () => {
         if (!currentGame) return;
-        socket.emit('game:rematch', { gameType: currentGame.type, toId: currentGame.opponentId });
-        closeGame();
+        const rematchType = currentGame.type;
+        const rematchOpponent = currentGame.opponentId;
+        closeGame(); // nulls currentGame — must read values first
+        socket.emit('game:rematch', { gameType: rematchType, toId: rematchOpponent });
       });
     }
 
@@ -208,21 +210,29 @@
       if (chatInput) chatInput.prepend(bar);
       else document.body.appendChild(bar);
 
+      let _inviteExpired = false;
       el('gameAcceptBtn').addEventListener('click', () => {
+        if (_inviteExpired) return;
+        _inviteExpired = true;
         bar.remove();
         clearGameBtnPulse();
         socket.emit('game:response', { accepted: true, gameType, toId: fromId });
       });
       el('gameDeclineBtn').addEventListener('click', () => {
+        if (_inviteExpired) return;
+        _inviteExpired = true;
         bar.remove();
         clearGameBtnPulse();
         socket.emit('game:response', { accepted: false, gameType, toId: fromId });
       });
 
       setTimeout(() => {
-        if (el('gameInviteBar')) {
+        if (el('gameInviteBar') && !_inviteExpired) {
+          _inviteExpired = true;
           el('gameInviteBar').remove();
           clearGameBtnPulse();
+          // Notify server so requester isn't left hanging
+          socket.emit('game:response', { accepted: false, gameType, toId: fromId });
         }
       }, 30000);
     }
