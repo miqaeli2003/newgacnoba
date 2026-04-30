@@ -411,6 +411,9 @@ io.on("connection", (socket) => {
       queue.forEach(m => sock.emit("message", m));
       sock.emit("partnerRestored",       { name: partner.userName });
       partner.emit("partnerReconnected", { name: sock.userName });
+      // Reset repeat-detection ring for the restored session
+      sock.lastMessages    = []; sock.spamStrikes    = 0;
+      partner.lastMessages = []; partner.spamStrikes = 0;
       return true;
     }
     return false;
@@ -480,8 +483,10 @@ io.on("connection", (socket) => {
 
     // ── Reset anti-bot state for both users ────────────────────────────────
     const now = Date.now();
-    socket.hasTyped      = false;  socket.chatStartedAt = now;
-    partnerSocket.hasTyped = false; partnerSocket.chatStartedAt = now;
+    socket.hasTyped        = false;  socket.chatStartedAt = now;
+    socket.lastMessages    = [];     socket.spamStrikes   = 0;
+    partnerSocket.hasTyped = false;  partnerSocket.chatStartedAt = now;
+    partnerSocket.lastMessages = []; partnerSocket.spamStrikes   = 0;
     broadcastQueuePositions();
   }
 
@@ -557,11 +562,13 @@ io.on("connection", (socket) => {
     if (socket.lastMessages.includes(normalised)) {
       console.warn(`[BOT-REPEAT] Repeated message — ${socket.userName}: ${normalised.slice(0,60)}`);
       socket.spamStrikes++;
-      if (socket.spamStrikes >= 2) { socket.emit("autoKicked"); socket.disconnect(true); }
+      if (socket.spamStrikes >= 3) { socket.emit("autoKicked"); socket.disconnect(true); }
+      // Let the real user know their duplicate was dropped so they're not confused
+      socket.emit("messageFlagged");
       return; // silently drop
     }
     socket.lastMessages.push(normalised);
-    if (socket.lastMessages.length > 6) socket.lastMessages.shift(); // keep last 6
+    if (socket.lastMessages.length > 20) socket.lastMessages.shift(); // keep last 20
 
     LINK_RE.lastIndex = 0; // reset before test — global regex retains lastIndex between calls
     if (LINK_RE.test(text)) {
