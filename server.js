@@ -526,15 +526,12 @@ io.on("connection", (socket) => {
 
     text = text.slice(0, MSG_MAX).replace(/<[^>]*>/g, "").trim();
     if (!text) return;
-    if (hasProfanity(text)) { socket.emit("messageFlagged"); return; }
 
     // ── @ mention kick ────────────────────────────────────────────────────
-    // Messages starting with @word are a common spam/bot pattern.
-    // Kick and disconnect immediately.
     if (/^@\w/.test(text)) {
       console.warn(`[BOT-AT] @ mention message — ${socket.userName}: ${text.slice(0, 60)}`);
       const kickedPartner = socket.partner;
-      socket.emit("linkKicked");          // reuse the existing "you were kicked" event
+      socket.emit("linkKicked");
       if (kickedPartner) {
         kickedPartner.emit("partnerLinkKicked");
         kickedPartner.partner        = null;
@@ -546,31 +543,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    // ── Anti-bot layer 3: phone number detection ──────────────────────────
-    PHONE_RE.lastIndex = 0;
-    if (PHONE_RE.test(text)) {
-      console.warn(`[BOT-PHONE] Phone number in message — ${socket.userName}: ${text.slice(0,60)}`);
-      socket.emit("messageFlagged");
-      socket.spamStrikes++;
-      if (socket.spamStrikes >= 2) { socket.emit("autoKicked"); socket.disconnect(true); }
-      return;
-    }
-
-    // ── Anti-bot layer 4: copy-paste repetition detection ─────────────────
-    // Bots send the same pre-written message to every matched partner.
-    const normalised = text.toLowerCase().replace(/\s+/g, " ").trim();
-    if (socket.lastMessages.includes(normalised)) {
-      console.warn(`[BOT-REPEAT] Repeated message — ${socket.userName}: ${normalised.slice(0,60)}`);
-      socket.spamStrikes++;
-      if (socket.spamStrikes >= 3) { socket.emit("autoKicked"); socket.disconnect(true); }
-      // Let the real user know their duplicate was dropped so they're not confused
-      socket.emit("messageFlagged");
-      return; // silently drop
-    }
-    socket.lastMessages.push(normalised);
-    if (socket.lastMessages.length > 20) socket.lastMessages.shift(); // keep last 20
-
-    LINK_RE.lastIndex = 0; // reset before test — global regex retains lastIndex between calls
+    LINK_RE.lastIndex = 0;
     if (LINK_RE.test(text)) {
       LINK_RE.lastIndex = 0;
       const kickedPartner = socket.partner;
@@ -583,7 +556,7 @@ io.on("connection", (socket) => {
       return;
     }
     LINK_RE.lastIndex = 0;
-    if (!socket.partner) return; // partner left between link check and ghost check
+    if (!socket.partner) return; // partner left
     if (socket.partner._isGhost) {
       socket.partner._messageQueue = socket.partner._messageQueue || [];
       socket.partner._messageQueue.push({ text, messageId, replyTo });
