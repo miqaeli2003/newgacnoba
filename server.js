@@ -661,6 +661,15 @@ io.on("connection", (socket) => {
       setTimeout(() => {
         socket.recentPartnerIds.delete(oldPartnerId);
         if (oldPartner.connected) oldPartner.recentPartnerIds.delete(socket.id);
+        // After cooldown, re-queue both sockets if still waiting — fixes small-pool deadlock
+        if (socket.connected && !socket.partner && socket.userName) {
+          if (!waitingQueue.some(s => s.id === socket.id)) waitingQueue.push(socket);
+          broadcastQueuePositions();
+        }
+        if (oldPartner.connected && !oldPartner.partner && oldPartner.userName) {
+          if (!waitingQueue.some(s => s.id === oldPartner.id)) waitingQueue.push(oldPartner);
+          broadcastQueuePositions();
+        }
       }, 5000);
 
     // Cancel any active game for both sides
@@ -709,6 +718,8 @@ io.on("connection", (socket) => {
         console.log(`Auto-kicking ${blockedSocket.userName}: blocked ${MAX_BLOCKS_RX}x within 5 min`);
         blockedSocket.emit("autoKicked");
         blockedSocket.disconnect(true);
+        // Still notify the blocker so the client redirects them to a new search
+        socket.emit("userBlocked", { name: blockedDisplayName });
         return;
       }
       socket.emit("userBlocked", { name: blockedDisplayName });
