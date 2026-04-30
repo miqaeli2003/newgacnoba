@@ -1361,6 +1361,40 @@ document.addEventListener("touchend", (e) => {
   }
 }, { passive: true });
 
+// ── Welcome page / logo home ──────────────────────────────────────────────────
+// Called when user clicks the GAICANI logo to return to the welcome screen.
+function goToWelcome() {
+  socket.emit("next"); // tell server we're leaving current chat
+  stopSearchRetry();
+  hideTypingIndicator();
+  closeGifPickerPanel();
+  clearChat();
+  clearReply();
+
+  // Reset all session state
+  partnerConnected     = false;
+  partnerName          = "";
+  lastPartnerName      = "";
+  canBlockDisconnected = false;
+  userName             = "";
+  isFirstLogin         = true;
+  isReconnecting       = false;
+  setInputsEnabled(false);
+  updateBlockBtn();
+
+  // Clear saved name so a page reload also shows welcome
+  try { sessionStorage.removeItem("gaicani_username"); } catch (_) {}
+
+  // Show the welcome/name modal fresh
+  const nameModalClose = document.getElementById("nameModalClose");
+  if (nameModalClose) nameModalClose.style.display = "none";
+  nameInput.value         = "";
+  saveNameBtn.textContent = "საუბრის დაწყება";
+  clearNameError();
+  nameModal.style.display = "flex";
+  setTimeout(() => nameInput.focus(), 100);
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
   userName       = "";
@@ -1372,9 +1406,20 @@ document.addEventListener("DOMContentLoaded", () => {
   saveNameBtn.textContent  = "საუბრის დაწყება";
   charCount.textContent    = "";
 
+  // X button on name modal — only active during mid-session name change
+  const nameModalClose = document.getElementById("nameModalClose");
+  if (nameModalClose) {
+    nameModalClose.addEventListener("click", () => {
+      nameModal.style.display = "none";
+      nameModalClose.style.display = "none";
+      clearNameError();
+    });
+  }
+
   // ── Auto-reconnect after iOS page kill ───────────────────────────────────
   // iOS Safari can fully unload the page when the app is backgrounded.
   // If we have a saved username, skip the modal and reconnect silently.
+  // If site data was cleared, sessionStorage returns null → show welcome modal.
   const savedName = (() => { try { return sessionStorage.getItem("gaicani_username"); } catch(_) { return null; } })();
 
   if (savedName) {
@@ -1390,8 +1435,6 @@ document.addEventListener("DOMContentLoaded", () => {
           .then(d => {
             _challengeToken = d.token;
             _challengePow   = (d.nonce * 31 + d.nonce % 97);
-            // Do NOT set isFirstLogin=true here — we are reconnecting, not a fresh start.
-            // If partner is gone, server sends waitingForPartner; user presses ძებნა manually.
             isReconnecting  = true;
             socket.emit("setName", {
               name:      savedName,
@@ -1401,7 +1444,8 @@ document.addEventListener("DOMContentLoaded", () => {
             });
           })
           .catch(() => {
-            // Token fetch failed — fall back to showing the modal
+            // Token fetch failed — fall back to showing the welcome modal
+            nameInput.value = "";
             nameModal.style.display = "flex";
             setTimeout(() => nameInput.focus(), 100);
           });
@@ -1414,17 +1458,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return; // don't show the modal
   }
 
-  // Normal first visit — show entry modal
+  // No saved name (fresh visit OR site data cleared) — always show welcome modal
   nameModal.style.display = "flex";
   setTimeout(() => nameInput.focus(), 100);
-
-  // X button on name modal — only active during mid-session name change
-  const nameModalClose = document.getElementById("nameModalClose");
-  if (nameModalClose) {
-    nameModalClose.addEventListener("click", () => {
-      nameModal.style.display = "none";
-      nameModalClose.style.display = "none";
-      clearNameError();
-    });
-  }
 });
