@@ -654,8 +654,9 @@ io.on("connection", (socket) => {
         if (oldPartner.connected) oldPartner.recentPartnerIds.delete(socket.id);
       }, 5000);
 
-      // Cancel any active game
+    // Cancel any active game for both sides
       cleanupGameForSocket(socket.id);
+      cleanupGameForSocket(oldPartnerId);
     }
 
     waitingQueue = waitingQueue.filter(s => s.id !== socket.id);
