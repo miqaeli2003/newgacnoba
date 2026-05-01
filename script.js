@@ -1206,16 +1206,11 @@ socket.on("youWereBlocked", (data) => {
   canBlockDisconnected = false;
   stopSearchRetry();
   hideTypingIndicator();
+  setInputsEnabled(false);
   updateBlockBtn();
   closeGifPickerPanel();
   addDisconnectMessage(`${blockerName} -მა დაგბლოკათ :(`);
-  // Automatically search for a new partner
-  setTimeout(() => {
-    addSearchingMessage();
-    setInputsEnabled(false);
-    socket.emit("findPartner");
-    startSearchRetry();
-  }, 1500);
+  // Do NOT auto-search — user must press Next manually
 });
 
 socket.on("reportConfirmed", () => {
