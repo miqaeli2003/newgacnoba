@@ -1190,11 +1190,8 @@ socket.on("userBlocked", (data) => {
   updateBlockBtn();
   closeGifPickerPanel();
   addSystemMessage(`🔴 „${blockedName}" -  წარმატებით იქნა დაბლოკილი 🔴`);
-  // Automatically search for a new partner after blocking
-  addSearchingMessage();
   setInputsEnabled(false);
-  socket.emit("findPartner");
-  startSearchRetry();
+  // Do NOT auto-search — user must press Next manually
 });
 
 socket.on("blockLimitReached", () => {
