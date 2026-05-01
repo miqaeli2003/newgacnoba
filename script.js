@@ -1202,6 +1202,7 @@ socket.on("partnerDisconnected", (data) => {
   } else {
     scheduleScroll();
   }
+
 });
 
 socket.on("userBlocked", (data) => {
@@ -1273,12 +1274,6 @@ socket.on("partnerLinkKicked", () => {
   updateBlockBtn();
   closeGifPickerPanel();
   addDisconnectMessage("🚫 ლინკების გაგზავნა აკრძალულია! პარტნიორი გაირიცხა საიტიდან.");
-  // Automatically search for a new partner
-  setTimeout(() => {
-    addSearchingMessage();
-    socket.emit("findPartner");
-    startSearchRetry();
-  }, 1500);
 });
 
 socket.on("autoKicked", () => {
