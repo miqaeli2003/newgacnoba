@@ -1300,7 +1300,7 @@ blockBtn.addEventListener("click", () => {
   const confirmed = confirm(
     `Block "${targetName}"? თქვენ ვეღარ შეხვდებით ამ იუზერს ბლოკის შემდეგ. 😡 `
   );
-  if (confirmed) socket.emit("blockUser");
+  if (confirmed) socket.emit("blockUser", { targetName });
 });
 
 sendBtn.addEventListener("click", sendMessage);
