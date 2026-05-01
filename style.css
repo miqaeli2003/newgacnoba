@@ -252,6 +252,40 @@ html, body {
   margin: 4px 0;
 }
 
+/* ── BLOCK OFFER (shown after partner disconnects) ─────────────────────── */
+.block-offer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: rgba(242, 63, 66, 0.08);
+  border: 1px solid rgba(242, 63, 66, 0.3);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin: 6px auto;
+  max-width: 420px;
+  font-size: 0.82em;
+  color: #ccc;
+  text-align: center;
+}
+.block-offer strong {
+  color: #f23f42;
+}
+.block-offer-btn {
+  background: linear-gradient(135deg, #e53935, #b71c1c);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 5px 14px;
+  font-size: 0.88em;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+.block-offer-btn:hover { opacity: 0.85; }
+
 .system-message-reconnecting {
   text-align: center;
   color: #f0b232;
