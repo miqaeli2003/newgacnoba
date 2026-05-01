@@ -655,6 +655,21 @@ io.on("connection", (socket) => {
   });
 
   socket.on("blockUser", () => {
+    // Treat a ghost partner (mid-reconnect grace) the same as "partner already left"
+    if (socket.partner && socket.partner._isGhost) {
+      const ghostName = socket.partner.userName || "";
+      const nameLower = ghostName.toLowerCase();
+      if (pendingDisconnects.has(nameLower)) {
+        const { timeout } = pendingDisconnects.get(nameLower);
+        clearTimeout(timeout);
+        pendingDisconnects.delete(nameLower);
+        activeUsernames.delete(nameLower);
+      }
+      socket.partner.partner = null;
+      socket.partner         = null;
+      if (ghostName && !socket.lastPartnerName) socket.lastPartnerName = ghostName;
+    }
+
     if (!socket.partner && !socket.lastPartnerName) return;
 
     // Enforce per-session block limit
@@ -869,6 +884,9 @@ io.on("connection", (socket) => {
       socket._messageQueue = [];
       // Keep partner.partner pointing at the ghost socket — staying user
       // can keep typing. No event emitted — chat looks uninterrupted.
+      // Store the leaving user's name on the staying partner so they can block
+      // even during the reconnect grace period.
+      partner.lastPartnerName = name;
 
       if (socket.userName) {
         const timeout = setTimeout(() => {
