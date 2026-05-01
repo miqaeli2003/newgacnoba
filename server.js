@@ -654,7 +654,7 @@ io.on("connection", (socket) => {
     tryFindPartner();
   });
 
-  socket.on("blockUser", () => {
+  socket.on("blockUser", (data) => {
     // Treat a ghost partner (mid-reconnect grace) the same as "partner already left"
     if (socket.partner && socket.partner._isGhost) {
       const ghostName = socket.partner.userName || "";
@@ -668,6 +668,11 @@ io.on("connection", (socket) => {
       socket.partner.partner = null;
       socket.partner         = null;
       if (ghostName && !socket.lastPartnerName) socket.lastPartnerName = ghostName;
+    }
+
+    // Fallback: client sends the name it saw — use it if server lost it
+    if (!socket.partner && !socket.lastPartnerName && data && data.targetName) {
+      socket.lastPartnerName = String(data.targetName).trim();
     }
 
     if (!socket.partner && !socket.lastPartnerName) return;
