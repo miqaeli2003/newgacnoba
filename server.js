@@ -639,10 +639,7 @@ io.on("connection", (socket) => {
           if (!waitingQueue.some(s => s.id === socket.id)) waitingQueue.push(socket);
           broadcastQueuePositions();
         }
-        if (oldPartner.connected && !oldPartner.partner && oldPartner.userName) {
-          if (!waitingQueue.some(s => s.id === oldPartner.id)) waitingQueue.push(oldPartner);
-          broadcastQueuePositions();
-        }
+        // oldPartner was left — do NOT auto-queue them; they must press Next themselves
       }, 5000);
 
     // Cancel any active game for both sides
