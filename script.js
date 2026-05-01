@@ -1067,7 +1067,7 @@ socket.on("queuePosition", ({ position, total }) => {
   const wrapper = document.getElementById("searchingMsg");
   if (wrapper) {
     const msg = wrapper.querySelector(".system-message");
-    if (msg) msg.textContent = `ვეძებთ ახალ პარტნიორს... 🔎 (${position}/${total})`;
+    if (msg) msg.textContent = `ვეძებთ ახალ პარტნიორს... 🔎 `;
   }
 });
 
