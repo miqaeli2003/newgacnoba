@@ -286,6 +286,16 @@ html, body {
 }
 .block-offer-btn:hover { opacity: 0.85; }
 
+.searching-warning {
+  text-align: center;
+  color: #f0b232;
+  font-size: 0.78em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+  opacity: 0.85;
+}
+
 .system-message-reconnecting {
   text-align: center;
   color: #f0b232;
@@ -1345,7 +1355,17 @@ html, body {
 
 .keyboard-open .system-message,
 .keyboard-open .system-message-disconnect,
-.keyboard-open .system-message-reconnecting {
+.keyboard-open .searching-warning {
+  text-align: center;
+  color: #f0b232;
+  font-size: 0.78em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+  opacity: 0.85;
+}
+
+.system-message-reconnecting {
   font-size: 0.7em;
   margin: 1px 0;
 }
