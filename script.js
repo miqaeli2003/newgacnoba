@@ -1175,8 +1175,28 @@ socket.on("partnerDisconnected", (data) => {
   canBlockDisconnected = !!lastPartnerName;
   setInputsEnabled(false);
   updateBlockBtn();
-  // Show a visible notice that partner left — chat stays visible so they can block
-  addDisconnectMessage(`❌ ${lastPartnerName || "პარტნიორი"} გათიშა.`);
+
+  // Show disconnect notice + inline block offer
+  const disconnectEl = document.createElement("div");
+  disconnectEl.className = "system-message-disconnect";
+  disconnectEl.textContent = `❌ ${lastPartnerName || "პარტნიორი"} გათიშა.`;
+  chat.appendChild(disconnectEl);
+
+  if (lastPartnerName) {
+    const offerEl = document.createElement("div");
+    offerEl.className = "block-offer";
+    offerEl.innerHTML = `<span>გსურთ დაბლოკოთ <strong>"${lastPartnerName}"</strong>? ის ვეღარ შეძლებს თქვენს შეწუხებას.</span>` +
+      `<button class="block-offer-btn" id="blockOfferBtn">🚫 დაბლოკვა</button>`;
+    chat.appendChild(offerEl);
+    scheduleScroll();
+
+    document.getElementById("blockOfferBtn").addEventListener("click", () => {
+      offerEl.remove();
+      socket.emit("blockUser", { targetName: lastPartnerName });
+    });
+  } else {
+    scheduleScroll();
+  }
 });
 
 socket.on("userBlocked", (data) => {
