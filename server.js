@@ -882,26 +882,22 @@ io.on("connection", (socket) => {
       socket.partner       = null;
       socket._isGhost      = true;
       socket._messageQueue = [];
-      // Keep partner.partner pointing at the ghost socket — staying user
-      // can keep typing. No event emitted — chat looks uninterrupted.
-      // Store the leaving user's name on the staying partner so they can block
-      // even during the reconnect grace period.
+
+      // Immediately notify the staying partner so they see the disconnect
+      // message and can block right away. We clear partner.partner now so
+      // blockUser falls cleanly into the name-only block path.
       partner.lastPartnerName = name;
+      partner.partner         = null;
+      if (partner.connected) partner.emit("partnerDisconnected", { name });
 
       if (socket.userName) {
         const timeout = setTimeout(() => {
           pendingDisconnects.delete(nameLower);
           activeUsernames.delete(nameLower);
-          // Only break the partner link if the staying partner hasn't moved on yet
-          if (partner.partner === socket || partner.partner === null) {
-            if (partner.partner === socket) partner.partner = null;
-            if (partner.connected) partner.emit("partnerDisconnected", { name });
-          }
         }, RECONNECT_GRACE_MS);
         pendingDisconnects.set(nameLower, { partner, timeout, ghostSocket: socket });
       } else {
-        partner.partner = null;
-        partner.emit("partnerDisconnected", { name: "Anonymous" });
+        // Anonymous user — no reconnect grace needed
       }
     } else {
       if (socket.userName) activeUsernames.delete(socket.userName.toLowerCase());
