@@ -254,6 +254,11 @@ function addSearchingMessage() {
   factCard.appendChild(nextFactBtn);
   wrapper.appendChild(factCard);
 
+  const warningEl = document.createElement("div");
+  warningEl.className = "searching-warning";
+  warningEl.textContent = "⚠️ WARNING : გთხოვთ არ ჩაკეცოთ ბრაუზერი";
+  wrapper.appendChild(warningEl);
+
   chat.appendChild(wrapper);
   scheduleScroll();
 
