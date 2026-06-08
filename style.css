@@ -84,6 +84,7 @@ html, body {
 
 .change-name-btn,
 .block-button,
+.report-button,
 .next-button {
   border: none;
   padding: 8px 14px;
@@ -113,6 +114,27 @@ html, body {
   color: #fff;
 }
 .block-button:hover:not(:disabled) { background: linear-gradient(135deg, #c62828 0%, #b71c1c 100%); }
+
+.report-button {
+  background: linear-gradient(135deg, #ff6f00 0%, #e65100 100%);
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+.report-button::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%);
+  pointer-events: none;
+}
+.report-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #e65100 0%, #bf360c 100%);
+  box-shadow: 0 4px 14px rgba(230,81,0,0.45);
+  transform: translateY(-1px);
+}
+.report-button:active:not(:disabled) { transform: translateY(0); }
+.report-button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .block-button:disabled,
 .next-button:disabled {
@@ -1235,6 +1257,7 @@ html, body {
   /* All buttons: icon-only on mobile */
   .change-name-btn,
   .block-button,
+  .report-button,
   .next-button,
   .interests-btn {
     padding: 0;
