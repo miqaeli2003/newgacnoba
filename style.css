@@ -114,22 +114,6 @@ html, body {
 }
 .block-button:hover:not(:disabled) { background: linear-gradient(135deg, #c62828 0%, #b71c1c 100%); }
 
-.report-button {
-  background: linear-gradient(135deg, #f57c00 0%, #e65100 100%);
-  color: #fff;
-  border: none;
-  padding: 8px 14px;
-  border-radius: 10px;
-  font-weight: 700;
-  font-size: 0.9em;
-  cursor: pointer;
-  transition: background 0.18s ease, transform 0.12s ease, box-shadow 0.18s ease;
-  touch-action: manipulation;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-}
-.report-button:hover:not(:disabled) { background: linear-gradient(135deg, #e65100 0%, #bf360c 100%); }
-.report-button:disabled { opacity: 0.5; cursor: not-allowed; }
-
 .block-button:disabled,
 .next-button:disabled {
   opacity: 0.5;
@@ -237,6 +221,66 @@ html, body {
   will-change: transform;
 }
 .gif-message-img:hover { transform: scale(1.02); }
+
+/* ── PHOTO MESSAGE ───────────────────────────────────────────────────────── */
+.message-wrapper.photo-msg-wrapper { max-width: 260px; }
+
+.photo-message-img {
+  width: 100%;
+  max-width: 260px;
+  border-radius: 12px;
+  display: block;
+  cursor: pointer;
+  transition: filter 0.3s ease, transform 0.15s ease;
+  will-change: filter;
+}
+.photo-message-img.blurred {
+  filter: blur(18px);
+  transform: scale(1.02);
+}
+.photo-message-img.blurred:hover { filter: blur(14px); }
+
+.photo-blur-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.photo-blur-hint {
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: 0.78em;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 20px;
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.photo-wrapper-inner {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+/* photo send button */
+.photo-btn {
+  background: linear-gradient(135deg, #43a047 0%, #2e7d32 100%);
+  color: #fff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: background 0.18s ease;
+  touch-action: manipulation;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+.photo-btn:hover:not(:disabled) { background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%); }
+.photo-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ── TIMESTAMP ───────────────────────────────────────────────────────────── */
 
