@@ -68,9 +68,10 @@
       <button id="replyPreviewClose" class="reply-preview-close" title="Cancel reply">✕</button>
     </div>
     <div class="chat-input-row">
-      <input type="text" id="messageInput" placeholder="Type your message..."
+      <textarea id="messageInput" placeholder="Type your message..."
              autocomplete="off" autocorrect="off" autocapitalize="sentences"
-             spellcheck="false" inputmode="text" enterkeyhint="send" disabled />
+             spellcheck="false" inputmode="text" enterkeyhint="send"
+             rows="1" maxlength="2000" disabled></textarea>
       <span id="charCount" class="char-count"></span>
       <button id="questionBtn" class="question-btn" disabled title="Random question">?</button>
       <button id="gifBtn" class="gif-btn" disabled title="Send a GIF">GIF</button>
