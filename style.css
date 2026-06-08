@@ -289,7 +289,7 @@ html, body {
 
 /* photo send button */
 .photo-btn {
-  
+  background: #f8f9fc;
   color: #fff;
   border: none;
   padding: 8px 12px;
