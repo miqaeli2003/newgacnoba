@@ -68,7 +68,51 @@ setInterval(() => {
   const now = Date.now();
   for (const [ip, entry] of linkStrikes)
     if (!entry.bannedUntil || now >= entry.bannedUntil) linkStrikes.delete(ip);
+  for (const [ip, entry] of reportStrikes) {
+    const expired = entry.bannedUntil && now >= entry.bannedUntil;
+    const windowExpired = !entry.bannedUntil && entry.firstReportAt && (now - entry.firstReportAt) >= REPORT_BAN_DURATION_MS;
+    if (expired || windowExpired) reportStrikes.delete(ip);
+  }
 }, 60 * 60 * 1000);
+
+// ── Report-strike system ──────────────────────────────────────────────────────
+// 5 reports from different sessions → 24-hour auto-ban
+const REPORT_BAN_DURATION_MS = 24 * 60 * 60 * 1000;
+const REPORT_THRESHOLD       = 5;
+const reportStrikes = new Map(); // ip → { count, bannedUntil, reporters: Set, firstReportAt }
+
+function recordReport(reporterSocketId, targetIP) {
+  if (!targetIP || targetIP === 'unknown') return false;
+  const now   = Date.now();
+  let entry   = reportStrikes.get(targetIP) || { count: 0, bannedUntil: null, reporters: new Set(), firstReportAt: null };
+  if (entry.bannedUntil && now < entry.bannedUntil) return true; // already banned
+  // Reset count if 24h passed since first report without hitting threshold
+  if (entry.firstReportAt && (now - entry.firstReportAt) >= REPORT_BAN_DURATION_MS) {
+    console.warn(`[REPORT-RESET] IP ${targetIP} — 24h passed, resetting ${entry.count} reports`);
+    entry = { count: 0, bannedUntil: null, reporters: new Set(), firstReportAt: null };
+  }
+  // One report per socket id to prevent spam
+  if (entry.reporters.has(reporterSocketId)) return false;
+  entry.reporters.add(reporterSocketId);
+  entry.count++;
+  if (entry.count === 1) entry.firstReportAt = now; // start the 24h window
+  if (entry.count >= REPORT_THRESHOLD) {
+    entry.bannedUntil = now + REPORT_BAN_DURATION_MS;
+    console.warn(`[REPORT-BAN] IP ${targetIP} auto-banned 24h after ${entry.count} reports`);
+    reportStrikes.set(targetIP, entry);
+    return true; // just got banned
+  }
+  console.warn(`[REPORT] IP ${targetIP} — ${entry.count}/${REPORT_THRESHOLD} reports`);
+  reportStrikes.set(targetIP, entry);
+  return false;
+}
+
+function isReportBanned(ip) {
+  const entry = reportStrikes.get(ip);
+  if (!entry || !entry.bannedUntil) return false;
+  if (Date.now() >= entry.bannedUntil) { reportStrikes.delete(ip); return false; }
+  return true;
+}
 
 const VALID_TAGS = new Set([
   "gaming","music","movies","books","sports",
@@ -337,7 +381,7 @@ io.on("connection", (socket) => {
   socket.clientIP = rawIP;
 
   // ── Drop banned IPs immediately ─────────────────────────────────────────────
-  if (bannedIPs.has(rawIP) || isLinkBanned(rawIP)) {
+  if (bannedIPs.has(rawIP) || isLinkBanned(rawIP) || isReportBanned(rawIP)) {
     socket.emit("autoKicked");
     setTimeout(() => socket.disconnect(true), 500);
     return;
@@ -638,6 +682,16 @@ io.on("connection", (socket) => {
     socket.partner.emit("gif", { url: data.url, preview: data.preview });
   });
 
+  // ── PHOTO ─────────────────────────────────────────────────────────────────
+  socket.on("photo", (data) => {
+    if (!socket.partner || typeof data?.dataUrl !== "string") return;
+    if (socket.partner._isGhost) return;
+    // Validate it's a real image data URL and not too large (~3MB base64 ≈ 4MB string)
+    if (!data.dataUrl.startsWith("data:image/")) return;
+    if (data.dataUrl.length > 4 * 1024 * 1024) return;
+    socket.partner.emit("photo", { dataUrl: data.dataUrl });
+  });
+
   // ── Reactions ────────────────────────────────────────────────────────────
   socket.on("react", ({ messageId, emoji }) => {
     if (!socket.partner || !messageId || !emoji) return;
@@ -654,15 +708,31 @@ io.on("connection", (socket) => {
   // ── Report ───────────────────────────────────────────────────────────────
   socket.on("reportUser", ({ reason }) => {
     if (!socket.partner) return;
+    const targetIP = socket.partner.clientIP;
     const entry = {
       reportedId:   socket.partner.id,
       reportedName: socket.partner.userName,
       reportedBy:   socket.userName,
+      reporterIP:   socket.clientIP,
+      targetIP,
       reason:       (reason || "").slice(0, 200),
       timestamp:    new Date().toISOString(),
     };
     reportLog.push(entry);
     console.log("REPORT:", JSON.stringify(entry));
+
+    const justBanned = recordReport(socket.id, targetIP);
+    if (justBanned) {
+      // Kick the reported partner
+      const target = socket.partner;
+      if (target) {
+        target.emit("reportBanned");
+        target.partner = null;
+        if (socket) { socket.partner = null; }
+        cleanupGameForSocket(target.id);
+        setTimeout(() => target.disconnect(true), 1500);
+      }
+    }
     socket.emit("reportConfirmed");
   });
 
