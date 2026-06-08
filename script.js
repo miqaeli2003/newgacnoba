@@ -746,12 +746,47 @@ function sendGif(fullUrl, previewUrl) {
 socket.on("gif", (data) => addGifMessage(data.url, false));
 
 // ── Photo send ────────────────────────────────────────────────────────────────
-const MAX_PHOTO_BYTES = 2 * 1024 * 1024; // 2 MB — base64 inflates ~33% so stays under 5MB socket buffer
 
 if (photoBtn) {
   photoBtn.addEventListener("click", () => {
     if (photoInput) photoInput.click();
   });
+}
+
+// Compress + resize image to fit within socket buffer
+function compressImage(file, callback) {
+  const MAX_DIM     = 1280;  // max width or height
+  const QUALITY     = 0.82;  // JPEG quality
+  const MAX_B64_LEN = 2.8 * 1024 * 1024; // ~2MB file after base64
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      // Scale down if needed
+      if (width > MAX_DIM || height > MAX_DIM) {
+        if (width > height) { height = Math.round(height * MAX_DIM / width); width = MAX_DIM; }
+        else                { width  = Math.round(width  * MAX_DIM / height); height = MAX_DIM; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width  = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+
+      // Try JPEG first, fall back to lower quality if still too large
+      let dataUrl = canvas.toDataURL("image/jpeg", QUALITY);
+      if (dataUrl.length > MAX_B64_LEN) {
+        dataUrl = canvas.toDataURL("image/jpeg", 0.65);
+      }
+      if (dataUrl.length > MAX_B64_LEN) {
+        dataUrl = canvas.toDataURL("image/jpeg", 0.45);
+      }
+      callback(dataUrl);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 
 if (photoInput) {
@@ -763,17 +798,10 @@ if (photoInput) {
       addSystemMessage("⚠️ მხოლოდ სურათების გაგზავნაა შესაძლებელი.");
       return;
     }
-    if (file.size > MAX_PHOTO_BYTES) {
-      addSystemMessage("⚠️ სურათი ძალიან დიდია (მაქს. 2MB).");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target.result;
+    compressImage(file, (dataUrl) => {
       socket.emit("photo", { dataUrl });
       addPhotoMessage(dataUrl, true);
-    };
-    reader.readAsDataURL(file);
+    });
   });
 }
 
