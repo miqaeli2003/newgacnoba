@@ -1480,7 +1480,7 @@ blockBtn.addEventListener("click", () => {
 reportBtn.addEventListener("click", () => {
   if (!partnerConnected) return;
   const confirmed = confirm(
-    `მოახსენოთ "${partnerName}"? 5 რეპორტის შემდეგ მომხმარებელი 24 საათით დაიბლოკება.`
+    `მოახსენოთ "${partnerName}"? გსურთ დარეპორტება?`
   );
   if (confirmed) {
     socket.emit("reportUser", { reason: "manual report" });
