@@ -85,6 +85,7 @@ const messageInput   = document.getElementById("messageInput");
 const sendBtn        = document.getElementById("sendBtn");
 const nextBtn        = document.getElementById("nextBtn");
 const blockBtn       = document.getElementById("blockBtn");
+const reportBtn      = document.getElementById("reportBtn");
 const changeNameBtn  = document.getElementById("changeNameBtn");
 const interestsBtn   = document.getElementById("interestsBtn");
 const bioPopup       = document.getElementById("bioPopup");
@@ -497,7 +498,8 @@ function setInputsEnabled(enabled) {
 // Block button is enabled when chatting OR when partner just left normally.
 // It stays disabled during the reconnecting grace-period ("გავიდა საიტიდან").
 function updateBlockBtn() {
-  blockBtn.disabled = !(partnerConnected || canBlockDisconnected);
+  blockBtn.disabled  = !(partnerConnected || canBlockDisconnected);
+  if (reportBtn) reportBtn.disabled = !partnerConnected;
 }
 
 function showNameError(msg) {
@@ -1241,6 +1243,21 @@ socket.on("youWereBlocked", (data) => {
 
 socket.on("reportConfirmed", () => {
   addSystemMessage("შეტყობინება გაგზავნილია. გმადლობთ. 🙏");
+  if (reportBtn) reportBtn.disabled = true; // one report per session per partner
+});
+
+socket.on("reportBanned", () => {
+  partnerConnected     = false;
+  partnerName          = "";
+  lastPartnerName      = "";
+  canBlockDisconnected = false;
+  stopSearchRetry();
+  hideTypingIndicator();
+  setInputsEnabled(false);
+  updateBlockBtn();
+  closeGifPickerPanel();
+  clearChat();
+  addDisconnectMessage("🚫 თქვენ დაიბლოკეთ 24 საათით — მრავალი მომხმარებლის მიერ მოხსენების გამო.");
 });
 
 socket.on("messageFlagged", () => {
@@ -1350,6 +1367,14 @@ blockBtn.addEventListener("click", () => {
     `Block "${targetName}"? თქვენ ვეღარ შეხვდებით ამ იუზერს ბლოკის შემდეგ. 😡 `
   );
   if (confirmed) socket.emit("blockUser", { targetName });
+});
+
+reportBtn.addEventListener("click", () => {
+  if (!partnerConnected) return;
+  const confirmed = confirm(
+    `მოახსენოთ "${partnerName}"? 5 რეპორტის შემდეგ მომხმარებელი 24 საათით დაიბლოკება.`
+  );
+  if (confirmed) socket.emit("reportUser", { reason: "manual report" });
 });
 
 sendBtn.addEventListener("click", sendMessage);
