@@ -746,7 +746,7 @@ function sendGif(fullUrl, previewUrl) {
 socket.on("gif", (data) => addGifMessage(data.url, false));
 
 // ── Photo send ────────────────────────────────────────────────────────────────
-const MAX_PHOTO_BYTES = 3 * 1024 * 1024; // 3 MB limit
+const MAX_PHOTO_BYTES = 2 * 1024 * 1024; // 2 MB — base64 inflates ~33% so stays under 5MB socket buffer
 
 if (photoBtn) {
   photoBtn.addEventListener("click", () => {
@@ -764,7 +764,7 @@ if (photoInput) {
       return;
     }
     if (file.size > MAX_PHOTO_BYTES) {
-      addSystemMessage("⚠️ სურათი ძალიან დიდია (მაქს. 3MB).");
+      addSystemMessage("⚠️ სურათი ძალიან დიდია (მაქს. 2MB).");
       return;
     }
     const reader = new FileReader();
@@ -1452,7 +1452,7 @@ blockBtn.addEventListener("click", () => {
 reportBtn.addEventListener("click", () => {
   if (!partnerConnected) return;
   const confirmed = confirm(
-    `მოახსენოთ "${partnerName}"? გსურთ დარეპორტება?`
+    `მოახსენოთ "${partnerName}"? 5 რეპორტის შემდეგ მომხმარებელი 24 საათით დაიბლოკება.`
   );
   if (confirmed) {
     socket.emit("reportUser", { reason: "manual report" });
