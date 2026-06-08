@@ -32,6 +32,39 @@ const MSG_RATE_WINDOW_MS = 5000;
 const ADMIN_SECRET = process.env.ADMIN_SECRET || "change-this-secret";
 const bannedIPs    = new Set(); // persists for server lifetime
 
+// ── Link-strike system ────────────────────────────────────────────────────────
+// 2 violations → 24-hour auto-ban
+const LINK_BAN_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+const linkStrikes = new Map(); // ip → { count, bannedUntil }
+
+function recordLinkStrike(ip) {
+  const now   = Date.now();
+  const entry = linkStrikes.get(ip) || { count: 0, bannedUntil: null };
+  if (entry.bannedUntil && now < entry.bannedUntil) return; // already banned
+  entry.count++;
+  if (entry.count >= 2) {
+    entry.bannedUntil = now + LINK_BAN_DURATION_MS;
+    console.warn(`[LINK-BAN] IP ${ip} auto-banned 24h after ${entry.count} violations`);
+  } else {
+    console.warn(`[LINK-STRIKE] IP ${ip} — strike ${entry.count}/2`);
+  }
+  linkStrikes.set(ip, entry);
+}
+
+function isLinkBanned(ip) {
+  const entry = linkStrikes.get(ip);
+  if (!entry || !entry.bannedUntil) return false;
+  if (Date.now() >= entry.bannedUntil) { linkStrikes.delete(ip); return false; }
+  return true;
+}
+
+// Clean expired entries every hour
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of linkStrikes)
+    if (!entry.bannedUntil || now >= entry.bannedUntil) linkStrikes.delete(ip);
+}, 60 * 60 * 1000);
+
 const VALID_TAGS = new Set([
   "gaming","music","movies","books","sports",
   "tech","art","food","travel","memes",
@@ -299,8 +332,9 @@ io.on("connection", (socket) => {
   socket.clientIP = rawIP;
 
   // ── Drop banned IPs immediately ─────────────────────────────────────────────
-  if (bannedIPs.has(rawIP)) {
-    socket.disconnect(true);
+  if (bannedIPs.has(rawIP) || isLinkBanned(rawIP)) {
+    socket.emit("autoKicked");
+    setTimeout(() => socket.disconnect(true), 500);
     return;
   }
 
@@ -528,9 +562,9 @@ io.on("connection", (socket) => {
     if (!text) return;
 
     // ── @ mention kick ────────────────────────────────────────────────────
-    // Catches: @john, @ john, "add me on telegram @john", "my @ is john", etc.
     if (/(?:^|\s)@\s*\w/.test(text)) {
       console.warn(`[BOT-AT] @ mention message — ${socket.userName}: ${text.slice(0, 60)}`);
+      recordLinkStrike(socket.clientIP);
       const kickedPartner = socket.partner;
       socket.emit("linkKicked");
       if (kickedPartner) {
@@ -547,6 +581,7 @@ io.on("connection", (socket) => {
     LINK_RE.lastIndex = 0;
     if (LINK_RE.test(text)) {
       LINK_RE.lastIndex = 0;
+      recordLinkStrike(socket.clientIP);
       const kickedPartner = socket.partner;
       socket.emit("linkKicked");
       if (kickedPartner) kickedPartner.emit("partnerLinkKicked");
