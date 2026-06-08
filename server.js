@@ -40,15 +40,18 @@ const linkStrikes = new Map(); // ip → { count, bannedUntil }
 function recordLinkStrike(ip) {
   const now   = Date.now();
   const entry = linkStrikes.get(ip) || { count: 0, bannedUntil: null };
-  if (entry.bannedUntil && now < entry.bannedUntil) return; // already banned
+  if (entry.bannedUntil && now < entry.bannedUntil) return 'banned'; // already banned
   entry.count++;
   if (entry.count >= 2) {
     entry.bannedUntil = now + LINK_BAN_DURATION_MS;
     console.warn(`[LINK-BAN] IP ${ip} auto-banned 24h after ${entry.count} violations`);
+    linkStrikes.set(ip, entry);
+    return 'banned';
   } else {
     console.warn(`[LINK-STRIKE] IP ${ip} — strike ${entry.count}/2`);
+    linkStrikes.set(ip, entry);
+    return 'warning';
   }
-  linkStrikes.set(ip, entry);
 }
 
 function isLinkBanned(ip) {
@@ -564,9 +567,15 @@ io.on("connection", (socket) => {
     // ── @ mention kick ────────────────────────────────────────────────────
     if (/(?:^|\s)@\s*\w/.test(text)) {
       console.warn(`[BOT-AT] @ mention message — ${socket.userName}: ${text.slice(0, 60)}`);
-      recordLinkStrike(socket.clientIP);
+      const strikeResult1 = recordLinkStrike(socket.clientIP);
+      if (strikeResult1 === 'warning') {
+        // First offence — warn but don't kick
+        socket.emit("linkWarning");
+        return;
+      }
+      // Second offence — ban and kick
       const kickedPartner = socket.partner;
-      socket.emit("linkKicked");
+      socket.emit("linkBanned");
       if (kickedPartner) {
         kickedPartner.emit("partnerLinkKicked");
         kickedPartner.partner        = null;
@@ -581,12 +590,16 @@ io.on("connection", (socket) => {
     LINK_RE.lastIndex = 0;
     if (LINK_RE.test(text)) {
       LINK_RE.lastIndex = 0;
-      recordLinkStrike(socket.clientIP);
-      const kickedPartner = socket.partner;
-      socket.emit("linkKicked");
-      if (kickedPartner) kickedPartner.emit("partnerLinkKicked");
+      const strikeResult2 = recordLinkStrike(socket.clientIP);
+      if (strikeResult2 === 'warning') {
+        socket.emit("linkWarning");
+        return;
+      }
+      const kickedPartner2 = socket.partner;
+      socket.emit("linkBanned");
+      if (kickedPartner2) kickedPartner2.emit("partnerLinkKicked");
       socket.partner = null;
-      if (kickedPartner) { kickedPartner.partner = null; kickedPartner.lastPartnerName = ""; }
+      if (kickedPartner2) { kickedPartner2.partner = null; kickedPartner2.lastPartnerName = ""; }
       cleanupGameForSocket(socket.id);
       setTimeout(() => socket.disconnect(true), 1500);
       return;
