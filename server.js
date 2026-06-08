@@ -38,6 +38,8 @@ const LINK_BAN_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 const linkStrikes = new Map(); // ip → { count, bannedUntil }
 
 function recordLinkStrike(ip) {
+  // If we can't identify the IP reliably, just warn — never perma-ban unknowns
+  if (!ip || ip === 'unknown' || ip === '::1' || ip === '127.0.0.1') return 'warning';
   const now   = Date.now();
   const entry = linkStrikes.get(ip) || { count: 0, bannedUntil: null };
   if (entry.bannedUntil && now < entry.bannedUntil) return 'banned'; // already banned
