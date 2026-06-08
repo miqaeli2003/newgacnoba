@@ -99,6 +99,8 @@ const saveNameBtn    = document.getElementById("saveNameBtn");
 const nameError      = document.getElementById("nameError");
 const onlineCountEl  = document.getElementById("onlineCount");
 const gifBtn         = document.getElementById("gifBtn");
+const photoBtn       = document.getElementById("photoBtn");
+const photoInput     = document.getElementById("photoInput");
 const gifPicker      = document.getElementById("gifPicker");
 const gifSearch      = document.getElementById("gifSearch");
 const gifResults     = document.getElementById("gifResults");
@@ -408,6 +410,47 @@ function addGifMessage(gifUrl, isYou) {
   scheduleScroll();
 }
 
+// ── Photo message ────────────────────────────────────────────────────────────
+function addPhotoMessage(dataUrl, isYou) {
+  const wrapper     = document.createElement("div");
+  wrapper.className = `message-wrapper photo-msg-wrapper ${isYou ? "you" : "partner"}`;
+
+  const inner       = document.createElement("div");
+  inner.className   = "photo-wrapper-inner";
+
+  const img         = document.createElement("img");
+  img.src           = dataUrl;
+  img.className     = "photo-message-img" + (isYou ? "" : " blurred");
+  img.loading       = "lazy";
+  img.decoding      = "async";
+
+  inner.appendChild(img);
+
+  if (!isYou) {
+    const overlay   = document.createElement("div");
+    overlay.className = "photo-blur-overlay";
+    const hint      = document.createElement("span");
+    hint.className  = "photo-blur-hint";
+    hint.textContent = "👁 სანახავად დააჭირე";
+    overlay.appendChild(hint);
+    inner.appendChild(overlay);
+
+    img.addEventListener("click", () => {
+      img.classList.remove("blurred");
+      overlay.remove();
+    }, { once: true });
+  }
+
+  const timestamp       = document.createElement("div");
+  timestamp.className   = "timestamp";
+  timestamp.textContent = formatTimestamp(new Date());
+
+  wrapper.appendChild(inner);
+  wrapper.appendChild(timestamp);
+  chat.appendChild(wrapper);
+  scheduleScroll();
+}
+
 // ── Question card ─────────────────────────────────────────────────────────────
 function addQuestionCard(questionText, isYou) {
   const card       = document.createElement("div");
@@ -491,6 +534,7 @@ function setInputsEnabled(enabled) {
   messageInput.disabled = !enabled;
   sendBtn.disabled      = !enabled;
   gifBtn.disabled       = !enabled;
+  if (photoBtn) photoBtn.disabled = !enabled;
   questionBtn.disabled  = !enabled;
   // blockBtn is managed separately via updateBlockBtn()
 }
@@ -700,6 +744,42 @@ function sendGif(fullUrl, previewUrl) {
 }
 
 socket.on("gif", (data) => addGifMessage(data.url, false));
+
+// ── Photo send ────────────────────────────────────────────────────────────────
+const MAX_PHOTO_BYTES = 3 * 1024 * 1024; // 3 MB limit
+
+if (photoBtn) {
+  photoBtn.addEventListener("click", () => {
+    if (photoInput) photoInput.click();
+  });
+}
+
+if (photoInput) {
+  photoInput.addEventListener("change", () => {
+    const file = photoInput.files[0];
+    photoInput.value = ""; // reset so same file can be re-sent
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      addSystemMessage("⚠️ მხოლოდ სურათების გაგზავნაა შესაძლებელი.");
+      return;
+    }
+    if (file.size > MAX_PHOTO_BYTES) {
+      addSystemMessage("⚠️ სურათი ძალიან დიდია (მაქს. 3MB).");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target.result;
+      socket.emit("photo", { dataUrl });
+      addPhotoMessage(dataUrl, true);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+socket.on("photo", (data) => {
+  if (data?.dataUrl) addPhotoMessage(data.dataUrl, false);
+});
 
 // ── Question button ───────────────────────────────────────────────────────────
 let questionBtnCooldown = false;
