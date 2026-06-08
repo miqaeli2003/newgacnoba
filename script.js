@@ -917,6 +917,8 @@ function sendMessage() {
   addMessage(message, true, msgId, currentReply);
   socket.emit("message", { text: message, messageId: msgId, replyTo: currentReply });
   messageInput.value = "";
+  messageInput.style.height = "auto";
+  messageInput.style.overflowY = "hidden";
   charCount.textContent = "";
   charCount.classList.remove("warning");
   clearReply();
@@ -1490,11 +1492,19 @@ reportBtn.addEventListener("click", () => {
 
 sendBtn.addEventListener("click", sendMessage);
 
-messageInput.addEventListener("keypress", (e) => {
-  if (e.key === "Enter") sendMessage();
+messageInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
 });
 
 messageInput.addEventListener("input", () => {
+  // Auto-resize textarea
+  messageInput.style.height = "auto";
+  messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + "px";
+  messageInput.style.overflowY = messageInput.scrollHeight > 120 ? "auto" : "hidden";
+
   // Character counter
   const len = messageInput.value.length;
   charCount.textContent = len > 0 ? `${len}/2000` : ``;
