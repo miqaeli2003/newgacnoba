@@ -528,7 +528,8 @@ io.on("connection", (socket) => {
     if (!text) return;
 
     // ── @ mention kick ────────────────────────────────────────────────────
-    if (/^@\w/.test(text)) {
+    // Catches: @john, @ john, "add me on telegram @john", "my @ is john", etc.
+    if (/(?:^|\s)@\s*\w/.test(text)) {
       console.warn(`[BOT-AT] @ mention message — ${socket.userName}: ${text.slice(0, 60)}`);
       const kickedPartner = socket.partner;
       socket.emit("linkKicked");
