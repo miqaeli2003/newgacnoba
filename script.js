@@ -1247,7 +1247,27 @@ socket.on("messageFlagged", () => {
   // silently drop — no notice shown to user
 });
 
-// Sender gets kicked for sending a link
+// First offence — warning, chat continues
+socket.on("linkWarning", () => {
+  addSystemMessage("⚠️ ლინკების გაზიარება არ შეიძლება! განმეორებით შემთხვევაში ერთი დღით დაიბლოკებით საიტიდან!");
+});
+
+// Second offence — banned
+socket.on("linkBanned", () => {
+  partnerConnected     = false;
+  partnerName          = "";
+  lastPartnerName      = "";
+  canBlockDisconnected = false;
+  stopSearchRetry();
+  hideTypingIndicator();
+  setInputsEnabled(false);
+  updateBlockBtn();
+  closeGifPickerPanel();
+  clearChat();
+  addDisconnectMessage("🚫 თქვენ დაიბლოკეთ 24 საათით ლინკების გაგზავნის გამო.");
+});
+
+// Legacy event kept for safety
 socket.on("linkKicked", () => {
   partnerConnected     = false;
   partnerName          = "";
@@ -1288,7 +1308,16 @@ socket.on("autoKicked", () => {
   updateBlockBtn();
   closeGifPickerPanel();
   clearChat();
-  // Do NOT reload — just show message
+  // Show ban notice on the entry modal
+  const nameModal = document.getElementById("nameModal");
+  const nameError = document.getElementById("nameError");
+  const saveBtn   = document.getElementById("saveNameBtn");
+  if (nameModal) nameModal.style.display = "flex";
+  if (nameError) {
+    nameError.textContent = "🚫 თქვენ დაიბლოკეთ 24 საათით ლინკების გაგზავნის გამო. სცადეთ ხვალ.";
+    nameError.style.display = "block";
+  }
+  if (saveBtn) saveBtn.disabled = true;
 });
 
 // awayTimeout disabled — intentionally ignored
