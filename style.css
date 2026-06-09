@@ -1167,6 +1167,20 @@ html, body {
   flex-shrink: 0;
 }
 
+/* 🎮 game icon */
+.modal-feature-icon--game {
+  background: rgba(88, 28, 135, 0.35);
+  border: 1px solid rgba(139, 92, 246, 0.5);
+  border-radius: 8px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.9em;
+}
+
 /* Mobile interests button: text label instead of emoji */
 .btn-icon--int {
   font-size: 0.52em;
