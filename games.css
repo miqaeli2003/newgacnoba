@@ -22,8 +22,8 @@
    🎮  TOP-BAR BUTTON
    ══════════════════════════════════════════════════════════════════ */
 .game-btn {
-  background: transparent;
-  border: none;
+  background: rgba(88, 28, 135, 0.35);
+  border: 1px solid rgba(139, 92, 246, 0.45);
   color: var(--game-text);
   cursor: pointer;
   font-size: 0.85em;
@@ -35,7 +35,7 @@
   transition: background 0.15s, transform 0.1s;
   position: relative;
 }
-.game-btn:hover:not(:disabled) { background: rgba(88,101,242,.15); }
+.game-btn:hover:not(:disabled) { background: rgba(109, 40, 217, 0.5); }
 .game-btn:active:not(:disabled){ transform: scale(0.95); }
 .game-btn:disabled              { opacity: 0.4; cursor: not-allowed; }
 
