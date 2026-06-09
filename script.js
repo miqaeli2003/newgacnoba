@@ -1307,8 +1307,8 @@ socket.on("partnerDisconnected", (data) => {
     offerEl.className = "block-offer";
     offerEl.innerHTML =
       `<div class="block-offer-main">` +
-        `<p class="block-offer-title">— უზერმა გადაგრთოთ</p>` +
-        `<p class="block-offer-subtitle">დაბლოკეთ რომ მან ვეღარ შეძლოს თქვენი შეწუხება</p>` +
+        `<p class="block-offer-title">იუზერმა გადაგრთოთ</p>` +
+        `<p class="block-offer-subtitle">გირჩევთ დაბლოკეთ რომ მან ვეღარ შეძლოს თქვენი შეწუხება</p>` +
         `<button class="block-offer-btn" id="blockOfferBtn">🚫 დაბლოკვა</button>` +
       `</div>` +
       `<div class="block-offer-report-row">` +
