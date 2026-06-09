@@ -73,6 +73,20 @@ html, body {
   max-width: 110px;
 }
 
+.partner-name-display {
+  font-size: 0.82em;
+  font-weight: 600;
+  color: #f23f42;
+  background: rgba(242, 63, 66, 0.10);
+  border: 1px solid rgba(242, 63, 66, 0.35);
+  border-radius: 20px;
+  padding: 8px 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+}
+
 /* ── BUTTONS ─────────────────────────────────────────────────────────────── */
 
 .right-side {
@@ -1311,6 +1325,15 @@ html, body {
     padding: 3px 10px;
     max-width: 100px;
     border-radius: 12px;
+    margin-left: auto;
+  }
+
+  .partner-name-display {
+    font-size: 0.72em;
+    padding: 3px 10px;
+    max-width: 100px;
+    border-radius: 12px;
+    order: -1; /* appear before username on mobile (left side) */
     margin-left: auto;
   }
 
