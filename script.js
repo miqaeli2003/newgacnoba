@@ -767,7 +767,7 @@ if (photoBtn) {
     confirmEl.style.borderColor = "rgba(88,101,242,0.4)";
     confirmEl.style.background = "rgba(88,101,242,0.07)";
     confirmEl.innerHTML =
-      `<span style="color:#dcddde;font-size:0.95em;">🖼️ გსურთ კამერის გახსნა?</span>` +
+      `<span style="color:#dcddde;font-size:0.95em;">🖼️ გსურთ გალერიის გახსნა?</span>` +
       `<div style="display:flex;gap:8px;margin-top:4px;">` +
         `<button id="cameraYesBtn" class="block-offer-btn" style="background:linear-gradient(135deg,#5865f2,#3b44c0);padding:6px 20px;">კი</button>` +
         `<button id="cameraNoBtn" class="block-offer-btn" style="background:rgba(255,255,255,0.08);color:#aaa;padding:6px 20px;">არა</button>` +
