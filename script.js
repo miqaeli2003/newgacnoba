@@ -554,6 +554,18 @@ function updateBlockBtn() {
   if (reportBtn) reportBtn.disabled = !partnerConnected;
 }
 
+function setPartnerNameDisplay(name) {
+  const el = document.getElementById("partnerNameDisplay");
+  if (!el) return;
+  if (name) {
+    el.textContent = `👤 ${name}`;
+    el.style.display = "block";
+  } else {
+    el.textContent = "";
+    el.style.display = "none";
+  }
+}
+
 function showNameError(msg) {
   nameError.textContent   = msg;
   nameError.style.display = "block";
@@ -767,7 +779,7 @@ if (photoBtn) {
     confirmEl.style.borderColor = "rgba(88,101,242,0.4)";
     confirmEl.style.background = "rgba(88,101,242,0.07)";
     confirmEl.innerHTML =
-      `<span style="color:#dcddde;font-size:0.95em;">🖼️ გსურთ გალერიის გახსნა?</span>` +
+      `<span style="color:#dcddde;font-size:0.95em;">🖼️ გსურთ კამერის გახსნა?</span>` +
       `<div style="display:flex;gap:8px;margin-top:4px;">` +
         `<button id="cameraYesBtn" class="block-offer-btn" style="background:linear-gradient(135deg,#5865f2,#3b44c0);padding:6px 20px;">კი</button>` +
         `<button id="cameraNoBtn" class="block-offer-btn" style="background:rgba(255,255,255,0.08);color:#aaa;padding:6px 20px;">არა</button>` +
@@ -1230,6 +1242,7 @@ socket.on("partnerFound", (partner) => {
   partnerConnected     = true;
   lastPartnerName      = "";
   canBlockDisconnected = false;
+  setPartnerNameDisplay(partnerName);
   addSystemMessage(`გილოცავთ პარტნიორი ნაპოვნია 🥳 : ${partnerName}`);
 
   // Show partner's bio if they set one
@@ -1286,7 +1299,7 @@ socket.on("waitingForPartner", () => {
   // Guard: never disable inputs if partnerConnected is already true
   // (race condition: partnerFound can arrive just before waitingForPartner)
   if (!partnerConnected) {
-    partnerName = "";
+    partnerName = ""; setPartnerNameDisplay("");
     setInputsEnabled(false);
   }
   // If partnerConnected is true, partnerFound already won the race — do nothing
@@ -1322,7 +1335,7 @@ socket.on("partnerDisconnected", (data) => {
   partnerWasReconnecting = false;
   removeReconnectingMessage();
   partnerConnected     = false;
-  partnerName          = "";
+  partnerName = ""; setPartnerNameDisplay("");
   lastPartnerName      = data.name || lastPartnerName || "";
   canBlockDisconnected = !!lastPartnerName;
   setInputsEnabled(false);
@@ -1370,7 +1383,7 @@ socket.on("userBlocked", (data) => {
   stopSearchRetry();
   clearChat();
   partnerConnected     = false;
-  partnerName          = "";
+  partnerName = ""; setPartnerNameDisplay("");
   lastPartnerName      = "";
   canBlockDisconnected = false;
   updateBlockBtn();
@@ -1387,7 +1400,7 @@ socket.on("blockLimitReached", () => {
 socket.on("youWereBlocked", (data) => {
   const blockerName = data.name || "მომხმარებელი";
   partnerConnected     = false;
-  partnerName          = "";
+  partnerName = ""; setPartnerNameDisplay("");
   lastPartnerName      = "";
   canBlockDisconnected = false;
   stopSearchRetry();
@@ -1406,7 +1419,7 @@ socket.on("reportConfirmed", () => {
 
 socket.on("reportBanned", () => {
   partnerConnected     = false;
-  partnerName          = "";
+  partnerName = ""; setPartnerNameDisplay("");
   lastPartnerName      = "";
   canBlockDisconnected = false;
   stopSearchRetry();
@@ -1430,7 +1443,7 @@ socket.on("linkWarning", () => {
 // Second offence — banned
 socket.on("linkBanned", () => {
   partnerConnected     = false;
-  partnerName          = "";
+  partnerName = ""; setPartnerNameDisplay("");
   lastPartnerName      = "";
   canBlockDisconnected = false;
   stopSearchRetry();
@@ -1445,7 +1458,7 @@ socket.on("linkBanned", () => {
 // Legacy event kept for safety
 socket.on("linkKicked", () => {
   partnerConnected     = false;
-  partnerName          = "";
+  partnerName = ""; setPartnerNameDisplay("");
   lastPartnerName      = "";
   canBlockDisconnected = false;
   stopSearchRetry();
@@ -1460,7 +1473,7 @@ socket.on("linkKicked", () => {
 // Partner of the link-sender sees a notice and gets unlinked
 socket.on("partnerLinkKicked", () => {
   partnerConnected     = false;
-  partnerName          = "";
+  partnerName = ""; setPartnerNameDisplay("");
   lastPartnerName      = "";
   canBlockDisconnected = false;
   stopSearchRetry();
@@ -1474,7 +1487,7 @@ socket.on("partnerLinkKicked", () => {
 socket.on("autoKicked", () => {
   try { sessionStorage.removeItem("gaicani_username"); } catch (_) {}
   partnerConnected     = false;
-  partnerName          = "";
+  partnerName = ""; setPartnerNameDisplay("");
   lastPartnerName      = "";
   canBlockDisconnected = false;
   stopSearchRetry();
@@ -1507,7 +1520,7 @@ nextBtn.addEventListener("click", () => {
   clearChat();
   addSearchingMessage();
   partnerConnected     = false;
-  partnerName          = "";
+  partnerName = ""; setPartnerNameDisplay("");
   lastPartnerName      = "";
   canBlockDisconnected = false;
   setInputsEnabled(false);
@@ -1611,7 +1624,7 @@ function goToWelcome() {
 
   // Reset all session state
   partnerConnected     = false;
-  partnerName          = "";
+  partnerName = ""; setPartnerNameDisplay("");
   lastPartnerName      = "";
   canBlockDisconnected = false;
   userName             = "";
