@@ -1338,6 +1338,7 @@ socket.on("partnerTabBack", () => {});
 socket.on("partnerDisconnected", (data) => {
   partnerWasReconnecting = false;
   removeReconnectingMessage();
+  stopSearchRetry();  // stop any running search — user must press Next manually
   partnerConnected     = false;
   partnerName = ""; setPartnerNameDisplay("");
   lastPartnerName      = data.name || lastPartnerName || "";
