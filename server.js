@@ -389,11 +389,14 @@ io.on("connection", (socket) => {
 
   console.log("User connected", socket.id, rawIP);
 
-  socket.userName         = "";
-  socket.partner          = null;
-  socket.lastPartnerName  = "";
-  socket.blockedNames     = [];
-  socket.blockedIds       = new Set();
+  socket.userName           = "";
+  socket.partner            = null;
+  socket.lastPartnerName    = "";
+  socket.lastPartnerIP      = "";   // stored so report works after partner leaves
+  socket.lastPartnerSocketId = "";  // stored for dedup in reportStrikes
+  socket.hasReportedLast    = false; // one report per partner
+  socket.blockedNames       = [];
+  socket.blockedIds         = new Set();
   socket.recentPartnerIds = new Set();
   socket.interests        = [];
   socket.bio              = "";
@@ -558,6 +561,12 @@ io.on("connection", (socket) => {
     partnerSocket.partner = socket;
     socket.lastPartnerName        = partnerSocket.userName;
     partnerSocket.lastPartnerName = socket.userName;
+    socket.lastPartnerIP           = partnerSocket.clientIP || "";
+    partnerSocket.lastPartnerIP    = socket.clientIP || "";
+    socket.lastPartnerSocketId     = partnerSocket.id;
+    partnerSocket.lastPartnerSocketId = socket.id;
+    socket.hasReportedLast         = false;
+    partnerSocket.hasReportedLast  = false;
 
     const sharedTags = (socket.interests || []).filter(t => (partnerSocket.interests || []).includes(t));
 
@@ -707,11 +716,20 @@ io.on("connection", (socket) => {
 
   // ── Report ───────────────────────────────────────────────────────────────
   socket.on("reportUser", ({ reason }) => {
-    if (!socket.partner) return;
-    const targetIP = socket.partner.clientIP;
+    // Allow reporting both: current partner OR the partner who just left
+    const targetIP         = socket.partner ? socket.partner.clientIP : socket.lastPartnerIP;
+    const targetSocketId   = socket.partner ? socket.partner.id       : socket.lastPartnerSocketId;
+    const targetName       = socket.partner ? socket.partner.userName : socket.lastPartnerName;
+
+    if (!targetIP) return; // nothing to report
+
+    // Prevent double-reporting the same partner
+    if (socket.hasReportedLast) return;
+    socket.hasReportedLast = true;
+
     const entry = {
-      reportedId:   socket.partner.id,
-      reportedName: socket.partner.userName,
+      reportedId:   targetSocketId,
+      reportedName: targetName,
       reportedBy:   socket.userName,
       reporterIP:   socket.clientIP,
       targetIP,
@@ -723,12 +741,13 @@ io.on("connection", (socket) => {
 
     const justBanned = recordReport(socket.id, targetIP);
     if (justBanned) {
-      // Kick the reported partner
-      const target = socket.partner;
-      if (target) {
+      // Kick the reported partner if still connected
+      const target = socket.partner || (targetSocketId ? io.sockets.sockets.get(targetSocketId) : null);
+      if (target && target.connected) {
         target.emit("reportBanned");
+        if (target.partner) { target.partner.partner = null; }
         target.partner = null;
-        if (socket) { socket.partner = null; }
+        if (socket.partner && socket.partner.id === target.id) socket.partner = null;
         cleanupGameForSocket(target.id);
         setTimeout(() => target.disconnect(true), 1500);
       }
@@ -839,7 +858,9 @@ io.on("connection", (socket) => {
       const blockedDisplayName = socket.lastPartnerName;
       if (!socket.blockedNames.includes(blockedName)) socket.blockedNames.push(blockedName);
       // Note: no socket ID available after partner left — name-only block for this case
-      socket.lastPartnerName = "";
+      socket.lastPartnerName     = "";
+      socket.lastPartnerIP       = "";
+      socket.lastPartnerSocketId = "";
       socket.emit("userBlocked", { name: blockedDisplayName });
     }
   });
@@ -1010,6 +1031,9 @@ io.on("connection", (socket) => {
       // message and can block right away. We clear partner.partner now so
       // blockUser falls cleanly into the name-only block path.
       partner.lastPartnerName = name;
+      partner.lastPartnerIP   = socket.clientIP || "";
+      partner.lastPartnerSocketId = socket.id;
+      partner.hasReportedLast = false;
       partner.partner         = null;
       if (partner.connected) partner.emit("partnerDisconnected", { name });
 
