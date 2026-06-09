@@ -559,10 +559,11 @@ function setPartnerNameDisplay(name) {
   if (!el) return;
   if (name) {
     el.textContent = `👤 ${name}`;
-    el.style.display = "block";
+    el.style.opacity = "1";
+    el.style.color = "";
   } else {
-    el.textContent = "";
-    el.style.display = "none";
+    el.textContent = "👤 ---";
+    el.style.opacity = "0.25";
   }
 }
 
@@ -1654,6 +1655,7 @@ document.addEventListener("DOMContentLoaded", () => {
   stopSearchRetry();
   setInputsEnabled(false);
   updateBlockBtn();
+  setPartnerNameDisplay("");
   saveNameBtn.textContent  = "საუბრის დაწყება";
   charCount.textContent    = "";
 
