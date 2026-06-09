@@ -536,6 +536,14 @@ function setInputsEnabled(enabled) {
   gifBtn.disabled       = !enabled;
   if (photoBtn) photoBtn.disabled = !enabled;
   questionBtn.disabled  = !enabled;
+  if (!enabled) {
+    // Clear any text typed during a race (e.g. keyboard still open while searching)
+    messageInput.value = "";
+    messageInput.style.height = "auto";
+    charCount.textContent = "";
+    charCount.classList.remove("warning");
+    messageInput.blur();
+  }
   // blockBtn is managed separately via updateBlockBtn()
 }
 
@@ -794,11 +802,13 @@ if (photoInput) {
     const file = photoInput.files[0];
     photoInput.value = ""; // reset so same file can be re-sent
     if (!file) return;
+    if (!partnerConnected) return; // guard: don't send if no partner
     if (!file.type.startsWith("image/")) {
       addSystemMessage("⚠️ მხოლოდ სურათების გაგზავნაა შესაძლებელი.");
       return;
     }
     compressImage(file, (dataUrl) => {
+      if (!partnerConnected) return; // recheck after async compress
       socket.emit("photo", { dataUrl });
       addPhotoMessage(dataUrl, true);
     });
@@ -911,7 +921,8 @@ function displayReaction(messageId, emoji, isMine) {
 // ── Message sending ───────────────────────────────────────────────────────────
 function sendMessage() {
   const message = messageInput.value.trim();
-  if (!message || !partnerConnected || !userName) return;
+  if (!message) return;
+  if (!partnerConnected || !userName || messageInput.disabled) return;
   const msgId = generateMsgId();
   const currentReply = replyTo ? { ...replyTo } : null;
   addMessage(message, true, msgId, currentReply);
@@ -1293,10 +1304,7 @@ socket.on("partnerDisconnected", (data) => {
   setInputsEnabled(false);
   updateBlockBtn();
 
-  // Stop auto-searching — user must press Next manually
-  stopSearchRetry();
-
-  // Show disconnect notice + block/report offer
+  // Show disconnect notice + inline block offer
   const disconnectEl = document.createElement("div");
   disconnectEl.className = "system-message-disconnect";
   disconnectEl.textContent = `❌ ${lastPartnerName || "პარტნიორი"} გათიშა.`;
@@ -1305,27 +1313,13 @@ socket.on("partnerDisconnected", (data) => {
   if (lastPartnerName) {
     const offerEl = document.createElement("div");
     offerEl.className = "block-offer";
-    offerEl.innerHTML =
-      `<div class="block-offer-main">` +
-        `<p class="block-offer-title">იუზერმა გადაგრთოთ</p>` +
-        `<p class="block-offer-subtitle">გირჩევთ დაბლოკეთ რომ მან ვეღარ შეძლოს თქვენი შეწუხება</p>` +
-        `<button class="block-offer-btn" id="blockOfferBtn">🚫 დაბლოკვა</button>` +
-      `</div>` +
-      `<div class="block-offer-report-row">` +
-        `<button class="report-offer-btn" id="reportOfferBtn">🚩 რეპორტი</button>` +
-      `</div>`;
+    offerEl.innerHTML = `<span>გსურთ დაბლოკოთ <strong>"${lastPartnerName}"</strong>? ის ვეღარ შეძლებს თქვენს შეწუხებას.</span>` +
+      `<button class="block-offer-btn" id="blockOfferBtn">🚫 დაბლოკვა</button>`;
     chat.appendChild(offerEl);
     scheduleScroll();
 
     document.getElementById("blockOfferBtn").addEventListener("click", () => {
       offerEl.remove();
-      socket.emit("blockUser", { targetName: lastPartnerName });
-    });
-
-    document.getElementById("reportOfferBtn").addEventListener("click", () => {
-      document.getElementById("reportOfferBtn").disabled = true;
-      document.getElementById("reportOfferBtn").textContent = "🚩 გაგზავნილია";
-      socket.emit("reportUser", { reason: "reported after disconnect" });
       socket.emit("blockUser", { targetName: lastPartnerName });
     });
   } else {
