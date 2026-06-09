@@ -1496,7 +1496,6 @@ html, body {
 .keyboard-open .system-message-disconnect,
 .keyboard-open .searching-warning {
   text-align: center;
-  color: #f0b232;
   font-size: 0.78em;
   font-weight: 600;
   letter-spacing: 0.02em;
