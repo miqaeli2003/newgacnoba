@@ -71,6 +71,7 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 110px;
+  order: 1;
 }
 
 .partner-name-display {
@@ -85,6 +86,7 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 110px;
+  order: 2;
 }
 
 /* ── BUTTONS ─────────────────────────────────────────────────────────────── */
@@ -1325,7 +1327,7 @@ html, body {
     padding: 3px 10px;
     max-width: 100px;
     border-radius: 12px;
-    margin-left: auto;
+    order: 2;
   }
 
   .partner-name-display {
@@ -1333,8 +1335,8 @@ html, body {
     padding: 3px 10px;
     max-width: 100px;
     border-radius: 12px;
-    order: -1; /* appear before username on mobile (left side) */
-    margin-left: auto;
+    margin-left: auto; /* pushes both partner+user names to the right together */
+    order: 1;
   }
 
   /* Row 2: action buttons — compact strip */
