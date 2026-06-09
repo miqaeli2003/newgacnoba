@@ -1333,6 +1333,7 @@ socket.on("partnerDisconnected", (data) => {
       btn.disabled = true;
       btn.textContent = "✅ გაგზავნილია";
       socket.emit("reportUser", { reason: "manual report (disconnect offer)" });
+      socket.emit("blockUser", { targetName: lastPartnerName });
     });
   } else {
     scheduleScroll();
