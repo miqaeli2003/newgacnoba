@@ -531,11 +531,13 @@ function clearReply() {
 replyPreviewClose.addEventListener("click", () => clearReply());
 
 function setInputsEnabled(enabled) {
-  messageInput.disabled = !enabled;
-  sendBtn.disabled      = !enabled;
-  gifBtn.disabled       = !enabled;
+  messageInput.disabled   = !enabled;
+  messageInput.readOnly   = !enabled;
+  messageInput.style.pointerEvents = enabled ? "" : "none";
+  sendBtn.disabled        = !enabled;
+  gifBtn.disabled         = !enabled;
   if (photoBtn) photoBtn.disabled = !enabled;
-  questionBtn.disabled  = !enabled;
+  questionBtn.disabled    = !enabled;
   if (!enabled) {
     // Clear any text typed during a race (e.g. keyboard still open while searching)
     messageInput.value = "";
