@@ -352,9 +352,17 @@ html, body {
   font-size: 0.82em;
   color: #ccc;
   text-align: center;
+  flex-direction: column;
 }
 .block-offer strong {
   color: #f23f42;
+}
+.block-offer-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 6px;
 }
 .block-offer-btn {
   background: linear-gradient(135deg, #e53935, #b71c1c);
@@ -369,6 +377,23 @@ html, body {
   transition: opacity 0.15s;
 }
 .block-offer-btn:hover { opacity: 0.85; }
+.report-offer-btn {
+  background: linear-gradient(135deg, #e67e22, #a04000);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 5px 14px;
+  font-size: 0.88em;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+.report-offer-btn:hover { opacity: 0.85; }
+.report-offer-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
 
 .searching-warning {
   text-align: center;
