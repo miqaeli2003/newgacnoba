@@ -717,16 +717,20 @@ io.on("connection", (socket) => {
 
   // ── Report ───────────────────────────────────────────────────────────────
   socket.on("reportUser", ({ reason }) => {
-    // Allow reporting both: current partner OR the partner who just left
+    // Allow reporting both: current partner OR the partner who just left.
+    // NOTE: blockUser (often emitted together) clears lastPartnerName first but
+    // keeps lastPartnerIP alive for 2s, so we can still look up the target.
     const targetIP         = socket.partner ? socket.partner.clientIP : socket.lastPartnerIP;
     const targetSocketId   = socket.partner ? socket.partner.id       : socket.lastPartnerSocketId;
-    const targetName       = socket.partner ? socket.partner.userName : socket.lastPartnerName;
+    const targetName       = socket.partner ? socket.partner.userName : (socket.lastPartnerName || socket._lastReportedName || "");
 
     if (!targetIP) return; // nothing to report
 
     // Prevent double-reporting the same partner
     if (socket.hasReportedLast) return;
     socket.hasReportedLast = true;
+    // Remember name for the log even if blockUser cleared lastPartnerName already
+    if (targetName) socket._lastReportedName = targetName;
 
     const entry = {
       reportedId:   targetSocketId,
@@ -858,10 +862,14 @@ io.on("connection", (socket) => {
       const blockedName        = socket.lastPartnerName.toLowerCase();
       const blockedDisplayName = socket.lastPartnerName;
       if (!socket.blockedNames.includes(blockedName)) socket.blockedNames.push(blockedName);
-      // Note: no socket ID available after partner left — name-only block for this case
-      socket.lastPartnerName     = "";
-      socket.lastPartnerIP       = "";
-      socket.lastPartnerSocketId = "";
+      // Clear the name immediately so a double-click doesn't re-block.
+      // Keep IP/socketId alive for 2s so a concurrent reportUser (sent in
+      // the same button click) can still look up the target.
+      socket.lastPartnerName = "";
+      setTimeout(() => {
+        socket.lastPartnerIP       = "";
+        socket.lastPartnerSocketId = "";
+      }, 2000);
       socket.emit("userBlocked", { name: blockedDisplayName });
     }
   });
