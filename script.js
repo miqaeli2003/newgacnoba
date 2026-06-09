@@ -1293,7 +1293,10 @@ socket.on("partnerDisconnected", (data) => {
   setInputsEnabled(false);
   updateBlockBtn();
 
-  // Show disconnect notice + inline block offer
+  // Stop auto-searching — user must press Next manually
+  stopSearchRetry();
+
+  // Show disconnect notice + block/report offer
   const disconnectEl = document.createElement("div");
   disconnectEl.className = "system-message-disconnect";
   disconnectEl.textContent = `❌ ${lastPartnerName || "პარტნიორი"} გათიშა.`;
@@ -1303,9 +1306,12 @@ socket.on("partnerDisconnected", (data) => {
     const offerEl = document.createElement("div");
     offerEl.className = "block-offer";
     offerEl.innerHTML =
-      `<span>გსურთ <strong>"${lastPartnerName}"</strong>-ის დაბლოკვა ან რეპორტი?</span>` +
-      `<div class="block-offer-actions">` +
+      `<div class="block-offer-main">` +
+        `<p class="block-offer-title">— უზერმა გადაგრთოთ</p>` +
+        `<p class="block-offer-subtitle">დაბლოკეთ რომ მან ვეღარ შეძლოს თქვენი შეწუხება</p>` +
         `<button class="block-offer-btn" id="blockOfferBtn">🚫 დაბლოკვა</button>` +
+      `</div>` +
+      `<div class="block-offer-report-row">` +
         `<button class="report-offer-btn" id="reportOfferBtn">🚩 რეპორტი</button>` +
       `</div>`;
     chat.appendChild(offerEl);
