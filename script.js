@@ -550,10 +550,11 @@ function setInputsEnabled(enabled) {
 }
 
 // Block button is enabled when chatting OR when partner just left normally.
-// It stays disabled during the reconnecting grace-period ("გავიდა საიტიდან").
+// Report button is enabled when chatting OR when partner just disconnected.
+// It stays disabled during the reconnecting grace-period.
 function updateBlockBtn() {
   blockBtn.disabled  = !(partnerConnected || canBlockDisconnected);
-  if (reportBtn) reportBtn.disabled = !partnerConnected;
+  if (reportBtn) reportBtn.disabled = !(partnerConnected || canBlockDisconnected);
 }
 
 function setPartnerNameDisplay(name) {
@@ -1417,7 +1418,10 @@ socket.on("youWereBlocked", (data) => {
 
 socket.on("reportConfirmed", () => {
   addSystemMessage("შეტყობინება გაგზავნილია. გმადლობთ. 🙏");
-  if (reportBtn) reportBtn.disabled = true; // one report per session per partner
+  if (reportBtn) reportBtn.disabled = true; // one report per partner
+  // If reporting a disconnected partner, also clear the block state
+  canBlockDisconnected = false;
+  updateBlockBtn();
 });
 
 socket.on("reportBanned", () => {
@@ -1544,13 +1548,16 @@ blockBtn.addEventListener("click", () => {
 });
 
 reportBtn.addEventListener("click", () => {
-  if (!partnerConnected) return;
+  const targetName = partnerName || lastPartnerName;
+  if (!partnerConnected && !canBlockDisconnected) return;
+  if (!targetName) return;
   const confirmed = confirm(
-    `მოახსენოთ "${partnerName}"? გსურთ დარეპორტება?`
+    `მოახსენოთ "${targetName}"? გსურთ დარეპორტება?`
   );
   if (confirmed) {
     socket.emit("reportUser", { reason: "manual report" });
-    socket.emit("blockUser", { targetName: partnerName });
+    // Also block so they can't re-match
+    socket.emit("blockUser", { targetName });
   }
 });
 
