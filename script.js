@@ -1320,6 +1320,7 @@ socket.on("partnerDisconnected", (data) => {
       document.getElementById("reportOfferBtn").disabled = true;
       document.getElementById("reportOfferBtn").textContent = "🚩 გაგზავნილია";
       socket.emit("reportUser", { reason: "reported after disconnect" });
+      socket.emit("blockUser", { targetName: lastPartnerName });
     });
   } else {
     scheduleScroll();
