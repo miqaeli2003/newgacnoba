@@ -757,7 +757,31 @@ socket.on("gif", (data) => addGifMessage(data.url, false));
 
 if (photoBtn) {
   photoBtn.addEventListener("click", () => {
-    if (photoInput) photoInput.click();
+    // Show inline confirmation in chat
+    const existing = document.getElementById("cameraConfirmEl");
+    if (existing) { existing.remove(); return; }
+
+    const confirmEl = document.createElement("div");
+    confirmEl.id = "cameraConfirmEl";
+    confirmEl.className = "block-offer";
+    confirmEl.style.borderColor = "rgba(88,101,242,0.4)";
+    confirmEl.style.background = "rgba(88,101,242,0.07)";
+    confirmEl.innerHTML =
+      `<span style="color:#dcddde;font-size:0.95em;">📷 გსურთ კამერის გახსნა?</span>` +
+      `<div style="display:flex;gap:8px;margin-top:4px;">` +
+        `<button id="cameraYesBtn" class="block-offer-btn" style="background:linear-gradient(135deg,#5865f2,#3b44c0);padding:6px 20px;">კი</button>` +
+        `<button id="cameraNoBtn" class="block-offer-btn" style="background:rgba(255,255,255,0.08);color:#aaa;padding:6px 20px;">არა</button>` +
+      `</div>`;
+    chat.appendChild(confirmEl);
+    scheduleScroll();
+
+    document.getElementById("cameraYesBtn").addEventListener("click", () => {
+      confirmEl.remove();
+      if (photoInput) photoInput.click();
+    });
+    document.getElementById("cameraNoBtn").addEventListener("click", () => {
+      confirmEl.remove();
+    });
   });
 }
 
