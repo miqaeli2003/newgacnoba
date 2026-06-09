@@ -76,9 +76,9 @@ setInterval(() => {
 }, 60 * 60 * 1000);
 
 // ── Report-strike system ──────────────────────────────────────────────────────
-// 3 reports from different sessions → 24-hour auto-ban; resets after 24h if not reached
+// 5 reports from different sessions → 24-hour auto-ban; resets after 24h if not reached
 const REPORT_BAN_DURATION_MS = 24 * 60 * 60 * 1000;
-const REPORT_THRESHOLD       = 3;
+const REPORT_THRESHOLD       = 5;
 const reportStrikes = new Map(); // ip → { count, bannedUntil, reporters: Set, firstReportAt }
 
 function recordReport(reporterSocketId, targetIP) {
@@ -86,10 +86,11 @@ function recordReport(reporterSocketId, targetIP) {
   const now   = Date.now();
   let entry   = reportStrikes.get(targetIP) || { count: 0, bannedUntil: null, reporters: new Set(), firstReportAt: null };
   if (entry.bannedUntil && now < entry.bannedUntil) return true; // already banned
-  // Reset count if 24h passed since first report without hitting threshold
+  // After 24h without hitting threshold, reset count to 3 (not 0) — history still matters
   if (entry.firstReportAt && (now - entry.firstReportAt) >= REPORT_BAN_DURATION_MS) {
-    console.warn(`[REPORT-RESET] IP ${targetIP} — 24h passed, resetting ${entry.count} reports`);
-    entry = { count: 0, bannedUntil: null, reporters: new Set(), firstReportAt: null };
+    const resetTo = Math.min(entry.count, 3);
+    console.warn(`[REPORT-RESET] IP ${targetIP} — 24h passed, resetting ${entry.count} → ${resetTo} reports`);
+    entry = { count: resetTo, bannedUntil: null, reporters: new Set(), firstReportAt: resetTo > 0 ? now : null };
   }
   // One report per socket id to prevent spam
   if (entry.reporters.has(reporterSocketId)) return false;
