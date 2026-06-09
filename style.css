@@ -563,7 +563,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
+  opacity: 0.55;
   transition: opacity 0.18s ease, background 0.15s ease, transform 0.15s ease;
   padding: 0;
   touch-action: manipulation;
@@ -571,10 +571,6 @@ html, body {
 }
 
 .message-wrapper.partner:hover .react-btn { opacity: 1; }
-
-@media (hover: none) {
-  .react-btn { opacity: 0.55; }
-}
 
 .react-btn:hover { background: #4a4d63; transform: scale(1.15); }
 
@@ -950,7 +946,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
+  opacity: 0.55;
   transition: opacity 0.18s ease, background 0.15s ease, transform 0.15s ease;
   padding: 0;
   touch-action: manipulation;
@@ -959,10 +955,6 @@ html, body {
 }
 
 .message-wrapper:hover .reply-btn { opacity: 1; }
-
-@media (hover: none) {
-  .reply-btn { opacity: 0.45; }
-}
 
 .reply-btn:hover { background: #4a4d63; transform: scale(1.15); }
 
@@ -1532,12 +1524,6 @@ html, body {
   .keyboard-open .message-content {
     font-size: 15px;
     padding: 9px 13px;
-  }
-
-  /* React / reply buttons: stay visible (not hover-dependent) on mobile */
-  .keyboard-open .react-btn,
-  .keyboard-open .reply-btn {
-    opacity: 0.45;
   }
 }
 
