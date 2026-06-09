@@ -85,8 +85,10 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 90px;
   max-width: 110px;
   order: 2;
+  transition: opacity 0.2s;
 }
 
 /* ── BUTTONS ─────────────────────────────────────────────────────────────── */
@@ -1333,10 +1335,12 @@ html, body {
   .partner-name-display {
     font-size: 0.72em;
     padding: 3px 10px;
+    min-width: 80px;
     max-width: 100px;
     border-radius: 12px;
-    margin-left: auto; /* pushes both partner+user names to the right together */
+    margin-left: auto;
     order: 1;
+    transition: opacity 0.2s;
   }
 
   /* Row 2: action buttons — compact strip */
