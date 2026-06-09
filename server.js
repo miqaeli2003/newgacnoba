@@ -76,9 +76,9 @@ setInterval(() => {
 }, 60 * 60 * 1000);
 
 // ── Report-strike system ──────────────────────────────────────────────────────
-// 5 reports from different sessions → 24-hour auto-ban
+// 3 reports from different sessions → 24-hour auto-ban; resets after 24h if not reached
 const REPORT_BAN_DURATION_MS = 24 * 60 * 60 * 1000;
-const REPORT_THRESHOLD       = 5;
+const REPORT_THRESHOLD       = 3;
 const reportStrikes = new Map(); // ip → { count, bannedUntil, reporters: Set, firstReportAt }
 
 function recordReport(reporterSocketId, targetIP) {
