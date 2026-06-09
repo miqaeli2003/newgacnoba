@@ -1313,14 +1313,26 @@ socket.on("partnerDisconnected", (data) => {
   if (lastPartnerName) {
     const offerEl = document.createElement("div");
     offerEl.className = "block-offer";
-    offerEl.innerHTML = `<span>გსურთ დაბლოკოთ <strong>"${lastPartnerName}"</strong>? ის ვეღარ შეძლებს თქვენს შეწუხებას.</span>` +
-      `<button class="block-offer-btn" id="blockOfferBtn">🚫 დაბლოკვა</button>`;
+    offerEl.innerHTML =
+      `<span>გსურთ დაბლოკოთ <strong>"${lastPartnerName}"</strong>? ის ვეღარ შეძლებს თქვენს შეწუხებას.</span>` +
+      `<button class="block-offer-btn" id="blockOfferBtn">🚫 დაბლოკვა</button>` +
+      `<div class="block-offer-report-row">` +
+        `<button class="report-offer-btn" id="reportOfferBtn">🚩 რეპორტი</button>` +
+      `</div>`;
     chat.appendChild(offerEl);
     scheduleScroll();
 
     document.getElementById("blockOfferBtn").addEventListener("click", () => {
       offerEl.remove();
       socket.emit("blockUser", { targetName: lastPartnerName });
+    });
+
+    document.getElementById("reportOfferBtn").addEventListener("click", () => {
+      const btn = document.getElementById("reportOfferBtn");
+      if (!btn || btn.disabled) return;
+      btn.disabled = true;
+      btn.textContent = "✅ გაგზავნილია";
+      socket.emit("reportUser", { reason: "manual report (disconnect offer)" });
     });
   } else {
     scheduleScroll();
