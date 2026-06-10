@@ -962,7 +962,7 @@ function displayReaction(messageId, emoji, isMine) {
 function sendMessage() {
   const message = messageInput.value.trim();
   if (!message) return;
-  if (!partnerConnected || !userName || messageInput.disabled) return;
+  if (!partnerConnected || !userName || messageInput.disabled || messageInput.readOnly) return;
   const msgId = generateMsgId();
   const currentReply = replyTo ? { ...replyTo } : null;
   addMessage(message, true, msgId, currentReply);
@@ -1524,17 +1524,18 @@ socket.on("awayTimeout", () => {});
 nextBtn.addEventListener("click", () => {
   nextBtn.disabled = true;
   setTimeout(() => { nextBtn.disabled = false; }, 1000);
-  hideTypingIndicator();
-  clearChat();
-  addSearchingMessage();
+  // Lock state FIRST before any async/emit so no message can slip through
   partnerConnected     = false;
   partnerName = ""; setPartnerNameDisplay("");
   lastPartnerName      = "";
   canBlockDisconnected = false;
-  setInputsEnabled(false);
+  setInputsEnabled(false);   // disables + clears textarea immediately
   updateBlockBtn();
+  hideTypingIndicator();
   closeGifPickerPanel();
   clearReply();
+  clearChat();
+  addSearchingMessage();
   socket.emit("next");
   startSearchRetry();
 });
@@ -1567,7 +1568,7 @@ sendBtn.addEventListener("click", sendMessage);
 messageInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
-    sendMessage();
+    if (!messageInput.disabled && !messageInput.readOnly) sendMessage();
   }
 });
 
@@ -1626,14 +1627,7 @@ document.addEventListener("touchend", (e) => {
 // ── Welcome page / logo home ──────────────────────────────────────────────────
 // Called when user clicks the GAICANI logo to return to the welcome screen.
 function goToWelcome() {
-  socket.emit("next"); // tell server we're leaving current chat
-  stopSearchRetry();
-  hideTypingIndicator();
-  closeGifPickerPanel();
-  clearChat();
-  clearReply();
-
-  // Reset all session state
+  // Lock state FIRST so no message can slip through
   partnerConnected     = false;
   partnerName = ""; setPartnerNameDisplay("");
   lastPartnerName      = "";
@@ -1643,6 +1637,13 @@ function goToWelcome() {
   isReconnecting       = false;
   setInputsEnabled(false);
   updateBlockBtn();
+
+  socket.emit("next"); // tell server we're leaving current chat
+  stopSearchRetry();
+  hideTypingIndicator();
+  closeGifPickerPanel();
+  clearChat();
+  clearReply();
 
   // Clear saved name so a page reload also shows welcome
   try { sessionStorage.removeItem("gaicani_username"); } catch (_) {}
