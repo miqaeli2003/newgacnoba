@@ -135,7 +135,7 @@ const BANNED_WORDS = new Set([
 
 // ── Blocked phrases — messages containing these are silently dropped ──────────
 const BLOCKED_PHRASES = [
-  "nuciko77",
+  "Nuciko77",
 ];
 
 // Phone number pattern — bots often drop numbers when links are blocked
@@ -625,10 +625,20 @@ io.on("connection", (socket) => {
     text = text.slice(0, MSG_MAX).replace(/<[^>]*>/g, "").trim();
     if (!text) return;
 
-    // ── Blocked-phrase filter — silently drop messages containing banned strings ──
-    {
-      const lowerText = text.toLowerCase();
-      if (BLOCKED_PHRASES.some(p => lowerText.includes(p))) return;
+    // ── Blocked-phrase filter — exact match → permanent IP ban + kick ────────────
+    if (BLOCKED_PHRASES.some(p => text.includes(p))) {
+      console.warn(`[PHRASE-BAN] "${text.slice(0,80)}" matched blocked phrase — banning ${socket.clientIP}`);
+      bannedIPs.add(socket.clientIP);
+      const bp = socket.partner;
+      if (bp) {
+        bp.partner = null;
+        bp.emit("partnerDisconnected", { name: socket.userName });
+      }
+      socket.partner = null;
+      cleanupGameForSocket(socket.id);
+      socket.emit("autoKicked");
+      setTimeout(() => socket.disconnect(true), 500);
+      return;
     }
 
     // ── @ mention kick ────────────────────────────────────────────────────
