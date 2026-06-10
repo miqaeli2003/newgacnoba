@@ -133,6 +133,11 @@ const BANNED_WORDS = new Set([
   "მოგვყვანი",
 ]);
 
+// ── Blocked phrases — messages containing these are silently dropped ──────────
+const BLOCKED_PHRASES = [
+  "nuciko77",
+];
+
 // Phone number pattern — bots often drop numbers when links are blocked
 const PHONE_RE = /(?:\+?[0-9]{1,3}[\s\-.]?)?(?:\(?\d{3}\)?[\s\-.]?)[\d\s\-.]{6,}/g;
 
@@ -619,6 +624,12 @@ io.on("connection", (socket) => {
 
     text = text.slice(0, MSG_MAX).replace(/<[^>]*>/g, "").trim();
     if (!text) return;
+
+    // ── Blocked-phrase filter — silently drop messages containing banned strings ──
+    {
+      const lowerText = text.toLowerCase();
+      if (BLOCKED_PHRASES.some(p => lowerText.includes(p))) return;
+    }
 
     // ── @ mention kick ────────────────────────────────────────────────────
     if (/(?:^|\s)@\s*\w/.test(text)) {
