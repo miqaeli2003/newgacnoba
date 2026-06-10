@@ -690,17 +690,18 @@ function updateViewportOffsets() {
   const vv  = window.visualViewport;
   const kbH = getKeyboardHeight();
 
-  // Clamp body to the visual viewport height so the flex chat area fills
-  // exactly the space above the keyboard — maximum messages visible and
-  // the container stays scrollable (same trick Instagram uses).
+  // ── iOS Safari: use the actual visual-viewport height to clamp the body ──
+  // This prevents the layout from overflowing when the address bar is visible.
   document.body.style.height = kbH > 0 ? vv.height + "px" : "";
 
-  // Toggle a class so CSS can zoom out messages slightly when keyboard is open
-  document.body.classList.toggle("keyboard-open", kbH > 0);
+  // Toggle a class so CSS can zoom out messages slightly when keyboard is open.
+  // Use a small threshold (> 80) to avoid triggering on iOS toolbar-resize jitter.
+  document.body.classList.toggle("keyboard-open", kbH > 80);
 
-  // Input bar is position:fixed (layout-viewport coords) so still needs
-  // shifting up by the full keyboard height (accessory bar included).
-  chatInputBar.style.bottom     = kbH + "px";
+  // Input bar is position:fixed (layout-viewport coords) so it needs shifting
+  // up by the full keyboard height (Safari accessory bar included).
+  // When keyboard is closed, reset to 0 so CSS env(safe-area-inset-bottom) takes over.
+  chatInputBar.style.bottom     = kbH > 0 ? kbH + "px" : "";
   chatInputBar.style.transition = kbH === 0 ? "bottom 0.22s ease" : "none";
 
   // GIF picker floats 8 px above the input bar
@@ -717,6 +718,12 @@ function updateViewportOffsets() {
 if (window.visualViewport) {
   window.visualViewport.addEventListener("resize", updateViewportOffsets, { passive: true });
   window.visualViewport.addEventListener("scroll", updateViewportOffsets, { passive: true });
+  // Run once on load so the input bar and chat area start at the right position
+  // (important on iOS where env(safe-area-inset-bottom) must be applied early)
+  updateViewportOffsets();
+} else {
+  // Fallback for very old iOS Safari that doesn't support visualViewport
+  window.addEventListener("resize", updateViewportOffsets, { passive: true });
 }
 
 function updateGifPickerPosition() {
