@@ -320,7 +320,13 @@ function hasProfanity(text) {
 }
 
 // ── Link / URL detection ──────────────────────────────────────────────────────
-const LINK_RE = /(?:https?:\/\/|ftp:\/\/|www\.|\bt\.me\/|telegram\.me\/)[\w\-._~:/?#[\]@!$&'()*+,;=%]+|[\w\-]+\.(?:com|net|org|ge|io|ru|tv|me|gg|co|uk|us|info|biz|xyz|online|site|app|dev|ai|edu|gov|mil|int|eu|de|fr|es|it|pl|ua|by|kz|am|az|tr)(?:[/?\s]|$)/gi;
+// IMPORTANT: Never use a single shared /g-flag RegExp for .test() — the global
+// flag keeps lastIndex between calls, so every other call returns a wrong result.
+// We create a fresh RegExp each time via containsLink() to avoid this entirely.
+const _LINK_RE_SRC = String.raw`(?:https?:\/\/|ftp:\/\/|www\.|\bt\.me\/|telegram\.me\/)[\w\-._~:/?#[\]@!$&'()*+,;=%]+|[\w\-]+\.(?:com|net|org|ge|io|ru|tv|me|gg|co|uk|us|info|biz|xyz|online|site|app|dev|ai|edu|gov|mil|int|eu|de|fr|es|it|pl|ua|by|kz|am|az|tr)(?:[/?\s]|$)`;
+function containsLink(text) { return new RegExp(_LINK_RE_SRC, 'i').test(text); }
+// Backwards-compat alias (no longer used with .test() directly)
+const LINK_RE = { test: containsLink, lastIndex: 0 };
 
 // ── Game helpers ──────────────────────────────────────────────────────────────
 function rand(min, max) {
@@ -506,6 +512,17 @@ io.on("connection", (socket) => {
       // Reset repeat-detection ring for the restored session
       sock.lastMessages    = []; sock.spamStrikes    = 0;
       partner.lastMessages = []; partner.spamStrikes = 0;
+      // Reset chatStartedAt on both sides so the anti-bot speed gate doesn't
+      // lock out the reconnecting user (their timer was reset to 0 on connect)
+      const now = Date.now();
+      sock.chatStartedAt    = now;
+      partner.chatStartedAt = now;
+      sock.hasTyped         = false;
+      partner.hasTyped      = false;
+      // Clear recentPartnerIds between these two so they can be re-matched if
+      // both press Next — otherwise the IDs linger and cause permanent exclusion
+      sock.recentPartnerIds.delete(partner.id);
+      partner.recentPartnerIds.delete(sock.id);
       return true;
     }
     return false;
@@ -664,9 +681,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    LINK_RE.lastIndex = 0;
-    if (LINK_RE.test(text)) {
-      LINK_RE.lastIndex = 0;
+    if (containsLink(text)) {
       const strikeResult2 = recordLinkStrike(socket.clientIP);
       if (strikeResult2 === 'warning') {
         socket.emit("linkWarning");
@@ -681,7 +696,6 @@ io.on("connection", (socket) => {
       setTimeout(() => socket.disconnect(true), 1500);
       return;
     }
-    LINK_RE.lastIndex = 0;
     if (!socket.partner) return; // partner left
     if (socket.partner._isGhost) {
       socket.partner._messageQueue = socket.partner._messageQueue || [];
