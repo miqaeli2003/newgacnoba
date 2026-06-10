@@ -2004,3 +2004,178 @@ html, body {
     padding: 28px 20px 24px;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   iOS / iPhone Safari — targeted fixes
+   Applied ONLY inside @supports(-webkit-touch-callout: none) which matches
+   every iOS browser (Safari, Chrome-on-iOS, Firefox-on-iOS) but nothing else.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+@supports (-webkit-touch-callout: none) {
+
+  /* ── 1. True viewport height — use dvh where supported, fall back to 100% ──
+     html/body already use height:100%, but iOS Safari's 100vh includes the
+     address-bar chrome which causes the layout to be taller than the screen.
+     dvh = dynamic viewport height — it tracks the ACTUAL visible height.      */
+  html, body {
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  /* ── 2. Textarea — always 16 px to prevent iOS auto-zoom on focus ────────── */
+  .chat-input textarea {
+    font-size: 16px !important;
+    /* Smooth, native-feeling scroll inside the textarea if it grows */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* ── 3. Modal name input — same zoom prevention ──────────────────────────── */
+  .modal-content input[type="text"],
+  .bio-textarea,
+  #gifSearch {
+    font-size: 16px !important;
+    -webkit-appearance: none;
+  }
+
+  /* ── 4. Input bar — ensure it clears the iOS home indicator (env) ─────────── */
+  .chat-input {
+    /* On iPhone X+ the Home Indicator sits 34 px above the bottom edge.
+       padding-bottom already uses env() in the row, but the bar background
+       itself must also extend into the safe area so there's no colour gap.    */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* ── 5. Chat container — account for the dynamic top bar + input bar ────────
+     Using dvh instead of % means it won't overflow when the address bar shows. */
+  .chat-container {
+    /* Slightly more generous bottom padding so the last bubble clears
+       the input bar + home indicator on all iPhone models                      */
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 20px));
+  }
+
+  /* ── 6. Scroll momentum — critical for natural iOS feel ─────────────────── */
+  .chat-container,
+  .gif-results,
+  .modal-content {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
+  /* ── 7. Prevent text-size adjustment when rotating the screen ────────────── */
+  body {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* ── 8. Remove inner shadows / system highlights on form elements ────────── */
+  input, textarea, select {
+    -webkit-appearance: none;
+  }
+
+  /* ── 9. Buttons — disable the 300 ms tap delay that Safari still applies
+     on some button types                                                        */
+  button,
+  [role="button"],
+  .next-button,
+  .change-name-btn,
+  .block-button,
+  .report-button,
+  .interests-btn,
+  #sendBtn,
+  .gif-btn,
+  .question-btn,
+  .photo-btn {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
+  }
+
+  /* ── 10. GIF picker — full-width bottom sheet on iPhone ─────────────────── */
+  @media (max-width: 600px) {
+    .gif-picker {
+      /* Snap it to bottom edges; JS still moves it above the keyboard */
+      left: 0;
+      right: 0;
+      width: 100%;
+      border-radius: 18px 18px 0 0;
+      bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+      /* Respect safe areas on the sides (landscape iPhone notch) */
+      padding-left:  env(safe-area-inset-left, 0px);
+      padding-right: env(safe-area-inset-right, 0px);
+    }
+  }
+
+  /* ── 11. Modal — prevent rubber-banding from scrolling the backdrop ──────── */
+  .modal {
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: auto;
+  }
+
+  /* ── 12. Top bar — respect notch / Dynamic Island in landscape ───────────── */
+  .top-bar {
+    padding-left:  max(18px, env(safe-area-inset-left, 18px));
+    padding-right: max(18px, env(safe-area-inset-right, 18px));
+  }
+
+  @media (max-width: 600px) {
+    .left-side {
+      padding-left:  max(14px, env(safe-area-inset-left, 14px));
+    }
+    .right-side {
+      padding-right: max(10px, env(safe-area-inset-right, 10px));
+    }
+  }
+
+  /* ── 13. Send button & action buttons — minimum 44×44 tap target (HIG) ──── */
+  #sendBtn,
+  .gif-btn,
+  .question-btn,
+  .photo-btn {
+    min-width:  44px;
+    min-height: 44px;
+  }
+
+  /* ── 14. React / reply buttons — slightly bigger tap target on touch ──────── */
+  .react-btn,
+  .reply-btn {
+    min-width:  36px;
+    min-height: 36px;
+  }
+
+  /* ── 15. Prevent the whole page from bouncing when scrolling past edges ───── */
+  body {
+    overscroll-behavior-y: none;
+  }
+
+  /* ── 16. Input row bottom padding — ensure no gap behind home indicator ───── */
+  .chat-input-row {
+    padding-bottom: max(10px, calc(8px + env(safe-area-inset-bottom, 0px)));
+  }
+
+  /* ── 17. Away-ended / toast — don't overlap the notch area ────────────────── */
+  .toast-popup {
+    top: max(72px, calc(56px + env(safe-area-inset-top, 16px)));
+  }
+
+  /* ── 18. Typing indicator safe-area alignment ─────────────────────────────── */
+  .typing-indicator {
+    left: max(16px, env(safe-area-inset-left, 16px));
+  }
+
+} /* end @supports (-webkit-touch-callout: none) */
+
+
+/* ── iPhone landscape — extra horizontal safe-area clearance ─────────────────
+   @supports alone is enough; the orientation media query handles landscape.    */
+@media screen and (orientation: landscape) and (max-height: 500px) {
+  @supports (-webkit-touch-callout: none) {
+    /* In landscape the keyboard is almost full-height; shrink message area. */
+    .chat-container {
+      padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+    }
+    /* Compact the top bar so more chat is visible */
+    .top-bar {
+      flex: 0 0 48px;
+    }
+  }
+}
