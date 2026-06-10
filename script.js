@@ -1242,6 +1242,7 @@ socket.on("queuePosition", ({ position, total }) => {
 socket.on("partnerFound", (partner) => {
   stopSearchRetry();
   clearChat();
+  isReconnecting       = false;  // clear any lingering reconnect state
   partnerName          = partner.name || "Anonymous";
   partnerConnected     = true;
   lastPartnerName      = "";
@@ -1259,7 +1260,12 @@ socket.on("partnerFound", (partner) => {
   }
 
   setInputsEnabled(true);
+  // Safety: explicitly clear readOnly/disabled in case a race left them set
+  messageInput.disabled  = false;
+  messageInput.readOnly  = false;
+  messageInput.style.pointerEvents = "";
   updateBlockBtn();
+  hideTypingIndicator();
   playNotification("partnerFound");
   incrementUnread();
   // Focus the input so the user can start typing immediately (especially on mobile)
@@ -1282,21 +1288,32 @@ socket.on("partnerReconnected", (data) => {
   canBlockDisconnected   = false;
   removeReconnectingMessage();
   clearPartnerAwayCountdown();
+  setPartnerNameDisplay(partnerName);
   setInputsEnabled(true);
+  // Explicitly unlock — race-safe double-clear
+  messageInput.disabled  = false;
+  messageInput.readOnly  = false;
+  messageInput.style.pointerEvents = "";
   updateBlockBtn();
+  hideTypingIndicator();
+  setTimeout(() => messageInput.focus(), 100);
 });
 
 // Own socket restored to previous partner after reconnecting
 socket.on("partnerRestored", (data) => {
   stopSearchRetry();
+  isReconnecting       = false;   // clear reconnecting flag — we're back
   partnerName          = data.name || "Anonymous";
   partnerConnected     = true;
   lastPartnerName      = "";
   canBlockDisconnected = false;
+  removeReconnectingMessage();
+  setPartnerNameDisplay(partnerName);  // restore name in header (cleared on disconnect)
   setInputsEnabled(true);
   updateBlockBtn();
+  hideTypingIndicator();
   setTimeout(() => messageInput.focus(), 100);
-  // No clearChat(), no system message — messages stay, chat resumes silently
+  // No clearChat() — messages stay, chat resumes silently
 });
 
 socket.on("waitingForPartner", () => {
