@@ -122,20 +122,14 @@ const VALID_TAGS = new Set([
 const VALID_EMOJIS = new Set(["❤️","😂","😢"]);
 const BANNED_WORDS = new Set([
   // common spam/commercial phrases (lower-case, partial match)
-  "subscribe", "subscribers", "telegram", "whatsapp", "viber",
-  "onlyfans", "only fans", "follow me", "follow us",
-  "join our", "join my", "join now", "click here", "click the link",
-  "check out", "check my", "check our",
-  "buy now", "buy here", "sale", "discount", "promo", "coupon",
-  "free money", "earn money", "make money", "investment", "crypto",
-  "casino", "betting", "gamble", "jackpot",
-  "კარგი შემოსავალი", "გამოიმუშავე", "ჩვენი არხი", "ჩვენი ჯგუფი",
-  "მოგვყვანი",
+ 
 ]);
 
 // ── Blocked phrases — messages containing these are silently dropped ──────────
 const BLOCKED_PHRASES = [
   "Nuciko77",
+  "NucikО77"
+  
 ];
 
 // Phone number pattern — bots often drop numbers when links are blocked
