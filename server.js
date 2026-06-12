@@ -424,11 +424,32 @@ table{width:100%;border-collapse:collapse}
 td,th{padding:8px 10px;text-align:left;font-size:.85em}
 th{color:#72767d;font-weight:600;border-bottom:1px solid #1a1b1e}
 tr:hover td{background:rgba(255,255,255,.03)}
+.manual-ban-box{background:#2b2d31;border-radius:10px;padding:18px;margin-bottom:12px}
+.manual-ban-box textarea{width:100%;background:#1e1f22;border:1px solid #3a3c40;border-radius:6px;color:#dcddde;font-family:monospace;font-size:.9em;padding:10px 12px;resize:vertical;min-height:72px;outline:none;margin-bottom:10px}
+.manual-ban-box textarea:focus{border-color:#5865f2}
+.manual-ban-box input[type=text]{width:100%;background:#1e1f22;border:1px solid #3a3c40;border-radius:6px;color:#dcddde;font-size:.85em;padding:8px 12px;outline:none;margin-bottom:10px}
+.manual-ban-box input[type=text]:focus{border-color:#5865f2}
+.manual-ban-box label{display:block;color:#72767d;font-size:.78em;margin-bottom:4px}
+.do-ban-btn{background:#f23f42;color:#fff;border:none;border-radius:6px;padding:8px 20px;cursor:pointer;font-size:.88em;font-weight:600}
+.do-ban-btn:hover{background:#c0393b}
+.hint{color:#72767d;font-size:.76em;margin-top:6px}
 </style>
 </head>
 <body>
 <h1>🛡️ Admin Panel</h1>
 <button class="refresh-btn" onclick="loadAll()">↻ Refresh</button><span id="status"></span>
+
+<div class="section">
+  <h2>🔒 Manual Permanent Ban</h2>
+  <div class="manual-ban-box">
+    <label>IP address(es) to ban forever</label>
+    <textarea id="manualIPs" placeholder="1.2.3.4&#10;5.6.7.8&#10;or comma-separated: 1.2.3.4, 5.6.7.8"></textarea>
+    <label>Reason (optional, for your notes)</label>
+    <input type="text" id="manualReason" placeholder="e.g. spammer, harassment..." />
+    <button class="do-ban-btn" onclick="manualBan()">🚫 Ban Forever</button>
+    <p class="hint">Enter one IP per line, or separate with commas. Bans are saved to disk and survive restarts.</p>
+  </div>
+</div>
 
 <div class="section">
   <h2>Connected Users</h2>
@@ -466,10 +487,46 @@ async function unbanIP(ip) {
   loadAll();
 }
 
+async function manualBan() {
+  const raw    = document.getElementById("manualIPs").value;
+  const reason = document.getElementById("manualReason").value.trim();
+
+  // Split on newlines or commas, strip whitespace, drop empties
+  const ips = raw.split(/[\\n,]+/).map(s => s.trim()).filter(s => s.length > 0);
+  if (!ips.length) { setStatus("⚠️ No IPs entered"); return; }
+
+  // Basic IP validation (v4 and v6 allowed)
+  const invalid = ips.filter(ip => !/^[0-9a-fA-F:.]+$/.test(ip));
+  if (invalid.length) {
+    setStatus("⚠️ Invalid IP(s): " + invalid.join(", "));
+    return;
+  }
+
+  if (!confirm("Permanently ban " + ips.length + " IP(s)?\\n\\n" + ips.join("\\n"))) return;
+
+  let totalKicked = 0;
+  const failed = [];
+  for (const ip of ips) {
+    try {
+      const d = await api("POST", R.ban + "?ip=" + encodeURIComponent(ip));
+      totalKicked += (d.kicked || 0);
+    } catch { failed.push(ip); }
+  }
+
+  document.getElementById("manualIPs").value = "";
+  document.getElementById("manualReason").value = "";
+
+  const msg = failed.length
+    ? "⚠️ Banned " + (ips.length - failed.length) + "/" + ips.length + " — failed: " + failed.join(", ")
+    : "✅ Banned " + ips.length + " IP(s)" + (totalKicked ? " — " + totalKicked + " kicked" : "") + (reason ? " [" + reason + "]" : "");
+  setStatus(msg);
+  loadAll();
+}
+
 function setStatus(msg) {
   const el = document.getElementById("status");
   el.textContent = msg;
-  setTimeout(() => el.textContent = "", 3000);
+  setTimeout(() => el.textContent = "", 5000);
 }
 
 async function loadAll() {
