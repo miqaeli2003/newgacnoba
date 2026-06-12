@@ -239,6 +239,121 @@ app.get("/admin/bans", adminAuth, (req, res) => {
   res.json({ count: bannedIPs.size, ips: [...bannedIPs] });
 });
 
+// GET /gaicani-panel-7x9k2?key=SECRET  — secret visual admin panel
+app.get("/gaicani-panel-7x9k2", adminAuth, (req, res) => {
+  const key = req.query.key || req.headers["x-admin-key"];
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Admin Panel</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#1e1f22;color:#dcddde;font-family:"Segoe UI",Arial,sans-serif;padding:24px}
+h1{color:#fff;font-size:1.4em;margin-bottom:20px}
+h2{color:#5865f2;font-size:1em;margin:24px 0 10px;text-transform:uppercase;letter-spacing:.5px}
+.card{background:#2b2d31;border-radius:10px;padding:16px;margin-bottom:12px}
+.ip{font-family:monospace;color:#fff;font-size:1em}
+.name{color:#b5bac1;font-size:.85em;margin-top:2px}
+.ban-btn{background:#f23f42;color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:.85em;float:right;margin-top:-2px}
+.ban-btn:hover{background:#c0393b}
+.unban-btn{background:#3ba55d;color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:.85em}
+.unban-btn:hover{background:#2d8a4e}
+.badge{display:inline-block;background:rgba(88,101,242,.2);color:#5865f2;border-radius:4px;font-size:.75em;padding:2px 7px;margin-left:6px}
+.badge.green{background:rgba(59,165,93,.2);color:#3ba55d}
+.refresh-btn{background:#5865f2;color:#fff;border:none;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:.85em;margin-bottom:16px}
+.refresh-btn:hover{background:#4752c4}
+.section{margin-bottom:32px}
+#status{color:#3ba55d;font-size:.85em;margin-left:10px;display:inline}
+table{width:100%;border-collapse:collapse}
+td,th{padding:8px 10px;text-align:left;font-size:.85em}
+th{color:#72767d;font-weight:600;border-bottom:1px solid #1a1b1e}
+tr:hover td{background:rgba(255,255,255,.03)}
+</style>
+</head>
+<body>
+<h1>🛡️ Admin Panel</h1>
+<button class="refresh-btn" onclick="loadAll()">↻ Refresh</button><span id="status"></span>
+
+<div class="section">
+  <h2>Connected Users</h2>
+  <div id="users">Loading...</div>
+</div>
+
+<div class="section">
+  <h2>Banned IPs</h2>
+  <div id="bans">Loading...</div>
+</div>
+
+<script>
+const KEY = "${key}";
+
+async function api(method, path) {
+  const r = await fetch(path + "?key=" + KEY, { method });
+  return r.json();
+}
+
+async function banIP(ip) {
+  if (!confirm("Ban IP: " + ip + "?")) return;
+  const d = await api("POST", "/admin/ban?ip=" + encodeURIComponent(ip));
+  setStatus("Banned " + ip + " (" + d.kicked + " kicked)");
+  loadAll();
+}
+
+async function unbanIP(ip) {
+  await api("POST", "/admin/unban?ip=" + encodeURIComponent(ip));
+  setStatus("Unbanned " + ip);
+  loadAll();
+}
+
+function setStatus(msg) {
+  const el = document.getElementById("status");
+  el.textContent = msg;
+  setTimeout(() => el.textContent = "", 3000);
+}
+
+async function loadAll() {
+  // Users
+  try {
+    const d = await api("GET", "/admin/users");
+    const el = document.getElementById("users");
+    if (!d.users || !d.users.length) { el.innerHTML = '<p style="color:#72767d;font-size:.9em">No connected users</p>'; }
+    else {
+      el.innerHTML = '<table><tr><th>Name</th><th>IP</th><th>Status</th><th></th></tr>' +
+        d.users.map(u => \`<tr>
+          <td><span class="ip">\${esc(u.name)}</span></td>
+          <td style="font-family:monospace;color:#b5bac1">\${esc(u.ip)}</td>
+          <td>\${u.partner ? '<span class="badge green">chatting</span>' : '<span class="badge">waiting</span>'}</td>
+          <td><button class="ban-btn" onclick="banIP('\${esc(u.ip)}')">Ban IP</button></td>
+        </tr>\`).join("") + "</table>";
+    }
+  } catch(e) { document.getElementById("users").textContent = "Error"; }
+
+  // Bans
+  try {
+    const d = await api("GET", "/admin/bans");
+    const el = document.getElementById("bans");
+    if (!d.ips || !d.ips.length) { el.innerHTML = '<p style="color:#72767d;font-size:.9em">No banned IPs</p>'; }
+    else {
+      el.innerHTML = d.ips.map(ip => \`<div class="card">
+        <span class="ip">\${esc(ip)}</span>
+        <button class="unban-btn" onclick="unbanIP('\${esc(ip)}')" style="float:right">Unban</button>
+      </div>\`).join("");
+    }
+  } catch(e) { document.getElementById("bans").textContent = "Error"; }
+}
+
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+loadAll();
+setInterval(loadAll, 15000);
+</script>
+</body>
+</html>`);
+});
+
 // ── Challenge Token + Proof-of-Work (anti-bot) ───────────────────────────────
 // 1. Client fetches /api/challenge  → { token, nonce }
 // 2. Client computes powAnswer = (nonce * 31 + nonce % 97)  [done in real browser JS]
