@@ -239,6 +239,22 @@ app.get("/admin/bans", adminAuth, (req, res) => {
   res.json({ count: bannedIPs.size, ips: [...bannedIPs] });
 });
 
+// GET /admin/reported?key=SECRET  — list IPs that hit 5 reports within 24h window
+app.get("/admin/reported", adminAuth, (req, res) => {
+  const now = Date.now();
+  const result = [];
+  for (const [ip, entry] of reportStrikes) {
+    // Only show if they actually reached the threshold (bannedUntil is set)
+    if (!entry.bannedUntil) continue;
+    // Hide if the 24h ban has already expired
+    if (now >= entry.bannedUntil) continue;
+    const remainingMs = entry.bannedUntil - now;
+    const remainingHrs = Math.ceil(remainingMs / (60 * 60 * 1000));
+    result.push({ ip, count: entry.count, remainingHrs });
+  }
+  res.json({ count: result.length, reported: result });
+});
+
 // GET /gaicani-panel-7x9k2?key=SECRET  — secret visual admin panel
 app.get("/gaicani-panel-7x9k2", adminAuth, (req, res) => {
   const key = req.query.key || req.headers["x-admin-key"];
@@ -280,6 +296,11 @@ tr:hover td{background:rgba(255,255,255,.03)}
 <div class="section">
   <h2>Connected Users</h2>
   <div id="users">Loading...</div>
+</div>
+
+<div class="section">
+  <h2>🚩 Reported IPs (5+ reports, active ban)</h2>
+  <div id="reported">Loading...</div>
 </div>
 
 <div class="section">
@@ -331,6 +352,22 @@ async function loadAll() {
         </tr>\`).join("") + "</table>";
     }
   } catch(e) { document.getElementById("users").textContent = "Error"; }
+
+  // Reported IPs (5+ reports within 24h)
+  try {
+    const d = await api("GET", "/admin/reported");
+    const el = document.getElementById("reported");
+    if (!d.reported || !d.reported.length) { el.innerHTML = '<p style="color:#72767d;font-size:.9em">No reported IPs right now</p>'; }
+    else {
+      el.innerHTML = '<table><tr><th>IP</th><th>Reports</th><th>Ban expires in</th><th></th></tr>' +
+        d.reported.map(r => \`<tr>
+          <td style="font-family:monospace;color:#fff">\${esc(r.ip)}</td>
+          <td><span style="color:#f23f42;font-weight:700">\${r.count}</span></td>
+          <td style="color:#72767d">\${r.remainingHrs}h</td>
+          <td><button class="ban-btn" onclick="banIP('\${esc(r.ip)}')">Ban IP</button></td>
+        </tr>\`).join("") + "</table>";
+    }
+  } catch(e) { document.getElementById("reported").textContent = "Error"; }
 
   // Bans
   try {
