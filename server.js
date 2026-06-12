@@ -290,21 +290,22 @@ tr:hover td{background:rgba(255,255,255,.03)}
 <script>
 const KEY = "${key}";
 
-async function api(method, path) {
-  const r = await fetch(path + "?key=" + KEY, { method });
+async function api(method, endpoint) {
+  const sep = endpoint.includes("?") ? "&" : "?";
+  const r = await fetch(endpoint + sep + "key=" + encodeURIComponent(KEY), { method });
   return r.json();
 }
 
 async function banIP(ip) {
   if (!confirm("Ban IP: " + ip + "?")) return;
   const d = await api("POST", "/admin/ban?ip=" + encodeURIComponent(ip));
-  setStatus("Banned " + ip + " (" + d.kicked + " kicked)");
+  setStatus("✅ Banned " + ip + " — " + (d.kicked || 0) + " kicked");
   loadAll();
 }
 
 async function unbanIP(ip) {
   await api("POST", "/admin/unban?ip=" + encodeURIComponent(ip));
-  setStatus("Unbanned " + ip);
+  setStatus("✅ Unbanned " + ip);
   loadAll();
 }
 
