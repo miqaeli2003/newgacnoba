@@ -27,30 +27,32 @@ const MAX_BLOCKS_TX      = 10;  // max users one socket can block per session
 const MSG_RATE_MAX       = 20;
 const MSG_RATE_WINDOW_MS = 5000;
 
-// ── Admin ─────────────────────────────────────────────────────────────────────
-// Set ADMIN_SECRET in your environment: e.g. export ADMIN_SECRET=mypassword123
-const ADMIN_SECRET = process.env.ADMIN_SECRET || "change-this-secret";
-const bannedIPs    = new Set(); // persists for server lifetime
+// ── Admin / Owner ─────────────────────────────────────────────────────────────
+// All sensitive routes are locked to OWNER_IP only — no password needed.
+const OWNER_IP  = "109.172.136.114";
+const bannedIPs = new Set(); // persists for server lifetime
+
+// ── Randomised secret route slugs ─────────────────────────────────────────────
+// These replace every predictable /admin/* and old panel/stats paths.
+const ROUTE = {
+  panel:       "/x7k2mq9pn4w",  // visual admin panel  (users, ban/unban)
+  stats:       "/r3tz8vj1qs6",  // stats dashboard HTML
+  statsApi:    "/n5ph2ck7ew0",  // stats JSON API       (called by stats page)
+  users:       "/b9wf4yd6ul3",  // list connected users JSON
+  ban:         "/m2xg7rn0ks5",  // POST ban an IP
+  unban:       "/q6jd1vc8zt4",  // POST unban an IP
+  bans:        "/a4hs3oe9lp7",  // list banned IPs JSON
+  reported:    "/f8nb5wx2cr1",  // list report-banned IPs JSON
+  visitorLog:  "/t1uy6im0dg8",  // visitor log HTML
+  visitorJson: "/e3kp9af5qh2",  // visitor log JSON
+};
 
 // ── Sensitive-URL visitor log ─────────────────────────────────────────────────
-// Records every IP that visits (or attempts to visit) the admin panel or stats
-// dashboard. Only the owner IP can view this log.
-const OWNER_IP = "109.172.136.114";
-const MAX_VISITOR_LOG = 2000; // keep at most this many entries in memory
-
-// Each entry: { ip, url, timestamp, userAgent, allowed }
+const MAX_VISITOR_LOG = 2000;
 const sensitiveVisitorLog = [];
+// Each entry: { ip, url, timestamp, userAgent, allowed }
 
-const SENSITIVE_URL_PATTERNS = [
-  "/gaicani-panel-7x9k2",
-  "/gaicani-stats-m3p8q",
-  "/admin/stats-api",
-  "/admin/users",
-  "/admin/ban",
-  "/admin/unban",
-  "/admin/bans",
-  "/admin/reported",
-];
+const SENSITIVE_URL_PATTERNS = Object.values(ROUTE);
 
 function recordSensitiveVisit(req, allowed) {
   const ip = (
@@ -304,15 +306,8 @@ app.get("/api/random-question", (req, res) => {
   res.json({ question });
 });
 
-// ── Admin middleware ──────────────────────────────────────────────────────────
-function adminAuth(req, res, next) {
-  const key = req.query.key || req.headers["x-admin-key"];
-  if (key !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
-  next();
-}
-
-// GET /admin/users?key=SECRET  — list all connected users with IPs
-app.get("/admin/users", adminAuth, (req, res) => {
+// GET <users route>  — list all connected users with IPs
+app.get(ROUTE.users, ownerOnly, (req, res) => {
   const users = [];
   for (const [, socket] of io.sockets.sockets) {
     users.push({
@@ -323,12 +318,12 @@ app.get("/admin/users", adminAuth, (req, res) => {
       connected: socket.connected,
     });
   }
-  users.sort((a, b) => (b.partner ? 1 : 0) - (a.partner ? 1 : 0)); // chatting first
+  users.sort((a, b) => (b.partner ? 1 : 0) - (a.partner ? 1 : 0));
   res.json({ count: users.length, users });
 });
 
-// POST /admin/ban?key=SECRET&ip=1.2.3.4  — ban an IP and kick all matching sockets
-app.post("/admin/ban", adminAuth, (req, res) => {
+// POST <ban route>?ip=1.2.3.4  — ban an IP and kick all matching sockets
+app.post(ROUTE.ban, ownerOnly, (req, res) => {
   const ip = (req.query.ip || "").trim();
   if (!ip) return res.status(400).json({ error: "ip param required" });
 
@@ -345,38 +340,35 @@ app.post("/admin/ban", adminAuth, (req, res) => {
   res.json({ ok: true, ip, kicked });
 });
 
-// POST /admin/unban?key=SECRET&ip=1.2.3.4  — remove an IP ban
-app.post("/admin/unban", adminAuth, (req, res) => {
+// POST <unban route>?ip=1.2.3.4  — remove an IP ban
+app.post(ROUTE.unban, ownerOnly, (req, res) => {
   const ip = (req.query.ip || "").trim();
   if (!ip) return res.status(400).json({ error: "ip param required" });
   const existed = bannedIPs.delete(ip);
   res.json({ ok: true, ip, wasBanned: existed });
 });
 
-// GET /admin/bans?key=SECRET  — list all currently banned IPs
-app.get("/admin/bans", adminAuth, (req, res) => {
+// GET <bans route>  — list all currently banned IPs
+app.get(ROUTE.bans, ownerOnly, (req, res) => {
   res.json({ count: bannedIPs.size, ips: [...bannedIPs] });
 });
 
-// GET /admin/reported?key=SECRET  — list IPs that hit 5 reports within 24h window
-app.get("/admin/reported", adminAuth, (req, res) => {
+// GET <reported route>  — list IPs that hit 5 reports within 24h window
+app.get(ROUTE.reported, ownerOnly, (req, res) => {
   const now = Date.now();
   const result = [];
   for (const [ip, entry] of reportStrikes) {
-    // Only show if they actually reached the threshold (bannedUntil is set)
     if (!entry.bannedUntil) continue;
-    // Hide if the 24h ban has already expired
     if (now >= entry.bannedUntil) continue;
-    const remainingMs = entry.bannedUntil - now;
+    const remainingMs  = entry.bannedUntil - now;
     const remainingHrs = Math.ceil(remainingMs / (60 * 60 * 1000));
     result.push({ ip, count: entry.count, remainingHrs });
   }
   res.json({ count: result.length, reported: result });
 });
 
-// GET /gaicani-panel-7x9k2?key=SECRET  — secret visual admin panel
-app.get("/gaicani-panel-7x9k2", adminAuth, (req, res) => {
-  const key = req.query.key || req.headers["x-admin-key"];
+// GET <panel route>  — visual admin panel (IP-only, no key)
+app.get(ROUTE.panel, ownerOnly, (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -391,7 +383,6 @@ h1{color:#fff;font-size:1.4em;margin-bottom:20px}
 h2{color:#5865f2;font-size:1em;margin:24px 0 10px;text-transform:uppercase;letter-spacing:.5px}
 .card{background:#2b2d31;border-radius:10px;padding:16px;margin-bottom:12px}
 .ip{font-family:monospace;color:#fff;font-size:1em}
-.name{color:#b5bac1;font-size:.85em;margin-top:2px}
 .ban-btn{background:#f23f42;color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:.85em;float:right;margin-top:-2px}
 .ban-btn:hover{background:#c0393b}
 .unban-btn{background:#3ba55d;color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:.85em}
@@ -428,23 +419,22 @@ tr:hover td{background:rgba(255,255,255,.03)}
 </div>
 
 <script>
-const KEY = "${key}";
+const R = ${JSON.stringify(ROUTE)};
 
-async function api(method, endpoint) {
-  const sep = endpoint.includes("?") ? "&" : "?";
-  const r = await fetch(endpoint + sep + "key=" + encodeURIComponent(KEY), { method });
+async function api(method, url) {
+  const r = await fetch(url, { method });
   return r.json();
 }
 
 async function banIP(ip) {
   if (!confirm("Ban IP: " + ip + "?")) return;
-  const d = await api("POST", "/admin/ban?ip=" + encodeURIComponent(ip));
+  const d = await api("POST", R.ban + "?ip=" + encodeURIComponent(ip));
   setStatus("✅ Banned " + ip + " — " + (d.kicked || 0) + " kicked");
   loadAll();
 }
 
 async function unbanIP(ip) {
-  await api("POST", "/admin/unban?ip=" + encodeURIComponent(ip));
+  await api("POST", R.unban + "?ip=" + encodeURIComponent(ip));
   setStatus("✅ Unbanned " + ip);
   loadAll();
 }
@@ -456,9 +446,8 @@ function setStatus(msg) {
 }
 
 async function loadAll() {
-  // Users
   try {
-    const d = await api("GET", "/admin/users");
+    const d = await api("GET", R.users);
     const el = document.getElementById("users");
     if (!d.users || !d.users.length) { el.innerHTML = '<p style="color:#72767d;font-size:.9em">No connected users</p>'; }
     else {
@@ -472,9 +461,8 @@ async function loadAll() {
     }
   } catch(e) { document.getElementById("users").textContent = "Error"; }
 
-  // Reported IPs (5+ reports within 24h)
   try {
-    const d = await api("GET", "/admin/reported");
+    const d = await api("GET", R.reported);
     const el = document.getElementById("reported");
     if (!d.reported || !d.reported.length) { el.innerHTML = '<p style="color:#72767d;font-size:.9em">No reported IPs right now</p>'; }
     else {
@@ -488,9 +476,8 @@ async function loadAll() {
     }
   } catch(e) { document.getElementById("reported").textContent = "Error"; }
 
-  // Bans
   try {
-    const d = await api("GET", "/admin/bans");
+    const d = await api("GET", R.bans);
     const el = document.getElementById("bans");
     if (!d.ips || !d.ips.length) { el.innerHTML = '<p style="color:#72767d;font-size:.9em">No banned IPs</p>'; }
     else {
@@ -1370,7 +1357,7 @@ io.on("connection", (socket) => {
 });
 
 // ── Stats API ────────────────────────────────────────────────────────────────
-app.get("/admin/stats-api", adminAuth, (req, res) => {
+app.get(ROUTE.statsApi, ownerOnly, (req, res) => {
   const now = Date.now();
   const uptimeSec = Math.floor((now - stats.serverStartedAt) / 1000);
   const days = [];
@@ -1390,9 +1377,9 @@ app.get("/admin/stats-api", adminAuth, (req, res) => {
   });
 });
 
-// GET /gaicani-stats-m3p8q — secret stats dashboard
-app.get("/gaicani-stats-m3p8q", adminAuth, (req, res) => {
-  const key = req.query.key || req.headers["x-admin-key"];
+
+// GET <stats route> — stats dashboard (IP-only, no key)
+app.get(ROUTE.stats, ownerOnly, (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   const CSS = [
     "*{box-sizing:border-box;margin:0;padding:0}",
@@ -1417,12 +1404,13 @@ app.get("/gaicani-stats-m3p8q", adminAuth, (req, res) => {
     "#lu{color:#72767d;font-size:.78em;margin-left:10px}"
   ].join("");
 
-  const JS = "const KEY='" + key + "';" +
+  const STATS_API = ROUTE.statsApi;
+  const JS =
     "function fmt(s){if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m '+(s%60)+'s';return Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m';}" +
     "function pct(v,m){return m?Math.round(v/m*100):0;}" +
     "function esc(s){return String(s).replace(/[&<>\"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'})[c];});}" +
     "async function load(){try{" +
-    "var r=await fetch('/admin/stats-api?key='+encodeURIComponent(KEY));" +
+    "var r=await fetch('" + STATS_API + "');" +
     "var d=await r.json();" +
     "document.getElementById('now').innerHTML=" +
     "  '<div class=\"sc\"><div class=\"sv g\">'+d.currentOnline+'</div><div class=\"sl\">Online now</div></div>'" +
@@ -1468,9 +1456,7 @@ app.get("/gaicani-stats-m3p8q", adminAuth, (req, res) => {
 });
 
 // ── Sensitive-URL visitor log — owner eyes only ───────────────────────────────
-// GET /gaicani-visitor-log  (no key needed — IP check is the gate)
-// Only 109.172.136.114 gets a response; everyone else gets 403.
-app.get("/gaicani-visitor-log", ownerOnly, (req, res) => {
+app.get(ROUTE.visitorLog, ownerOnly, (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
 
   const esc = s => String(s).replace(/[&<>"']/g, c =>
@@ -1558,8 +1544,7 @@ button:hover{background:#4752c4}
 });
 
 // JSON version of the same log (for scripting)
-// GET /gaicani-visitor-log-json
-app.get("/gaicani-visitor-log-json", ownerOnly, (req, res) => {
+app.get(ROUTE.visitorJson, ownerOnly, (req, res) => {
   const unique = [...new Set(sensitiveVisitorLog.map(e => e.ip))];
   res.json({
     total: sensitiveVisitorLog.length,
