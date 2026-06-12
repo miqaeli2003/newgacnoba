@@ -32,6 +32,80 @@ const MSG_RATE_WINDOW_MS = 5000;
 const ADMIN_SECRET = process.env.ADMIN_SECRET || "change-this-secret";
 const bannedIPs    = new Set(); // persists for server lifetime
 
+// ── Sensitive-URL visitor log ─────────────────────────────────────────────────
+// Records every IP that visits (or attempts to visit) the admin panel or stats
+// dashboard. Only the owner IP can view this log.
+const OWNER_IP = "109.172.136.114";
+const MAX_VISITOR_LOG = 2000; // keep at most this many entries in memory
+
+// Each entry: { ip, url, timestamp, userAgent, allowed }
+const sensitiveVisitorLog = [];
+
+const SENSITIVE_URL_PATTERNS = [
+  "/gaicani-panel-7x9k2",
+  "/gaicani-stats-m3p8q",
+  "/admin/stats-api",
+  "/admin/users",
+  "/admin/ban",
+  "/admin/unban",
+  "/admin/bans",
+  "/admin/reported",
+];
+
+function recordSensitiveVisit(req, allowed) {
+  const ip = (
+    req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
+    req.socket?.remoteAddress ||
+    "unknown"
+  );
+  const entry = {
+    ip,
+    url: req.originalUrl || req.url,
+    timestamp: new Date().toISOString(),
+    userAgent: (req.headers["user-agent"] || "").slice(0, 200),
+    allowed,
+  };
+  sensitiveVisitorLog.push(entry);
+  // Keep log from growing unbounded
+  if (sensitiveVisitorLog.length > MAX_VISITOR_LOG)
+    sensitiveVisitorLog.splice(0, sensitiveVisitorLog.length - MAX_VISITOR_LOG);
+  if (!allowed) {
+    console.warn(`[SENSITIVE-URL] UNAUTHORIZED access attempt — IP: ${ip} → ${entry.url}`);
+  } else {
+    console.log(`[SENSITIVE-URL] Authorized access — IP: ${ip} → ${entry.url}`);
+  }
+}
+
+// Middleware: log every request to sensitive URLs (runs before auth checks)
+function sensitiveUrlLogger(req, res, next) {
+  const path = req.path || "";
+  const isSensitive = SENSITIVE_URL_PATTERNS.some(p => path.startsWith(p));
+  if (!isSensitive) return next();
+
+  const ip = (
+    req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
+    req.socket?.remoteAddress ||
+    "unknown"
+  );
+  const isAllowed = (ip === OWNER_IP);
+  recordSensitiveVisit(req, isAllowed);
+  next();
+}
+
+// Owner-only middleware — only the owner IP may access the visitor log endpoint
+function ownerOnly(req, res, next) {
+  const ip = (
+    req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
+    req.socket?.remoteAddress ||
+    "unknown"
+  );
+  if (ip !== OWNER_IP) {
+    res.status(403).send("Forbidden");
+    return;
+  }
+  next();
+}
+
 // ── Statistics tracking ───────────────────────────────────────────────────────
 const stats = {
   // Rolling 7-day window — each entry: { date: "YYYY-MM-DD", ips: Set, sessions: 0, totalDurationMs: 0, chats: 0 }
@@ -197,6 +271,7 @@ function randomItem(arr) {
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(compression());
+app.use(sensitiveUrlLogger); // log admin/stats visits BEFORE auth gates
 app.use(express.static(path.join(__dirname)));
 
 const gifHttpLimiter = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
@@ -1390,6 +1465,108 @@ app.get("/gaicani-stats-m3p8q", adminAuth, (req, res) => {
     "</body></html>";
 
   res.send(html);
+});
+
+// ── Sensitive-URL visitor log — owner eyes only ───────────────────────────────
+// GET /gaicani-visitor-log  (no key needed — IP check is the gate)
+// Only 109.172.136.114 gets a response; everyone else gets 403.
+app.get("/gaicani-visitor-log", ownerOnly, (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+
+  const esc = s => String(s).replace(/[&<>"']/g, c =>
+    ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
+
+  const rows = [...sensitiveVisitorLog].reverse().map(e => {
+    const cls = e.allowed ? "ok" : "bad";
+    return `<tr class="${cls}">
+      <td>${esc(e.timestamp)}</td>
+      <td class="ip">${esc(e.ip)}</td>
+      <td>${esc(e.url)}</td>
+      <td>${e.allowed ? "✅ owner" : "🚫 denied"}</td>
+      <td class="ua">${esc(e.userAgent)}</td>
+    </tr>`;
+  }).join("");
+
+  const uniqueIPs = [...new Set(sensitiveVisitorLog.map(e => e.ip))];
+  const denied    = sensitiveVisitorLog.filter(e => !e.allowed);
+
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Sensitive URL Visitor Log — GAICANI</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#1e1f22;color:#dcddde;font-family:"Segoe UI",Arial,sans-serif;padding:24px}
+h1{color:#fff;font-size:1.4em;margin-bottom:4px}
+.sub{color:#72767d;font-size:.82em;margin-bottom:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:28px}
+.sc{background:#2b2d31;border-radius:10px;padding:16px 18px}
+.sv{font-size:1.8em;font-weight:700;color:#fff;line-height:1.1}
+.sv.r{color:#f23f42}.sv.g{color:#3ba55d}
+.sl{font-size:.75em;color:#72767d;margin-top:4px}
+h2{color:#5865f2;font-size:.9em;margin:24px 0 12px;text-transform:uppercase;letter-spacing:.5px}
+table{width:100%;border-collapse:collapse;background:#2b2d31;border-radius:10px;overflow:hidden;font-size:.82em}
+th{background:#232428;color:#72767d;font-weight:600;padding:10px 12px;text-align:left;border-bottom:1px solid #1a1b1e}
+td{padding:8px 12px;border-bottom:1px solid #1e1f22;vertical-align:top}
+tr:last-child td{border-bottom:none}
+tr.bad td{background:rgba(242,63,66,.07)}
+tr.ok td{background:rgba(59,165,93,.04)}
+.ip{font-family:monospace;color:#fff;font-weight:600}
+.ua{color:#72767d;font-size:.78em;max-width:280px;word-break:break-all}
+.ip-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+.ip-tag{background:#2b2d31;border:1px solid #3a3c40;border-radius:6px;padding:4px 10px;font-family:monospace;font-size:.82em;color:#b5bac1}
+.ip-tag.bad{border-color:rgba(242,63,66,.5);color:#f23f42}
+button{background:#5865f2;color:#fff;border:none;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:.85em;margin-bottom:20px}
+button:hover{background:#4752c4}
+</style>
+</head>
+<body>
+<h1>🔍 Sensitive URL Visitor Log</h1>
+<p class="sub">All IPs that hit admin / stats URLs — only visible to you (${esc(OWNER_IP)})</p>
+<button onclick="location.reload()">↻ Refresh</button>
+
+<div class="grid">
+  <div class="sc"><div class="sv">${sensitiveVisitorLog.length}</div><div class="sl">Total requests logged</div></div>
+  <div class="sc"><div class="sv">${uniqueIPs.length}</div><div class="sl">Unique IPs seen</div></div>
+  <div class="sc"><div class="sv r">${denied.length}</div><div class="sl">Denied (non-owner) attempts</div></div>
+  <div class="sc"><div class="sv g">${sensitiveVisitorLog.length - denied.length}</div><div class="sl">Owner accesses</div></div>
+</div>
+
+<h2>All unique IPs that visited</h2>
+<div class="ip-list">
+  ${uniqueIPs.map(ip => {
+    const hasDenied = denied.some(e => e.ip === ip);
+    return `<span class="ip-tag${hasDenied ? " bad" : ""}">${esc(ip)}</span>`;
+  }).join("")}
+</div>
+
+<h2>Full request log (newest first — max ${MAX_VISITOR_LOG})</h2>
+<table>
+  <tr>
+    <th>Time (UTC)</th>
+    <th>IP</th>
+    <th>URL</th>
+    <th>Status</th>
+    <th>User-Agent</th>
+  </tr>
+  ${rows || '<tr><td colspan="5" style="color:#72767d;padding:16px">No visits recorded yet.</td></tr>'}
+</table>
+</body>
+</html>`);
+});
+
+// JSON version of the same log (for scripting)
+// GET /gaicani-visitor-log-json
+app.get("/gaicani-visitor-log-json", ownerOnly, (req, res) => {
+  const unique = [...new Set(sensitiveVisitorLog.map(e => e.ip))];
+  res.json({
+    total: sensitiveVisitorLog.length,
+    uniqueIPs: unique,
+    deniedCount: sensitiveVisitorLog.filter(e => !e.allowed).length,
+    entries: [...sensitiveVisitorLog].reverse(),
+  });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
