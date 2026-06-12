@@ -32,6 +32,50 @@ const MSG_RATE_WINDOW_MS = 5000;
 const ADMIN_SECRET = process.env.ADMIN_SECRET || "change-this-secret";
 const bannedIPs    = new Set(); // persists for server lifetime
 
+// ── Statistics tracking ───────────────────────────────────────────────────────
+const stats = {
+  // Rolling 7-day window — each entry: { date: "YYYY-MM-DD", ips: Set, sessions: 0, totalDurationMs: 0, chats: 0 }
+  days: new Map(),   // "YYYY-MM-DD" → { ips: Set, sessions, totalDurationMs, chats }
+  allTimeIPs: new Set(),
+  peakOnline: 0,
+  peakOnlineAt: null,
+  serverStartedAt: Date.now(),
+};
+
+function todayKey() {
+  return new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+}
+
+function getOrCreateDay(key) {
+  if (!stats.days.has(key)) {
+    stats.days.set(key, { ips: new Set(), sessions: 0, totalDurationMs: 0, chats: 0 });
+    // Keep only last 7 days
+    const keys = [...stats.days.keys()].sort();
+    while (keys.length > 7) { stats.days.delete(keys.shift()); keys.shift(); }
+  }
+  return stats.days.get(key);
+}
+
+function recordConnect(ip) {
+  const day = getOrCreateDay(todayKey());
+  day.ips.add(ip);
+  day.sessions++;
+  stats.allTimeIPs.add(ip);
+  const current = io ? io.sockets.sockets.size : 0;
+  if (current > stats.peakOnline) { stats.peakOnline = current; stats.peakOnlineAt = new Date().toISOString(); }
+}
+
+function recordDisconnect(ip, connectedAtMs) {
+  if (!connectedAtMs) return;
+  const durMs = Date.now() - connectedAtMs;
+  const day = getOrCreateDay(todayKey());
+  day.totalDurationMs += durMs;
+}
+
+function recordChatStarted() {
+  getOrCreateDay(todayKey()).chats++;
+}
+
 // ── Link-strike system ────────────────────────────────────────────────────────
 // 2 violations → 24-hour auto-ban
 const LINK_BAN_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -547,6 +591,8 @@ io.on("connection", (socket) => {
   }
 
   console.log("User connected", socket.id, rawIP);
+  socket._connectedAt = Date.now();
+  recordConnect(rawIP);
 
   socket.userName           = "";
   socket.partner            = null;
@@ -741,6 +787,7 @@ io.on("connection", (socket) => {
     const sharedTags = (socket.interests || []).filter(t => (partnerSocket.interests || []).includes(t));
 
     socket.emit("partnerFound",        { name: partnerSocket.userName, sharedTags, partnerBio: partnerSocket.bio });
+    recordChatStarted();
     partnerSocket.emit("partnerFound", { name: socket.userName,        sharedTags, partnerBio: socket.bio });
 
     // ── Reset anti-bot state for both users ────────────────────────────────
@@ -1206,6 +1253,7 @@ io.on("connection", (socket) => {
   // ── Disconnect ───────────────────────────────────────────────────────────
   socket.on("disconnect", () => {
     console.log("User disconnected", socket.id);
+    recordDisconnect(socket.clientIP, socket._connectedAt);
 
     cleanupGameForSocket(socket.id);
 
@@ -1244,6 +1292,104 @@ io.on("connection", (socket) => {
     waitingQueue = waitingQueue.filter(s => s.id !== socket.id);
     updateOnlineCount();
   });
+});
+
+// ── Stats API ────────────────────────────────────────────────────────────────
+app.get("/admin/stats-api", adminAuth, (req, res) => {
+  const now = Date.now();
+  const uptimeSec = Math.floor((now - stats.serverStartedAt) / 1000);
+  const days = [];
+  const sortedKeys = [...stats.days.keys()].sort();
+  for (const dk of sortedKeys) {
+    const d = stats.days.get(dk);
+    const avgDurSec = d.sessions > 0 ? Math.round(d.totalDurationMs / d.sessions / 1000) : 0;
+    days.push({ date: dk, uniqueIPs: d.ips.size, sessions: d.sessions, avgSessionSec: avgDurSec, chats: d.chats });
+  }
+  res.json({
+    currentOnline: io.sockets.sockets.size,
+    peakOnline: stats.peakOnline,
+    peakOnlineAt: stats.peakOnlineAt,
+    allTimeUniqueIPs: stats.allTimeIPs.size,
+    uptimeSec,
+    days,
+  });
+});
+
+// GET /gaicani-stats-m3p8q — secret stats dashboard
+app.get("/gaicani-stats-m3p8q", adminAuth, (req, res) => {
+  const key = req.query.key || req.headers["x-admin-key"];
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  const CSS = [
+    "*{box-sizing:border-box;margin:0;padding:0}",
+    "body{background:#1e1f22;color:#dcddde;font-family:Segoe UI,Arial,sans-serif;padding:24px;max-width:900px;margin:0 auto}",
+    "h1{color:#fff;font-size:1.4em;margin-bottom:6px}",
+    ".sub{color:#72767d;font-size:.82em;margin-bottom:24px}",
+    "h2{color:#5865f2;font-size:.9em;margin:28px 0 12px;text-transform:uppercase;letter-spacing:.5px}",
+    ".grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:8px}",
+    ".sc{background:#2b2d31;border-radius:10px;padding:16px 18px}",
+    ".sv{font-size:1.8em;font-weight:700;color:#fff;line-height:1.1}",
+    ".sv.g{color:#3ba55d}.sv.y{color:#faa61a}",
+    ".sl{font-size:.75em;color:#72767d;margin-top:4px}",
+    "table{width:100%;border-collapse:collapse;background:#2b2d31;border-radius:10px;overflow:hidden}",
+    "th{background:#232428;color:#72767d;font-size:.78em;font-weight:600;padding:10px 14px;text-align:left;border-bottom:1px solid #1a1b1e}",
+    "td{padding:10px 14px;font-size:.85em;border-bottom:1px solid #1e1f22}",
+    "tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)}",
+    ".bw{background:#1e1f22;border-radius:4px;height:8px;width:100%;margin-top:4px}",
+    ".b{height:8px;border-radius:4px;background:#5865f2;min-width:2px;transition:width .4s}",
+    ".b.g{background:#3ba55d}",
+    ".rb{background:#5865f2;color:#fff;border:none;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:.85em}",
+    ".rb:hover{background:#4752c4}",
+    "#lu{color:#72767d;font-size:.78em;margin-left:10px}"
+  ].join("");
+
+  const JS = "const KEY='" + key + "';" +
+    "function fmt(s){if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m '+(s%60)+'s';return Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m';}" +
+    "function pct(v,m){return m?Math.round(v/m*100):0;}" +
+    "function esc(s){return String(s).replace(/[&<>\"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'})[c];});}" +
+    "async function load(){try{" +
+    "var r=await fetch('/admin/stats-api?key='+encodeURIComponent(KEY));" +
+    "var d=await r.json();" +
+    "document.getElementById('now').innerHTML=" +
+    "  '<div class=\"sc\"><div class=\"sv g\">'+d.currentOnline+'</div><div class=\"sl\">Online now</div></div>'" +
+    "  +'<div class=\"sc\"><div class=\"sv y\">'+d.peakOnline+'</div><div class=\"sl\">Peak online</div></div>';" +
+    "document.getElementById('alltime').innerHTML=" +
+    "  '<div class=\"sc\"><div class=\"sv\">'+d.allTimeUniqueIPs+'</div><div class=\"sl\">Unique IPs (all time)</div></div>'" +
+    "  +'<div class=\"sc\"><div class=\"sv\">'+fmt(d.uptimeSec)+'</div><div class=\"sl\">Server uptime</div></div>';" +
+    "if(!d.days||!d.days.length){document.getElementById('daily').innerHTML='<p style=\"color:#72767d;padding:12px 0\">No data yet</p>';return;}" +
+    "var mi=Math.max.apply(null,d.days.map(function(x){return x.uniqueIPs;}),1);" +
+    "var ms=Math.max.apply(null,d.days.map(function(x){return x.sessions;}),1);" +
+    "var mc=Math.max.apply(null,d.days.map(function(x){return x.chats;}),1);" +
+    "mi=mi||1;ms=ms||1;mc=mc||1;" +
+    "var rows='<table><tr><th>Date</th><th>Unique IPs</th><th>Sessions</th><th>Chats started</th><th>Avg session</th></tr>';" +
+    "[].concat(d.days).reverse().forEach(function(row){" +
+    "  rows+='<tr><td style=\"color:#fff;font-weight:600\">'+esc(row.date)+'</td>'" +
+    "    +'<td>'+row.uniqueIPs+'<div class=\"bw\"><div class=\"b\" style=\"width:'+pct(row.uniqueIPs,mi)+'%\"></div></div></td>'" +
+    "    +'<td>'+row.sessions+'<div class=\"bw\"><div class=\"b\" style=\"width:'+pct(row.sessions,ms)+'%\"></div></div></td>'" +
+    "    +'<td>'+row.chats+'<div class=\"bw\"><div class=\"b g\" style=\"width:'+pct(row.chats,mc)+'%\"></div></div></td>'" +
+    "    +'<td style=\"color:#b5bac1\">'+fmt(row.avgSessionSec)+'</td></tr>';" +
+    "});" +
+    "rows+='</table>';" +
+    "document.getElementById('daily').innerHTML=rows;" +
+    "document.getElementById('lu').textContent='Updated '+new Date().toLocaleTimeString();" +
+    "}catch(e){console.error(e);}}" +
+    "load();setInterval(load,20000);";
+
+  const html = "<!DOCTYPE html><html lang=\"en\"><head>" +
+    "<meta charset=\"UTF-8\"/>" +
+    "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/>" +
+    "<title>GAICANI Stats</title>" +
+    "<style>" + CSS + "</style>" +
+    "</head><body>" +
+    "<h1>&#128202; GAICANI Statistics</h1>" +
+    "<p class=\"sub\">Resets on server restart &middot; Last 7 days shown</p>" +
+    "<button class=\"rb\" onclick=\"load()\">&#8635; Refresh</button><span id=\"lu\"></span>" +
+    "<h2>Right Now</h2><div class=\"grid\" id=\"now\">Loading...</div>" +
+    "<h2>All Time (since last restart)</h2><div class=\"grid\" id=\"alltime\">Loading...</div>" +
+    "<h2>Daily Breakdown</h2><div id=\"daily\">Loading...</div>" +
+    "<script>" + JS + "<\/script>" +
+    "</body></html>";
+
+  res.send(html);
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
