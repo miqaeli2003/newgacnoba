@@ -30,7 +30,32 @@ const MSG_RATE_WINDOW_MS = 5000;
 // ── Admin / Owner ─────────────────────────────────────────────────────────────
 // All sensitive routes are locked to OWNER_IP only — no password needed.
 const OWNER_IP  = "109.172.136.114";
-const bannedIPs = new Set(); // persists for server lifetime
+
+// ── Persistent manual ban list ────────────────────────────────────────────────
+// Manual bans (via admin panel) survive server restarts — stored in banned_ips.json
+// Auto-bans (link-strike, report) are still in-memory only.
+const BANNED_IPS_FILE = path.join(__dirname, "banned_ips.json");
+const bannedIPs       = new Set();
+
+function loadBannedIPs() {
+  try {
+    const arr = JSON.parse(fs.readFileSync(BANNED_IPS_FILE, "utf8"));
+    if (Array.isArray(arr)) {
+      arr.forEach(ip => bannedIPs.add(ip));
+      console.log(`[BAN] Loaded ${arr.length} persistent manual ban(s) from disk`);
+    }
+  } catch { /* file doesn't exist yet — fine */ }
+}
+
+function saveBannedIPs() {
+  try {
+    fs.writeFileSync(BANNED_IPS_FILE, JSON.stringify([...bannedIPs], null, 2), "utf8");
+  } catch (e) {
+    console.error("[BAN] Failed to save banned_ips.json:", e.message);
+  }
+}
+
+loadBannedIPs(); // restore bans immediately at startup
 
 // ── Randomised secret route slugs ─────────────────────────────────────────────
 // These replace every predictable /admin/* and old panel/stats paths.
@@ -328,6 +353,7 @@ app.post(ROUTE.ban, ownerOnly, (req, res) => {
   if (!ip) return res.status(400).json({ error: "ip param required" });
 
   bannedIPs.add(ip);
+  saveBannedIPs(); // persist to disk — survives restarts
   let kicked = 0;
   for (const [, socket] of io.sockets.sockets) {
     if (socket.clientIP === ip) {
@@ -345,6 +371,7 @@ app.post(ROUTE.unban, ownerOnly, (req, res) => {
   const ip = (req.query.ip || "").trim();
   if (!ip) return res.status(400).json({ error: "ip param required" });
   const existed = bannedIPs.delete(ip);
+  if (existed) saveBannedIPs(); // persist removal to disk
   res.json({ ok: true, ip, wasBanned: existed });
 });
 
