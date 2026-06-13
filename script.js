@@ -1545,38 +1545,15 @@ socket.on("awayTimeout", () => {});
 
 // ── Button handlers ───────────────────────────────────────────────────────────
 
-// ── Next-button cooldown (server-enforced for non-Georgian IPs) ───────────────
-let _nextCooldownTimer = null;
-
-function startNextCooldown(seconds) {
-  let left = seconds;
-  nextBtn.disabled = true;
-  const origLabel = nextBtn.querySelector(".btn-label");
-  if (origLabel) origLabel.textContent = `ძებნა (${left}წმ)`;
-  else nextBtn.textContent = `ძებნა (${left}წმ)`;
-
-  _nextCooldownTimer = setInterval(() => {
-    left--;
-    if (left <= 0) {
-      clearInterval(_nextCooldownTimer);
-      _nextCooldownTimer = null;
-      nextBtn.disabled = false;
-      if (origLabel) origLabel.textContent = "ძებნა";
-      else nextBtn.innerHTML = '<span class="btn-icon">🔎</span><span class="btn-label">ძებნა</span>';
-    } else {
-      if (origLabel) origLabel.textContent = `ძებნა (${left}წმ)`;
-      else nextBtn.textContent = `ძებნა (${left}წმ)`;
-    }
-  }, 1000);
-}
-
-socket.on("nextCooldown", ({ remaining }) => {
-  startNextCooldown(remaining);
+// ── Next-button cooldown (server-enforced for non-Georgian IPs, silent) ───────
+socket.on("nextCooldown", () => {
+  // Silently ignored on client — server just won't find a partner yet.
+  // The searching message stays visible; no countdown shown to the user.
 });
 
 nextBtn.addEventListener("click", () => {
   nextBtn.disabled = true;
-  setTimeout(() => { if (!_nextCooldownTimer) nextBtn.disabled = false; }, 1000);
+  setTimeout(() => { nextBtn.disabled = false; }, 1000);
   // Lock state FIRST before any async/emit so no message can slip through
   partnerConnected     = false;
   partnerName = ""; setPartnerNameDisplay("");
