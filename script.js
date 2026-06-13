@@ -1545,12 +1545,6 @@ socket.on("awayTimeout", () => {});
 
 // ── Button handlers ───────────────────────────────────────────────────────────
 
-// ── Next-button cooldown (server-enforced for non-Georgian IPs, silent) ───────
-socket.on("nextCooldown", () => {
-  // Silently ignored on client — server just won't find a partner yet.
-  // The searching message stays visible; no countdown shown to the user.
-});
-
 nextBtn.addEventListener("click", () => {
   nextBtn.disabled = true;
   setTimeout(() => { nextBtn.disabled = false; }, 1000);
