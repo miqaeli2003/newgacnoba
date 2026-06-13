@@ -3,6 +3,7 @@ const http       = require("http");
 const { Server } = require("socket.io");
 const path       = require("path");
 const fs         = require("fs");
+const crypto     = require("crypto");
 const compression   = require("compression");
 const rateLimit     = require("express-rate-limit");
 
@@ -329,6 +330,142 @@ function randomItem(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// ── Captcha / Geo gate ───────────────────────────────────────────────────────
+// Non-Georgian IPs must solve a simple math captcha before accessing the site.
+// Georgian IPs (country code "GE") pass straight through.
+// Once solved, a signed cookie is set — valid 30 days, no re-challenge needed.
+
+const CAPTCHA_SECRET  = process.env.CAPTCHA_SECRET || crypto.randomBytes(32).toString("hex");
+const CAPTCHA_COOKIE  = "gc_pass";
+const CAPTCHA_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+// Geo cache — avoid hammering ip-api.com (free tier: 45 req/min)
+// ip → { country: "GE"|other, ts: Date.now() }
+const geoCache = new Map();
+const GEO_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
+
+// Pending captcha challenges — ip → { a, b, answer, expires }
+const captchaChallenges = new Map();
+const CAPTCHA_TTL = 10 * 60 * 1000; // 10 minutes to solve
+
+// Clean expired challenges every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, c] of captchaChallenges)
+    if (now > c.expires) captchaChallenges.delete(ip);
+  for (const [ip, c] of geoCache)
+    if (now - c.ts > GEO_CACHE_TTL) geoCache.delete(ip);
+}, 5 * 60 * 1000);
+
+function makeCaptchaToken(ip) {
+  const payload = ip + ":" + Date.now();
+  const sig = crypto.createHmac("sha256", CAPTCHA_SECRET).update(payload).digest("hex");
+  return Buffer.from(payload + "." + sig).toString("base64url");
+}
+
+function verifyCaptchaToken(ip, token) {
+  try {
+    const decoded = Buffer.from(token, "base64url").toString("utf8");
+    const dotIdx  = decoded.lastIndexOf(".");
+    const payload = decoded.slice(0, dotIdx);
+    const sig     = decoded.slice(dotIdx + 1);
+    const expected = crypto.createHmac("sha256", CAPTCHA_SECRET).update(payload).digest("hex");
+    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return false;
+    const [storedIP, tsStr] = payload.split(":");
+    if (storedIP !== ip) return false;
+    if (Date.now() - Number(tsStr) > CAPTCHA_MAX_AGE) return false;
+    return true;
+  } catch { return false; }
+}
+
+function hasCaptchaCookie(req) {
+  const raw = req.headers.cookie || "";
+  const cookie = raw.split(";").map(s => s.trim()).find(s => s.startsWith(CAPTCHA_COOKIE + "="));
+  if (!cookie) return false;
+  const token = cookie.slice(CAPTCHA_COOKIE.length + 1);
+  const ip = (req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.socket?.remoteAddress || "");
+  return verifyCaptchaToken(ip, token);
+}
+
+function setCaptchaCookie(res, ip) {
+  const token = makeCaptchaToken(ip);
+  res.setHeader("Set-Cookie",
+    `${CAPTCHA_COOKIE}=${token}; Max-Age=${CAPTCHA_MAX_AGE / 1000}; Path=/; HttpOnly; SameSite=Lax`
+  );
+}
+
+async function getCountry(ip) {
+  // Always pass local / private IPs (dev environment)
+  if (!ip || ip === "::1" || ip === "127.0.0.1" || ip.startsWith("192.168.") || ip.startsWith("10.")) return "GE";
+
+  const cached = geoCache.get(ip);
+  if (cached && Date.now() - cached.ts < GEO_CACHE_TTL) return cached.country;
+
+  try {
+    const res  = await fetch(`http://ip-api.com/json/${encodeURIComponent(ip)}?fields=countryCode`, { signal: AbortSignal.timeout(3000) });
+    const data = await res.json();
+    const country = data.countryCode || "??";
+    geoCache.set(ip, { country, ts: Date.now() });
+    return country;
+  } catch {
+    // On lookup failure → let them through (don't block on geo error)
+    return "GE";
+  }
+}
+
+function newChallenge(ip) {
+  const ops = ["+", "-", "*"];
+  const op  = ops[Math.floor(Math.random() * ops.length)];
+  let a, b, answer;
+  if (op === "+") { a = Math.floor(Math.random()*50)+1; b = Math.floor(Math.random()*50)+1; answer = a+b; }
+  else if (op === "-") { a = Math.floor(Math.random()*90)+10; b = Math.floor(Math.random()*a)+1; answer = a-b; }
+  else { a = Math.floor(Math.random()*11)+2; b = Math.floor(Math.random()*11)+2; answer = a*b; }
+  const display = op === "*" ? `${a} × ${b}` : `${a} ${op} ${b}`;
+  const challenge = { display, answer, expires: Date.now() + CAPTCHA_TTL };
+  captchaChallenges.set(ip, challenge);
+  return challenge;
+}
+
+function captchaPageHTML(ip, error) {
+  const ch = captchaChallenges.get(ip) || newChallenge(ip);
+  const errHtml = error ? `<p class="err">${error}</p>` : "";
+  return `<!DOCTYPE html>
+<html lang="ka">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>GAICANI – გადამოწმება</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%;background:#1e1f22;display:flex;align-items:center;justify-content:center;font-family:"Segoe UI",Arial,sans-serif}
+.box{background:#2b2d31;border-radius:16px;padding:40px 36px;max-width:380px;width:90%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.4)}
+.logo{font-size:1.8em;font-weight:900;color:#fff;letter-spacing:1px;margin-bottom:6px}
+.sub{color:#72767d;font-size:.85em;margin-bottom:28px;line-height:1.5}
+.q{background:#1e1f22;border-radius:10px;padding:18px;font-size:2em;font-weight:700;color:#fff;letter-spacing:2px;margin-bottom:20px}
+input{width:100%;background:#1e1f22;border:2px solid #3a3c40;border-radius:8px;color:#fff;font-size:1.1em;padding:12px 16px;text-align:center;outline:none;transition:border .2s}
+input:focus{border-color:#5865f2}
+button{width:100%;margin-top:14px;background:#5865f2;color:#fff;border:none;border-radius:8px;padding:13px;font-size:1em;font-weight:600;cursor:pointer;transition:background .2s}
+button:hover{background:#4752c4}
+.err{color:#f23f42;font-size:.85em;margin-top:12px;background:rgba(242,63,66,.1);border-radius:6px;padding:8px 12px}
+.note{color:#72767d;font-size:.75em;margin-top:20px;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="logo">GAICANI</div>
+  <p class="sub">გთხოვთ ამოხსნათ მარტივი ამოცანა<br>პროდოლჟვამდე</p>
+  <div class="q">${ch.display} = ?</div>
+  <form method="POST" action="/captcha-verify">
+    <input type="number" name="answer" placeholder="პასუხი..." autofocus autocomplete="off"/>
+    ${errHtml}
+    <button type="submit">გაგრძელება →</button>
+  </form>
+  <p class="note">ეს შემოწმება მხოლოდ ერთხელ ხდება.<br>ქართული IP-ები ავტომატურად გადიან.</p>
+</div>
+</body>
+</html>`;
+}
+
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(compression());
 app.use(sensitiveUrlLogger); // log admin/stats visits BEFORE auth gates
@@ -351,6 +488,66 @@ app.use((req, res, next) => {
 });
 
 app.use(express.static(path.join(__dirname)));
+
+// ── Captcha gate — runs after static assets so CSS/JS can load ───────────────
+// Skipped for: API routes, captcha verify itself, static assets
+const CAPTCHA_SKIP = /^\/(api\/|captcha-verify|socket\.io\/|favicon|logo|icons|manifest|style|games|script)/;
+
+app.use(async (req, res, next) => {
+  // Skip non-HTML requests and internal routes
+  if (CAPTCHA_SKIP.test(req.path)) return next();
+  // Only gate GET requests for the main page
+  if (req.method !== "GET") return next();
+
+  const ip = (req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.socket?.remoteAddress || "");
+
+  // Owner always passes
+  if (ip === OWNER_IP) return next();
+
+  // Already passed captcha
+  if (hasCaptchaCookie(req)) return next();
+
+  // Check geo
+  const country = await getCountry(ip);
+  if (country === "GE") {
+    // Georgian IP — set cookie and pass through silently
+    setCaptchaCookie(res, ip);
+    return next();
+  }
+
+  // Non-Georgian — show captcha page
+  newChallenge(ip);
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.status(200).send(captchaPageHTML(ip, null));
+});
+
+// POST /captcha-verify — check submitted answer
+app.use(express.urlencoded({ extended: false }));
+
+app.post("/captcha-verify", (req, res) => {
+  const ip = (req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.socket?.remoteAddress || "");
+  const submitted = parseInt(req.body?.answer, 10);
+  const challenge = captchaChallenges.get(ip);
+
+  if (!challenge || Date.now() > challenge.expires) {
+    // Challenge expired — give a fresh one
+    newChallenge(ip);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(captchaPageHTML(ip, "ვადა გავიდა. სცადეთ თავიდან."));
+  }
+
+  if (isNaN(submitted) || submitted !== challenge.answer) {
+    // Wrong answer — new challenge
+    newChallenge(ip);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(captchaPageHTML(ip, "პასუხი არასწორია. სცადეთ თავიდან."));
+  }
+
+  // Correct — set cookie and redirect to main page
+  captchaChallenges.delete(ip);
+  setCaptchaCookie(res, ip);
+  res.redirect(302, "/");
+});
 
 const gifHttpLimiter = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
 
