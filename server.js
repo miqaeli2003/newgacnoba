@@ -77,27 +77,54 @@ function loadVTBans() {
     const arr = JSON.parse(fs.readFileSync(VT_BANS_FILE, "utf8"));
     if (Array.isArray(arr)) {
       let added = 0;
-      arr.forEach(ip => { if (!bannedIPs.has(ip)) { bannedIPs.add(ip); added++; } });
-      if (added) console.log(`[VT] Loaded ${added} VT-ban(s) from disk`);
+      arr.forEach(ip => {
+        if (!bannedIPs.has(ip)) {
+          bannedIPs.add(ip);
+          added++;
+        }
+      });
+      if (added) {
+        console.log(`[VT] Loaded ${added} new VT-ban(s) from disk`);
+        saveBannedIPs(); // merge into banned_ips.json so bans survive restart
+      }
     }
   } catch { /* file doesn't exist yet */ }
 }
 
 loadVTBans();
 
-// Watch vt-bans.json for changes written by vt-checker.js
-fs.watch(path.dirname(VT_BANS_FILE), (event, filename) => {
-  if (filename !== path.basename(VT_BANS_FILE)) return;
-  loadVTBans();
-  // Kick any connected sockets that are now banned
-  for (const [, socket] of io.sockets.sockets) {
-    if (bannedIPs.has(socket.clientIP)) {
-      console.log(`[VT] Kicking newly VT-banned IP: ${socket.clientIP}`);
-      socket.emit("autoKicked");
-      setTimeout(() => socket.disconnect(true), 500);
+// Poll vt-bans.json every 5s — more reliable than fs.watch on Linux
+// fs.watch can miss events or fire with null filename on some systems
+let _vtBansLastMtime = 0;
+
+function pollVTBans() {
+  try {
+    const stat = fs.statSync(VT_BANS_FILE);
+    const mtime = stat.mtimeMs;
+    if (mtime === _vtBansLastMtime) return; // file unchanged
+    _vtBansLastMtime = mtime;
+
+    const sizeBefore = bannedIPs.size;
+    loadVTBans();
+    const newBans = bannedIPs.size - sizeBefore;
+
+    if (newBans > 0) {
+      console.log(`[VT] Detected ${newBans} new VT-ban(s) — kicking live sockets`);
+      // Kick any connected sockets that are now VT-banned
+      for (const [, socket] of io.sockets.sockets) {
+        if (bannedIPs.has(socket.clientIP)) {
+          console.log(`[VT] Kicking VT-banned IP: ${socket.clientIP}`);
+          socket.emit("autoKicked");
+          setTimeout(() => socket.disconnect(true), 500);
+        }
+      }
     }
+  } catch {
+    // File doesn't exist yet — fine, keep polling
   }
-});
+}
+
+setInterval(pollVTBans, 5000);
 
 function enqueueForVT(ip) {
   if (vtQueued.has(ip)) return;       // already queued this session
