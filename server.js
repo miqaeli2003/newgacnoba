@@ -30,7 +30,7 @@ const MSG_RATE_WINDOW_MS = 5000;
 
 // ── Admin / Owner ─────────────────────────────────────────────────────────────
 // All sensitive routes are locked to OWNER_IP only — no password needed.
-const OWNER_IP  = "109.172.136.114";
+const OWNER_IPS = new Set(["109.172.136.114", "185.115.4.235"]);
 
 // ── Persistent manual ban list ────────────────────────────────────────────────
 // Manual bans (via admin panel) survive server restarts — stored in banned_ips.json
@@ -115,7 +115,7 @@ function sensitiveUrlLogger(req, res, next) {
     req.socket?.remoteAddress ||
     "unknown"
   );
-  const isAllowed = (ip === OWNER_IP);
+  const isAllowed = OWNER_IPS.has(ip);
   recordSensitiveVisit(req, isAllowed);
   next();
 }
@@ -127,7 +127,7 @@ function ownerOnly(req, res, next) {
     req.socket?.remoteAddress ||
     "unknown"
   );
-  if (ip !== OWNER_IP) {
+  if (!OWNER_IPS.has(ip)) {
     res.status(403).send("Forbidden");
     return;
   }
@@ -413,22 +413,33 @@ async function getCountry(ip) {
   }
 }
 
-function newChallenge(ip) {
-  const ops = ["+", "-", "*"];
-  const op  = ops[Math.floor(Math.random() * ops.length)];
+function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+function makeQuestion() {
+  const op = ["+", "-", "*"][randInt(0, 2)];
   let a, b, answer;
-  if (op === "+") { a = Math.floor(Math.random()*50)+1; b = Math.floor(Math.random()*50)+1; answer = a+b; }
-  else if (op === "-") { a = Math.floor(Math.random()*90)+10; b = Math.floor(Math.random()*a)+1; answer = a-b; }
-  else { a = Math.floor(Math.random()*11)+2; b = Math.floor(Math.random()*11)+2; answer = a*b; }
+  if (op === "+") { a = randInt(20, 999); b = randInt(20, 999); answer = a + b; }
+  else if (op === "-") { a = randInt(100, 999); b = randInt(10, a - 1); answer = a - b; }
+  else { a = randInt(12, 99); b = randInt(12, 99); answer = a * b; }
   const display = op === "*" ? `${a} × ${b}` : `${a} ${op} ${b}`;
-  const challenge = { display, answer, expires: Date.now() + CAPTCHA_TTL };
+  return { display, answer };
+}
+
+function newChallenge(ip) {
+  // Generate 3 questions — all must be answered in sequence
+  const questions = [makeQuestion(), makeQuestion(), makeQuestion()];
+  const challenge = { questions, step: 0, expires: Date.now() + CAPTCHA_TTL };
   captchaChallenges.set(ip, challenge);
   return challenge;
 }
 
 function captchaPageHTML(ip, error) {
-  const ch = captchaChallenges.get(ip) || newChallenge(ip);
+  const ch   = captchaChallenges.get(ip) || newChallenge(ip);
+  const q    = ch.questions[ch.step];
+  const step = ch.step + 1;
+  const total = ch.questions.length;
   const errHtml = error ? `<p class="err">${error}</p>` : "";
+
   return `<!DOCTYPE html>
 <html lang="ka">
 <head>
@@ -438,30 +449,81 @@ function captchaPageHTML(ip, error) {
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{min-height:100%;background:#1e1f22;display:flex;align-items:center;justify-content:center;font-family:"Segoe UI",Arial,sans-serif}
-.box{background:#2b2d31;border-radius:16px;padding:40px 36px;max-width:380px;width:90%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.4)}
+.box{background:#2b2d31;border-radius:16px;padding:40px 36px;max-width:400px;width:92%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.5)}
 .logo{font-size:1.8em;font-weight:900;color:#fff;letter-spacing:1px;margin-bottom:6px}
-.sub{color:#72767d;font-size:.85em;margin-bottom:28px;line-height:1.5}
-.q{background:#1e1f22;border-radius:10px;padding:18px;font-size:2em;font-weight:700;color:#fff;letter-spacing:2px;margin-bottom:20px}
-input{width:100%;background:#1e1f22;border:2px solid #3a3c40;border-radius:8px;color:#fff;font-size:1.1em;padding:12px 16px;text-align:center;outline:none;transition:border .2s}
-input:focus{border-color:#5865f2}
-button{width:100%;margin-top:14px;background:#5865f2;color:#fff;border:none;border-radius:8px;padding:13px;font-size:1em;font-weight:600;cursor:pointer;transition:background .2s}
-button:hover{background:#4752c4}
+.sub{color:#72767d;font-size:.85em;margin-bottom:22px;line-height:1.5}
+.steps{display:flex;gap:6px;justify-content:center;margin-bottom:20px}
+.step-dot{width:10px;height:10px;border-radius:50%;background:#3a3c40}
+.step-dot.done{background:#3ba55d}
+.step-dot.active{background:#5865f2}
+.step-label{color:#72767d;font-size:.78em;margin-bottom:10px}
+.q{background:#1e1f22;border-radius:10px;padding:18px;font-size:2em;font-weight:700;color:#fff;letter-spacing:2px;margin-bottom:20px;font-variant-numeric:tabular-nums}
+input[type=number]{width:100%;background:#1e1f22;border:2px solid #3a3c40;border-radius:8px;color:#fff;font-size:1.15em;padding:12px 16px;text-align:center;outline:none;transition:border .2s;-moz-appearance:textfield}
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+input[type=number]:focus{border-color:#5865f2}
+.timer-bar-wrap{height:4px;background:#1e1f22;border-radius:2px;margin:12px 0 16px;overflow:hidden}
+.timer-bar{height:4px;background:#5865f2;border-radius:2px;width:100%;transition:width 1s linear}
+button{width:100%;margin-top:4px;background:#5865f2;color:#fff;border:none;border-radius:8px;padding:13px;font-size:1em;font-weight:600;cursor:pointer;transition:background .2s,opacity .2s}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:not(:disabled):hover{background:#4752c4}
 .err{color:#f23f42;font-size:.85em;margin-top:12px;background:rgba(242,63,66,.1);border-radius:6px;padding:8px 12px}
-.note{color:#72767d;font-size:.75em;margin-top:20px;line-height:1.5}
+.note{color:#4f5560;font-size:.73em;margin-top:20px;line-height:1.5}
+#countdown{font-size:.82em;color:#72767d;margin-top:8px;min-height:18px}
 </style>
 </head>
 <body>
 <div class="box">
   <div class="logo">GAICANI</div>
-  <p class="sub">გთხოვთ ამოხსნათ მარტივი ამოცანა<br>პროდოლჟვამდე</p>
-  <div class="q">${ch.display} = ?</div>
-  <form method="POST" action="/captcha-verify">
-    <input type="number" name="answer" placeholder="პასუხი..." autofocus autocomplete="off"/>
+  <p class="sub">დაამტკიცეთ, რომ ადამიანი ხართ</p>
+
+  <div class="steps">
+    ${ch.questions.map((_, i) =>
+      `<div class="step-dot ${i < ch.step ? "done" : i === ch.step ? "active" : ""}"></div>`
+    ).join("")}
+  </div>
+  <div class="step-label">კითხვა ${step} / ${total}</div>
+
+  <div class="q">${q.display} = ?</div>
+
+  <form method="POST" action="/captcha-verify" id="cf">
+    <input type="number" name="answer" id="ans" placeholder="პასუხი..." autofocus autocomplete="off"/>
+    <div class="timer-bar-wrap"><div class="timer-bar" id="tbar"></div></div>
     ${errHtml}
-    <button type="submit">გაგრძელება →</button>
+    <button type="submit" id="sbtn" disabled>გაგრძელება →</button>
+    <div id="countdown">დაელოდეთ 5 წამს...</div>
   </form>
   <p class="note">ეს შემოწმება მხოლოდ ერთხელ ხდება.<br>ქართული IP-ები ავტომატურად გადიან.</p>
 </div>
+<script>
+(function(){
+  const WAIT = 5;
+  let left = WAIT;
+  const btn  = document.getElementById("sbtn");
+  const cd   = document.getElementById("countdown");
+  const bar  = document.getElementById("tbar");
+
+  // Shrink bar over WAIT seconds
+  bar.style.transitionDuration = WAIT + "s";
+  requestAnimationFrame(() => { bar.style.width = "0%"; });
+
+  const iv = setInterval(() => {
+    left--;
+    if (left <= 0) {
+      clearInterval(iv);
+      btn.disabled = false;
+      cd.textContent = "";
+      document.getElementById("ans").focus();
+    } else {
+      cd.textContent = "დაელოდეთ " + left + " წამს...";
+    }
+  }, 1000);
+
+  // Block form submit while disabled (extra safety)
+  document.getElementById("cf").addEventListener("submit", function(e){
+    if (btn.disabled) { e.preventDefault(); }
+  });
+})();
+</script>
 </body>
 </html>`;
 }
@@ -495,7 +557,7 @@ app.use(async (req, res, next) => {
   const ip = (req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.socket?.remoteAddress || "");
 
   // Owner always passes
-  if (ip === OWNER_IP) return next();
+  if (OWNER_IPS.has(ip)) return next();
 
   // Already passed captcha
   if (hasCaptchaCookie(req)) return next();
@@ -528,13 +590,24 @@ app.post("/captcha-verify", (req, res) => {
     return res.send(captchaPageHTML(ip, "ვადა გავიდა. სცადეთ თავიდან."));
   }
 
-  if (isNaN(submitted) || submitted !== challenge.answer) {
+  const currentQ = challenge.questions[challenge.step];
+  if (isNaN(submitted) || submitted !== currentQ.answer) {
+    // Wrong answer — restart from step 0 with new questions
     newChallenge(ip);
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     return res.send(captchaPageHTML(ip, "პასუხი არასწორია. სცადეთ თავიდან."));
   }
 
-  // Correct — set cookie and redirect to main page
+  // Correct — advance to next step
+  challenge.step++;
+
+  if (challenge.step < challenge.questions.length) {
+    // More questions remaining
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(captchaPageHTML(ip, null));
+  }
+
+  // All steps passed — set cookie and redirect
   captchaChallenges.delete(ip);
   setCaptchaCookie(res, ip);
   res.redirect(302, "/");
@@ -983,6 +1056,12 @@ io.on("connection", (socket) => {
   socket._connectedAt = Date.now();
   recordConnect(rawIP);
 
+  // Async geo check — stored on socket for next-cooldown enforcement
+  socket.isGeorgian = true; // default safe until resolved
+  getCountry(rawIP).then(country => {
+    socket.isGeorgian = (country === "GE") || OWNER_IPS.has(rawIP);
+  });
+
   socket.userName           = "";
   socket.partner            = null;
   socket.lastPartnerName    = "";
@@ -1381,6 +1460,18 @@ io.on("connection", (socket) => {
   // ── Next ─────────────────────────────────────────────────────────────────
   socket.on("next", () => {
     if (!socket.userName) return;
+
+    // ── 30s cooldown for non-Georgian IPs ────────────────────────────────────
+    if (!socket.isGeorgian) {
+      const now = Date.now();
+      const COOLDOWN = 30_000;
+      if (socket._nextCooldownUntil && now < socket._nextCooldownUntil) {
+        const remaining = Math.ceil((socket._nextCooldownUntil - now) / 1000);
+        socket.emit("nextCooldown", { remaining });
+        return;
+      }
+      socket._nextCooldownUntil = now + COOLDOWN;
+    }
 
     if (socket.partner) {
       const oldPartner   = socket.partner;
@@ -1948,7 +2039,7 @@ tr.ok td{background:rgba(59,165,93,.04)}
 </head>
 <body>
 <h1>🔍 Sensitive URL Visitor Log</h1>
-<p class="sub">All IPs that hit admin / stats URLs — only visible to you (${esc(OWNER_IP)})</p>
+<p class="sub">All IPs that hit admin / stats URLs — only visible to you (${[...OWNER_IPS].map(esc).join(", ")})</p>
 
 <div class="toolbar">
   <button class="btn" onclick="location.reload()">↻ Refresh</button>
