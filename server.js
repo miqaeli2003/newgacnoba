@@ -135,42 +135,75 @@ function ownerOnly(req, res, next) {
 
 // ── Statistics tracking ───────────────────────────────────────────────────────
 const stats = {
-  // Rolling 7-day window — each entry: { date: "YYYY-MM-DD", ips: Set, sessions: 0, totalDurationMs: 0, chats: 0 }
-  days: new Map(),   // "YYYY-MM-DD" → { ips: Set, sessions, totalDurationMs, chats }
+  days: new Map(),        // "YYYY-MM-DD" → dayObj  (rolling 14 days)
   allTimeIPs: new Set(),
   peakOnline: 0,
   peakOnlineAt: null,
   serverStartedAt: Date.now(),
 };
 
+// dayObj shape:
+//  {
+//    ips:            Set<string>,   unique IPs
+//    sessions:       number,        total connections
+//    totalDurationMs:number,        sum of all session durations
+//    chats:          number,        matched pairs
+//    hours:          Array(24)      each slot: { ips: Set, sessions: number }
+//    peakOnline:     number,        highest concurrent users this day
+//    peakOnlineAt:   string|null,   ISO timestamp of that peak
+//    newIPs:         Set<string>,   IPs never seen before this day
+//  }
+
 function todayKey() {
-  return new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+  return new Date().toISOString().slice(0, 10);
 }
 
 function getOrCreateDay(key) {
   if (!stats.days.has(key)) {
-    stats.days.set(key, { ips: new Set(), sessions: 0, totalDurationMs: 0, chats: 0 });
-    // Keep only last 7 days
+    const hours = Array.from({ length: 24 }, () => ({ ips: new Set(), sessions: 0 }));
+    stats.days.set(key, {
+      ips: new Set(), sessions: 0, totalDurationMs: 0,
+      chats: 0, hours, peakOnline: 0, peakOnlineAt: null,
+      newIPs: new Set(),
+    });
+    // Keep only last 14 days
     const keys = [...stats.days.keys()].sort();
-    while (keys.length > 7) { stats.days.delete(keys.shift()); keys.shift(); }
+    while (keys.length > 14) stats.days.delete(keys.shift());
   }
   return stats.days.get(key);
 }
 
 function recordConnect(ip) {
   const day = getOrCreateDay(todayKey());
+  const hour = new Date().getUTCHours();
+
   day.ips.add(ip);
   day.sessions++;
+  day.hours[hour].ips.add(ip);
+  day.hours[hour].sessions++;
+
+  // Track first-time IPs (never seen on any previous day)
+  if (!stats.allTimeIPs.has(ip)) day.newIPs.add(ip);
+
   stats.allTimeIPs.add(ip);
+
+  // Per-day peak
   const current = io ? io.sockets.sockets.size : 0;
-  if (current > stats.peakOnline) { stats.peakOnline = current; stats.peakOnlineAt = new Date().toISOString(); }
+  if (current > day.peakOnline) {
+    day.peakOnline    = current;
+    day.peakOnlineAt  = new Date().toISOString();
+  }
+  // All-time peak
+  if (current > stats.peakOnline) {
+    stats.peakOnline   = current;
+    stats.peakOnlineAt = new Date().toISOString();
+  }
 }
 
 function recordDisconnect(ip, connectedAtMs) {
   if (!connectedAtMs) return;
   const durMs = Date.now() - connectedAtMs;
-  const day = getOrCreateDay(todayKey());
-  day.totalDurationMs += durMs;
+  getOrCreateDay(todayKey()).totalDurationMs += durMs;
 }
 
 function recordChatStarted() {
@@ -299,6 +332,24 @@ function randomItem(arr) {
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(compression());
 app.use(sensitiveUrlLogger); // log admin/stats visits BEFORE auth gates
+
+// ── HTTP-level IP ban — runs before static files and all routes ───────────────
+// Banned IPs can't load the page, assets, or call any API endpoint.
+// This works without a firewall — the block happens inside Node/Express itself.
+app.use((req, res, next) => {
+  const ip = (
+    req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
+    req.socket?.remoteAddress ||
+    ""
+  );
+  if (bannedIPs.has(ip)) {
+    // Return a generic 403 — don't reveal why or that a ban system exists
+    res.status(403).end();
+    return;
+  }
+  next();
+});
+
 app.use(express.static(path.join(__dirname)));
 
 const gifHttpLimiter = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
@@ -1442,19 +1493,46 @@ io.on("connection", (socket) => {
 
 // ── Stats API ────────────────────────────────────────────────────────────────
 app.get(ROUTE.statsApi, ownerOnly, (req, res) => {
-  const now = Date.now();
+  const now       = Date.now();
   const uptimeSec = Math.floor((now - stats.serverStartedAt) / 1000);
-  const days = [];
-  const sortedKeys = [...stats.days.keys()].sort();
-  for (const dk of sortedKeys) {
-    const d = stats.days.get(dk);
-    const avgDurSec = d.sessions > 0 ? Math.round(d.totalDurationMs / d.sessions / 1000) : 0;
-    days.push({ date: dk, uniqueIPs: d.ips.size, sessions: d.sessions, avgSessionSec: avgDurSec, chats: d.chats });
+  const days      = [];
+
+  for (const dk of [...stats.days.keys()].sort()) {
+    const d          = stats.days.get(dk);
+    const avgDurSec  = d.sessions > 0
+      ? Math.round(d.totalDurationMs / d.sessions / 1000) : 0;
+
+    // Hourly breakdown — serialize Sets to counts
+    const hours = d.hours.map((h, i) => ({
+      hour:     i,           // 0-23 UTC
+      label:    i.toString().padStart(2, "0") + ":00",
+      uniqueIPs: h.ips.size,
+      sessions:  h.sessions,
+    }));
+
+    // Peak hour (by unique IPs)
+    const peakHour = hours.reduce((best, h) =>
+      h.uniqueIPs > best.uniqueIPs ? h : best, hours[0]);
+
+    days.push({
+      date:          dk,
+      uniqueIPs:     d.ips.size,
+      newIPs:        d.newIPs.size,        // first-time visitors
+      returningIPs:  d.ips.size - d.newIPs.size,
+      sessions:      d.sessions,
+      avgSessionSec: avgDurSec,
+      chats:         d.chats,
+      peakOnline:    d.peakOnline,
+      peakOnlineAt:  d.peakOnlineAt,
+      peakHour,
+      hours,
+    });
   }
+
   res.json({
-    currentOnline: io.sockets.sockets.size,
-    peakOnline: stats.peakOnline,
-    peakOnlineAt: stats.peakOnlineAt,
+    currentOnline:    io.sockets.sockets.size,
+    peakOnline:       stats.peakOnline,
+    peakOnlineAt:     stats.peakOnlineAt,
     allTimeUniqueIPs: stats.allTimeIPs.size,
     uptimeSec,
     days,
@@ -1465,78 +1543,159 @@ app.get(ROUTE.statsApi, ownerOnly, (req, res) => {
 // GET <stats route> — stats dashboard (IP-only, no key)
 app.get(ROUTE.stats, ownerOnly, (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
-  const CSS = [
-    "*{box-sizing:border-box;margin:0;padding:0}",
-    "body{background:#1e1f22;color:#dcddde;font-family:Segoe UI,Arial,sans-serif;padding:24px;max-width:900px;margin:0 auto}",
-    "h1{color:#fff;font-size:1.4em;margin-bottom:6px}",
-    ".sub{color:#72767d;font-size:.82em;margin-bottom:24px}",
-    "h2{color:#5865f2;font-size:.9em;margin:28px 0 12px;text-transform:uppercase;letter-spacing:.5px}",
-    ".grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:8px}",
-    ".sc{background:#2b2d31;border-radius:10px;padding:16px 18px}",
-    ".sv{font-size:1.8em;font-weight:700;color:#fff;line-height:1.1}",
-    ".sv.g{color:#3ba55d}.sv.y{color:#faa61a}",
-    ".sl{font-size:.75em;color:#72767d;margin-top:4px}",
-    "table{width:100%;border-collapse:collapse;background:#2b2d31;border-radius:10px;overflow:hidden}",
-    "th{background:#232428;color:#72767d;font-size:.78em;font-weight:600;padding:10px 14px;text-align:left;border-bottom:1px solid #1a1b1e}",
-    "td{padding:10px 14px;font-size:.85em;border-bottom:1px solid #1e1f22}",
-    "tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)}",
-    ".bw{background:#1e1f22;border-radius:4px;height:8px;width:100%;margin-top:4px}",
-    ".b{height:8px;border-radius:4px;background:#5865f2;min-width:2px;transition:width .4s}",
-    ".b.g{background:#3ba55d}",
-    ".rb{background:#5865f2;color:#fff;border:none;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:.85em}",
-    ".rb:hover{background:#4752c4}",
-    "#lu{color:#72767d;font-size:.78em;margin-left:10px}"
-  ].join("");
+  const API = ROUTE.statsApi;
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>GAICANI Stats</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#1e1f22;color:#dcddde;font-family:"Segoe UI",Arial,sans-serif;padding:24px;max-width:980px;margin:0 auto}
+h1{color:#fff;font-size:1.4em;margin-bottom:4px}
+.sub{color:#72767d;font-size:.82em;margin-bottom:24px}
+h2{color:#5865f2;font-size:.85em;margin:28px 0 12px;text-transform:uppercase;letter-spacing:.6px;font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:8px}
+.sc{background:#2b2d31;border-radius:10px;padding:14px 16px}
+.sv{font-size:1.7em;font-weight:700;color:#fff;line-height:1.1}
+.sv.g{color:#3ba55d}.sv.y{color:#faa61a}.sv.b{color:#5865f2}.sv.r{color:#f23f42}
+.sl{font-size:.73em;color:#72767d;margin-top:3px}
+table{width:100%;border-collapse:collapse;background:#2b2d31;border-radius:10px;overflow:hidden;margin-bottom:8px}
+th{background:#232428;color:#72767d;font-size:.76em;font-weight:600;padding:9px 12px;text-align:left;border-bottom:1px solid #1a1b1e}
+td{padding:9px 12px;font-size:.84em;border-bottom:1px solid #1e1f22;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+.bar-wrap{background:#1e1f22;border-radius:3px;height:6px;width:100%;margin-top:4px}
+.bar{height:6px;border-radius:3px;background:#5865f2;min-width:2px;transition:width .4s}
+.bar.g{background:#3ba55d}.bar.y{background:#faa61a}.bar.r{background:#f23f42}
+.rb{background:#5865f2;color:#fff;border:none;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:.85em}
+.rb:hover{background:#4752c4}
+#lu{color:#72767d;font-size:.78em;margin-left:10px}
+.day-block{background:#2b2d31;border-radius:12px;padding:18px;margin-bottom:16px}
+.day-title{color:#fff;font-weight:700;font-size:1em;margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.day-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:16px}
+.day-sc{background:#1e1f22;border-radius:8px;padding:10px 13px}
+.day-sv{font-size:1.3em;font-weight:700;color:#fff}
+.day-sl{font-size:.7em;color:#72767d;margin-top:2px}
+.hour-chart{display:flex;align-items:flex-end;gap:2px;height:52px;margin-top:4px}
+.hour-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px}
+.hour-bar{width:100%;border-radius:2px 2px 0 0;background:#5865f2;min-height:2px;transition:height .3s}
+.hour-bar.peak{background:#faa61a}
+.hour-label{font-size:8px;color:#72767d;white-space:nowrap}
+.peak-badge{background:rgba(250,166,26,.15);color:#faa61a;border:1px solid rgba(250,166,26,.3);border-radius:5px;font-size:.72em;padding:2px 7px;margin-left:auto}
+</style>
+</head>
+<body>
+<h1>📊 GAICANI Statistics</h1>
+<p class="sub">Last 14 days · Hours in UTC · Auto-refreshes every 20s</p>
+<button class="rb" onclick="load()">↻ Refresh</button><span id="lu"></span>
 
-  const STATS_API = ROUTE.statsApi;
-  const JS =
-    "function fmt(s){if(s<60)return s+'s';if(s<3600)return Math.floor(s/60)+'m '+(s%60)+'s';return Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m';}" +
-    "function pct(v,m){return m?Math.round(v/m*100):0;}" +
-    "function esc(s){return String(s).replace(/[&<>\"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'})[c];});}" +
-    "async function load(){try{" +
-    "var r=await fetch('" + STATS_API + "');" +
-    "var d=await r.json();" +
-    "document.getElementById('now').innerHTML=" +
-    "  '<div class=\"sc\"><div class=\"sv g\">'+d.currentOnline+'</div><div class=\"sl\">Online now</div></div>'" +
-    "  +'<div class=\"sc\"><div class=\"sv y\">'+d.peakOnline+'</div><div class=\"sl\">Peak online</div></div>';" +
-    "document.getElementById('alltime').innerHTML=" +
-    "  '<div class=\"sc\"><div class=\"sv\">'+d.allTimeUniqueIPs+'</div><div class=\"sl\">Unique IPs (all time)</div></div>'" +
-    "  +'<div class=\"sc\"><div class=\"sv\">'+fmt(d.uptimeSec)+'</div><div class=\"sl\">Server uptime</div></div>';" +
-    "if(!d.days||!d.days.length){document.getElementById('daily').innerHTML='<p style=\"color:#72767d;padding:12px 0\">No data yet</p>';return;}" +
-    "var mi=Math.max.apply(null,d.days.map(function(x){return x.uniqueIPs;}),1);" +
-    "var ms=Math.max.apply(null,d.days.map(function(x){return x.sessions;}),1);" +
-    "var mc=Math.max.apply(null,d.days.map(function(x){return x.chats;}),1);" +
-    "mi=mi||1;ms=ms||1;mc=mc||1;" +
-    "var rows='<table><tr><th>Date</th><th>Unique IPs</th><th>Sessions</th><th>Chats started</th><th>Avg session</th></tr>';" +
-    "[].concat(d.days).reverse().forEach(function(row){" +
-    "  rows+='<tr><td style=\"color:#fff;font-weight:600\">'+esc(row.date)+'</td>'" +
-    "    +'<td>'+row.uniqueIPs+'<div class=\"bw\"><div class=\"b\" style=\"width:'+pct(row.uniqueIPs,mi)+'%\"></div></div></td>'" +
-    "    +'<td>'+row.sessions+'<div class=\"bw\"><div class=\"b\" style=\"width:'+pct(row.sessions,ms)+'%\"></div></div></td>'" +
-    "    +'<td>'+row.chats+'<div class=\"bw\"><div class=\"b g\" style=\"width:'+pct(row.chats,mc)+'%\"></div></div></td>'" +
-    "    +'<td style=\"color:#b5bac1\">'+fmt(row.avgSessionSec)+'</td></tr>';" +
-    "});" +
-    "rows+='</table>';" +
-    "document.getElementById('daily').innerHTML=rows;" +
-    "document.getElementById('lu').textContent='Updated '+new Date().toLocaleTimeString();" +
-    "}catch(e){console.error(e);}}" +
-    "load();setInterval(load,20000);";
+<h2>Right Now</h2>
+<div class="grid" id="now">Loading...</div>
 
-  const html = "<!DOCTYPE html><html lang=\"en\"><head>" +
-    "<meta charset=\"UTF-8\"/>" +
-    "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/>" +
-    "<title>GAICANI Stats</title>" +
-    "<style>" + CSS + "</style>" +
-    "</head><body>" +
-    "<h1>&#128202; GAICANI Statistics</h1>" +
-    "<p class=\"sub\">Resets on server restart &middot; Last 7 days shown</p>" +
-    "<button class=\"rb\" onclick=\"load()\">&#8635; Refresh</button><span id=\"lu\"></span>" +
-    "<h2>Right Now</h2><div class=\"grid\" id=\"now\">Loading...</div>" +
-    "<h2>All Time (since last restart)</h2><div class=\"grid\" id=\"alltime\">Loading...</div>" +
-    "<h2>Daily Breakdown</h2><div id=\"daily\">Loading...</div>" +
-    "<script>" + JS + "<\/script>" +
-    "</body></html>";
+<h2>All Time (since last restart)</h2>
+<div class="grid" id="alltime">Loading...</div>
 
-  res.send(html);
+<h2>Per-Day Breakdown</h2>
+<div id="daily">Loading...</div>
+
+<script>
+const API = '${API}';
+
+function fmt(s) {
+  if (s < 60)   return s + 's';
+  if (s < 3600) return Math.floor(s/60) + 'm ' + (s%60) + 's';
+  return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
+}
+function pct(v, m) { return m ? Math.round(v / m * 100) : 0; }
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+function bar(v, max, cls='') {
+  return '<div class="bar-wrap"><div class="bar ' + cls + '" style="width:' + pct(v,max) + '%"></div></div>';
+}
+
+async function load() {
+  try {
+    const d = await fetch(API).then(r => r.json());
+
+    // ── Right now ──
+    document.getElementById('now').innerHTML =
+      sc(d.currentOnline, 'Online now', 'g') +
+      sc(d.peakOnline,    'All-time peak', 'y') +
+      (d.peakOnlineAt ? sc(new Date(d.peakOnlineAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) + ' ' + new Date(d.peakOnlineAt).toLocaleDateString(), 'Peak time', '') : '');
+
+    // ── All time ──
+    document.getElementById('alltime').innerHTML =
+      sc(d.allTimeUniqueIPs, 'Unique IPs ever', 'b') +
+      sc(fmt(d.uptimeSec),   'Server uptime', '');
+
+    if (!d.days || !d.days.length) {
+      document.getElementById('daily').innerHTML = '<p style="color:#72767d;padding:12px 0">No data yet</p>';
+      document.getElementById('lu').textContent = 'Updated ' + new Date().toLocaleTimeString();
+      return;
+    }
+
+    // ── Per-day blocks (newest first) ──
+    const days = [...d.days].reverse();
+    const maxH  = Math.max(...days.flatMap(day => day.hours.map(h => h.uniqueIPs)), 1);
+
+    let html = '';
+    days.forEach(day => {
+      const peakHr  = day.peakHour;
+      const isToday = day.date === new Date().toISOString().slice(0,10);
+
+      // Hourly bars
+      const maxHourIPs = Math.max(...day.hours.map(h => h.uniqueIPs), 1);
+      const hourBars = day.hours.map(h => {
+        const isPeak = h.hour === peakHr.hour && h.uniqueIPs > 0;
+        const heightPct = Math.max(pct(h.uniqueIPs, maxHourIPs), h.uniqueIPs > 0 ? 4 : 0);
+        return '<div class="hour-bar-wrap" title="' + esc(h.label) + ': ' + h.uniqueIPs + ' IPs, ' + h.sessions + ' sessions">' +
+          '<div class="hour-bar' + (isPeak ? ' peak' : '') + '" style="height:' + heightPct + '%"></div>' +
+          (h.hour % 6 === 0 ? '<div class="hour-label">' + esc(h.label.slice(0,2)) + '</div>' : '<div class="hour-label">&nbsp;</div>') +
+          '</div>';
+      }).join('');
+
+      html += '<div class="day-block">' +
+        '<div class="day-title">' +
+          '<span>' + esc(day.date) + (isToday ? ' <span style="color:#3ba55d;font-size:.75em">(today)</span>' : '') + '</span>' +
+          (peakHr.uniqueIPs > 0 ? '<span class="peak-badge">⏰ Peak ' + esc(peakHr.label) + ' UTC (' + peakHr.uniqueIPs + ' IPs)</span>' : '') +
+        '</div>' +
+
+        '<div class="day-grid">' +
+          dsc(day.uniqueIPs,     'Unique IPs') +
+          dsc(day.newIPs,        'New visitors', '#3ba55d') +
+          dsc(day.returningIPs,  'Returning', '#5865f2') +
+          dsc(day.sessions,      'Connections') +
+          dsc(day.chats,         'Chats started') +
+          dsc(fmt(day.avgSessionSec), 'Avg session') +
+          dsc(day.peakOnline,    'Peak online', '#faa61a') +
+        '</div>' +
+
+        '<div style="font-size:.72em;color:#72767d;margin-bottom:6px">Unique IPs per hour (UTC)</div>' +
+        '<div class="hour-chart">' + hourBars + '</div>' +
+        '</div>';
+    });
+
+    document.getElementById('daily').innerHTML = html;
+    document.getElementById('lu').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch(e) { console.error(e); }
+}
+
+function sc(v, label, cls) {
+  return '<div class="sc"><div class="sv ' + (cls||'') + '">' + esc(v) + '</div><div class="sl">' + esc(label) + '</div></div>';
+}
+function dsc(v, label, color) {
+  return '<div class="day-sc"><div class="day-sv"' + (color ? ' style="color:' + color + '"' : '') + '>' + esc(v) + '</div><div class="day-sl">' + esc(label) + '</div></div>';
+}
+
+load();
+setInterval(load, 20000);
+</script>
+</body>
+</html>`);
 });
 
 // ── Sensitive-URL visitor log — owner eyes only ───────────────────────────────
