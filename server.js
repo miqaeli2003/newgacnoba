@@ -489,15 +489,10 @@ app.use((req, res, next) => {
 
 app.use(express.static(path.join(__dirname)));
 
-// ── Captcha gate — runs after static assets so CSS/JS can load ───────────────
-// Skipped for: API routes, captcha verify itself, static assets
-const CAPTCHA_SKIP = /^\/(api\/|captcha-verify|socket\.io\/|favicon|logo|icons|manifest|style|games|script)/;
-
+// ── Captcha gate — only on the main page ─────────────────────────────────────
 app.use(async (req, res, next) => {
-  // Skip non-HTML requests and internal routes
-  if (CAPTCHA_SKIP.test(req.path)) return next();
-  // Only gate GET requests for the main page
-  if (req.method !== "GET") return next();
+  // Only gate the main page
+  if (req.method !== "GET" || req.path !== "/") return next();
 
   const ip = (req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.socket?.remoteAddress || "");
 
