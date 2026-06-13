@@ -487,9 +487,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.static(path.join(__dirname)));
-
-// ── Captcha gate — only on the main page ─────────────────────────────────────
+// ── Captcha gate — only on the main page, BEFORE static so it intercepts / ───
 app.use(async (req, res, next) => {
   // Only gate the main page
   if (req.method !== "GET" || req.path !== "/") return next();
@@ -510,13 +508,13 @@ app.use(async (req, res, next) => {
     return next();
   }
 
-  // Non-Georgian — show captcha page
+  // Non-Georgian — show captcha page instead of index.html
   newChallenge(ip);
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.status(200).send(captchaPageHTML(ip, null));
 });
 
-// POST /captcha-verify — check submitted answer
+// POST /captcha-verify — check submitted answer (also before static)
 app.use(express.urlencoded({ extended: false }));
 
 app.post("/captcha-verify", (req, res) => {
@@ -525,14 +523,12 @@ app.post("/captcha-verify", (req, res) => {
   const challenge = captchaChallenges.get(ip);
 
   if (!challenge || Date.now() > challenge.expires) {
-    // Challenge expired — give a fresh one
     newChallenge(ip);
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     return res.send(captchaPageHTML(ip, "ვადა გავიდა. სცადეთ თავიდან."));
   }
 
   if (isNaN(submitted) || submitted !== challenge.answer) {
-    // Wrong answer — new challenge
     newChallenge(ip);
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     return res.send(captchaPageHTML(ip, "პასუხი არასწორია. სცადეთ თავიდან."));
@@ -543,6 +539,10 @@ app.post("/captcha-verify", (req, res) => {
   setCaptchaCookie(res, ip);
   res.redirect(302, "/");
 });
+
+app.use(express.static(path.join(__dirname)));
+
+// (captcha gate was previously here — moved above static)
 
 const gifHttpLimiter = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
 
