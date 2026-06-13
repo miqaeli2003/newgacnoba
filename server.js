@@ -1897,9 +1897,11 @@ app.get(ROUTE.visitorLog, ownerOnly, (req, res) => {
   const esc = s => String(s).replace(/[&<>"']/g, c =>
     ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
 
+  const denied    = sensitiveVisitorLog.filter(e => !e.allowed);
+  const uniqueIPs = [...new Set(sensitiveVisitorLog.map(e => e.ip))];
+
   const rows = [...sensitiveVisitorLog].reverse().map(e => {
-    const cls = e.allowed ? "ok" : "bad";
-    return `<tr class="${cls}">
+    return `<tr class="${e.allowed ? "ok" : "bad"}">
       <td>${esc(e.timestamp)}</td>
       <td class="ip">${esc(e.ip)}</td>
       <td>${esc(e.url)}</td>
@@ -1907,9 +1909,6 @@ app.get(ROUTE.visitorLog, ownerOnly, (req, res) => {
       <td class="ua">${esc(e.userAgent)}</td>
     </tr>`;
   }).join("");
-
-  const uniqueIPs = [...new Set(sensitiveVisitorLog.map(e => e.ip))];
-  const denied    = sensitiveVisitorLog.filter(e => !e.allowed);
 
   res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -1939,14 +1938,23 @@ tr.ok td{background:rgba(59,165,93,.04)}
 .ip-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
 .ip-tag{background:#2b2d31;border:1px solid #3a3c40;border-radius:6px;padding:4px 10px;font-family:monospace;font-size:.82em;color:#b5bac1}
 .ip-tag.bad{border-color:rgba(242,63,66,.5);color:#f23f42}
-button{background:#5865f2;color:#fff;border:none;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:.85em;margin-bottom:20px}
-button:hover{background:#4752c4}
+.btn{background:#5865f2;color:#fff;border:none;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:.85em}
+.btn:hover{background:#4752c4}
+.btn.danger{background:#f23f42}
+.btn.danger:hover{background:#c0393b}
+.toolbar{display:flex;gap:10px;margin-bottom:20px;align-items:center}
+#clearStatus{font-size:.82em;color:#3ba55d}
 </style>
 </head>
 <body>
 <h1>🔍 Sensitive URL Visitor Log</h1>
 <p class="sub">All IPs that hit admin / stats URLs — only visible to you (${esc(OWNER_IP)})</p>
-<button onclick="location.reload()">↻ Refresh</button>
+
+<div class="toolbar">
+  <button class="btn" onclick="location.reload()">↻ Refresh</button>
+  <button class="btn danger" onclick="clearLogs()">🗑️ Clear All Logs</button>
+  <span id="clearStatus"></span>
+</div>
 
 <div class="grid">
   <div class="sc"><div class="sv">${sensitiveVisitorLog.length}</div><div class="sl">Total requests logged</div></div>
@@ -1960,7 +1968,7 @@ button:hover{background:#4752c4}
   ${uniqueIPs.map(ip => {
     const hasDenied = denied.some(e => e.ip === ip);
     return `<span class="ip-tag${hasDenied ? " bad" : ""}">${esc(ip)}</span>`;
-  }).join("")}
+  }).join("") || '<span style="color:#72767d;font-size:.85em">None yet</span>'}
 </div>
 
 <h2>Full request log (newest first — max ${MAX_VISITOR_LOG})</h2>
@@ -1974,8 +1982,28 @@ button:hover{background:#4752c4}
   </tr>
   ${rows || '<tr><td colspan="5" style="color:#72767d;padding:16px">No visits recorded yet.</td></tr>'}
 </table>
+
+<script>
+async function clearLogs() {
+  if (!confirm("Delete all visitor logs? This cannot be undone.")) return;
+  const r = await fetch('${ROUTE.visitorLog}', { method: 'DELETE' });
+  const d = await r.json();
+  if (d.ok) {
+    document.getElementById('clearStatus').textContent = '✅ Logs cleared — ' + d.deleted + ' entries deleted';
+    setTimeout(() => location.reload(), 1200);
+  }
+}
+</script>
 </body>
 </html>`);
+});
+
+// DELETE <visitorLog route> — wipe the in-memory log
+app.delete(ROUTE.visitorLog, ownerOnly, (req, res) => {
+  const deleted = sensitiveVisitorLog.length;
+  sensitiveVisitorLog.splice(0, sensitiveVisitorLog.length);
+  console.log(`[VISITOR-LOG] Cleared by owner — ${deleted} entries deleted`);
+  res.json({ ok: true, deleted });
 });
 
 // JSON version of the same log (for scripting)
