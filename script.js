@@ -430,7 +430,7 @@ function addPhotoMessage(dataUrl, isYou) {
     const overlay   = document.createElement("div");
     overlay.className = "photo-blur-overlay";
     const hint      = document.createElement("span");
-    hint.className  = "photo-blur-hint";
+    
     hint.textContent = "👁 სანახავად დააჭირე";
     overlay.appendChild(hint);
     inner.appendChild(overlay);
