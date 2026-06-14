@@ -22,9 +22,7 @@ const NAME_MIN           = 2;
 const NAME_MAX           = 20;
 const MSG_MAX            = 2000;
 const RECONNECT_GRACE_MS = 1800000; // 30 min
-const MAX_BLOCKS_RX      = 3;    // max blocks within the time window
-const BLOCKS_RX_WINDOW_MS = 5 * 60 * 1000; // 5-minute sliding window
-const MAX_BLOCKS_TX      = 10;  // max users one socket can block per session
+// Block limits removed — both sending and receiving blocks are now unlimited
 const MSG_RATE_MAX       = 20;
 const MSG_RATE_WINDOW_MS = 5000;
 
@@ -1606,11 +1604,7 @@ io.on("connection", (socket) => {
 
     if (!socket.partner && !socket.lastPartnerName) return;
 
-    // Enforce per-session block limit
-    if (socket.blockedNames.length >= MAX_BLOCKS_TX) {
-      socket.emit("blockLimitReached");
-      return;
-    }
+    // Add to blocks list (no limit anymore — users can block unlimited other users)
 
     if (socket.partner) {
       const blockedName        = socket.partner.userName.toLowerCase();
@@ -1634,16 +1628,9 @@ io.on("connection", (socket) => {
       const now5 = Date.now();
       blockedSocket.blockedByTimes.push(now5);
       blockedSocket.blockedByTimes = blockedSocket.blockedByTimes.filter(
-        t => now5 - t < BLOCKS_RX_WINDOW_MS
+        t => now5 - t < 300000 // keep last 5 minutes for logging (but no limit enforcement)
       );
-      if (blockedSocket.blockedByTimes.length >= MAX_BLOCKS_RX) {
-        console.log(`Auto-kicking ${blockedSocket.userName}: blocked ${MAX_BLOCKS_RX}x within 5 min`);
-        blockedSocket.emit("autoKicked");
-        blockedSocket.disconnect(true);
-        // Still notify the blocker so the client redirects them to a new search
-        socket.emit("userBlocked", { name: blockedDisplayName });
-        return;
-      }
+      // No longer auto-kick on block limit — blocks are unlimited now
       socket.emit("userBlocked", { name: blockedDisplayName });
     } else {
       const blockedName        = socket.lastPartnerName.toLowerCase();
