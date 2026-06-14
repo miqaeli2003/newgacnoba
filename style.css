@@ -678,15 +678,13 @@ html, body {
 
 .gif-picker {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  width: 100%;
-  height: 340px;
+  bottom: 72px;
+  right: 12px;
+  width: 320px;
+  height: 420px;
   background: #2e3140;
-  border: none;
-  border-top: 1px solid #4a4d63;
-  border-radius: 0;
+  border: 1px solid #4a4d63;
+  border-radius: 14px;
   box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.55);
   z-index: 500;
   flex-direction: column;
@@ -702,17 +700,24 @@ html, body {
   flex-shrink: 0;
 }
 
-.gif-picker-header input {
+.gif-picker-header textarea {
   flex: 1;
   background: #23252f;
   border: none;
   outline: none;
   color: #fff;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 0.88em;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.95em;
+  font-family: inherit;
+  resize: none;
+  overflow-y: hidden;
+  line-height: 1.45;
+  min-height: 40px;
+  box-sizing: border-box;
+  display: block;
 }
-.gif-picker-header input::placeholder { color: #8b8fa8; }
+.gif-picker-header textarea::placeholder { color: #8b8fa8; }
 
 .gif-picker-close {
   background: none;
@@ -1211,16 +1216,25 @@ html, body {
 
 /* ── MODAL INPUT & BUTTON ─────────────────────────────────────────────────── */
 
-.modal-content input[type="text"] {
+.modal-content textarea#nameInput {
   width: 100%;
-  padding: 12px;
   margin-top: 10px;
-  border-radius: 8px;
+  border-radius: 10px;
   border: none;
+  outline: none;
   background: #23252f;
-  color: white;
+  color: #fff;
   font-size: 0.95em;
+  font-family: inherit;
+  padding: 12px 14px;
+  resize: none;
+  overflow-y: hidden;
+  line-height: 1.45;
+  min-height: 44px;
+  box-sizing: border-box;
+  display: block;
 }
+.modal-content textarea#nameInput::placeholder { color: #8b8fa8; }
 
 .name-error {
   color: #f23f42;
@@ -1399,12 +1413,12 @@ html, body {
 
   /* ── GIF PICKER ────────────────────────────────────────────────────────── */
   .gif-picker {
-    width: 100%;
-    left: 0;
-    right: 0;
-    height: 340px;
-    bottom: 0;
-    border-radius: 0;
+    width: calc(100vw - 16px);
+    right: 8px;
+    left: 8px;
+    height: 400px;
+    bottom: 80px;
+    border-radius: 18px;
   }
 
   /* ── CHAT BUBBLES ──────────────────────────────────────────────────────── */
@@ -2032,7 +2046,7 @@ html, body {
   }
 
   /* ── 3. Modal name input — same zoom prevention ──────────────────────────── */
-  .modal-content input[type="text"],
+  .modal-content textarea#nameInput,
   .bio-textarea,
   #gifSearch {
     font-size: 16px !important;
@@ -2095,11 +2109,12 @@ html, body {
   /* ── 10. GIF picker — full-width bottom sheet on iPhone ─────────────────── */
   @media (max-width: 600px) {
     .gif-picker {
+      /* Snap it to bottom edges; JS still moves it above the keyboard */
       left: 0;
       right: 0;
       width: 100%;
-      border-radius: 0;
-      bottom: 0;
+      border-radius: 18px 18px 0 0;
+      bottom: calc(72px + env(safe-area-inset-bottom, 0px));
       /* Respect safe areas on the sides (landscape iPhone notch) */
       padding-left:  env(safe-area-inset-left, 0px);
       padding-right: env(safe-area-inset-right, 0px);
