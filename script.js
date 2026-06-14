@@ -1017,7 +1017,7 @@ if (photoInput) {
       // Store the photo and ask partner for permission
       pendingPhotoData = dataUrl;
       socket.emit("photo:request", { fromId: socket.id });
-      addSystemMessage("📸 სურათის გაგზავნის რჩევა გაუგზავნილია...");
+      addSystemMessage("📸 სურათის გაგზავნის მოთხოვნა შეთავაზებულია...");
     });
   });
 }
@@ -1042,7 +1042,7 @@ socket.on("photo:approved", () => {
   if (pendingPhotoData) {
     socket.emit("photo", { dataUrl: pendingPhotoData });
     addPhotoMessage(pendingPhotoData, true);
-    addSystemMessage("✅ პარტნიორი დაამტკიცა სურათის მიღება");
+    addSystemMessage("✅ პარტნიორმა დაამტკიცა სურათის მიღება");
     pendingPhotoData = null;
   }
 });
