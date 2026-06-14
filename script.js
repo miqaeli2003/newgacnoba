@@ -446,7 +446,6 @@ function addPhotoMessage(dataUrl, isYou) {
         // Update hint to show fullscreen is available
         const newHint = document.createElement("span");
         newHint.className = "photo-blur-hint";
-        newHint.textContent = "🖼️ დააჭირე გასაქმელად";
         inner.appendChild(newHint);
       } else {
         // Second click: Open fullscreen
