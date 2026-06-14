@@ -1662,6 +1662,10 @@ function goToWelcome() {
   setInputsEnabled(false);
   updateBlockBtn();
 
+  // 🚫 CLEAR ALL BLOCKS — fresh session means fresh block list
+  blockedUsers = new Set();
+  blockedNames = [];
+
   socket.emit("next"); // tell server we're leaving current chat
   stopSearchRetry();
   hideTypingIndicator();
