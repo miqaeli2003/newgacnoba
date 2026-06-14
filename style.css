@@ -302,17 +302,7 @@ html, body {
   justify-content: center;
   pointer-events: none;
 }
-.photo-blur-hint {
-  background: rgba(0,0,0,0.55);
-  color: #fff;
-  font-size: 0.78em;
-  font-weight: 600;
-  padding: 6px 12px;
-  border-radius: 20px;
-  backdrop-filter: blur(4px);
-  pointer-events: none;
-  white-space: nowrap;
-}
+
 .photo-wrapper-inner {
   position: relative;
   display: inline-block;
