@@ -822,6 +822,57 @@ if (photoBtn) {
   });
 }
 
+// ── Photo Permission Request Dialog (for partner to approve) ────────────────
+function showPhotoPermissionDialog(message, onApprove, onDecline) {
+  const modal = document.createElement("div");
+  modal.className = "photo-permission-modal";
+  
+  const backdrop = document.createElement("div");
+  backdrop.className = "photo-permission-backdrop";
+  
+  const content = document.createElement("div");
+  content.className = "photo-permission-content";
+  
+  const icon = document.createElement("div");
+  icon.className = "photo-permission-icon";
+  icon.textContent = "📸";
+  
+  const text = document.createElement("p");
+  text.className = "photo-permission-text";
+  text.textContent = message;
+  
+  const buttonGroup = document.createElement("div");
+  buttonGroup.className = "photo-permission-buttons";
+  
+  const declineBtn = document.createElement("button");
+  declineBtn.className = "photo-permission-btn decline";
+  declineBtn.textContent = "უარი";
+  declineBtn.onclick = () => {
+    modal.remove();
+    onDecline();
+  };
+  
+  const approveBtn = document.createElement("button");
+  approveBtn.className = "photo-permission-btn approve";
+  approveBtn.textContent = "დამტკიცება";
+  approveBtn.onclick = () => {
+    modal.remove();
+    onApprove();
+  };
+  
+  buttonGroup.appendChild(declineBtn);
+  buttonGroup.appendChild(approveBtn);
+  
+  content.appendChild(icon);
+  content.appendChild(text);
+  content.appendChild(buttonGroup);
+  
+  backdrop.appendChild(content);
+  modal.appendChild(backdrop);
+  
+  document.body.appendChild(modal);
+}
+
 // ── Photo Confirmation Dialog ────────────────────────────────────────────────
 function showPhotoConfirmation(dataUrl, onConfirm) {
   const modal = document.createElement("div");
@@ -935,6 +986,8 @@ function compressImage(file, callback) {
   reader.readAsDataURL(file);
 }
 
+let pendingPhotoData = null; // Store pending photo waiting for approval
+
 if (photoInput) {
   photoInput.addEventListener("change", () => {
     const file = photoInput.files[0];
@@ -948,14 +1001,44 @@ if (photoInput) {
     compressImage(file, (dataUrl) => {
       if (!partnerConnected) return; // recheck after async compress
       
-      // Show confirmation dialog before sending
-      showPhotoConfirmation(dataUrl, () => {
-        socket.emit("photo", { dataUrl });
-        addPhotoMessage(dataUrl, true);
-      });
+      // Store the photo and ask partner for permission
+      pendingPhotoData = dataUrl;
+      socket.emit("photo:request", { fromId: socket.id });
+      addSystemMessage("📸 სურათის გაგზავნის რჩევა გაუგზავნილია...");
     });
   });
 }
+
+// Listen for photo permission request from partner
+socket.on("photo:request", ({ fromId }) => {
+  showPhotoPermissionDialog(
+    "ღ파트ნიორი გსურს სურათის გაგზავნა. დასაშვებია?",
+    () => {
+      // Partner accepted - send approval
+      socket.emit("photo:approved", { toId: fromId });
+    },
+    () => {
+      // Partner declined - send rejection
+      socket.emit("photo:declined", { toId: fromId });
+    }
+  );
+});
+
+// Listen for approval from partner
+socket.on("photo:approved", () => {
+  if (pendingPhotoData) {
+    socket.emit("photo", { dataUrl: pendingPhotoData });
+    addPhotoMessage(pendingPhotoData, true);
+    addSystemMessage("✅ პარტნიორი დაამტკიცა სურათის მიღება");
+    pendingPhotoData = null;
+  }
+});
+
+// Listen for rejection from partner
+socket.on("photo:declined", () => {
+  pendingPhotoData = null;
+  addSystemMessage("❌ პარტნიორმა უარყო სურათის მიღება");
+});
 
 socket.on("photo", (data) => {
   if (data?.dataUrl) addPhotoMessage(data.dataUrl, false);
