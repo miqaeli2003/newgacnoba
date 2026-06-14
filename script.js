@@ -704,9 +704,9 @@ function updateViewportOffsets() {
   chatInputBar.style.bottom     = kbH > 0 ? kbH + "px" : "";
   chatInputBar.style.transition = kbH === 0 ? "bottom 0.22s ease" : "none";
 
-  // GIF picker sits flush above the keyboard (full-width bottom sheet style)
+  // GIF picker floats 8 px above the input bar
   if (gifPickerOpen) {
-    gifPicker.style.bottom = kbH + "px";
+    gifPicker.style.bottom = (kbH + chatInputBar.offsetHeight + 8) + "px";
   }
 
   // Pin scroll to bottom whenever the viewport shifts
@@ -729,7 +729,7 @@ if (window.visualViewport) {
 function updateGifPickerPosition() {
   if (!gifPickerOpen) return;
   const kbH = getKeyboardHeight();
-  gifPicker.style.bottom = kbH + "px";
+  gifPicker.style.bottom = (kbH + chatInputBar.offsetHeight + 8) + "px";
 }
 
 function openGifPicker() {
@@ -759,7 +759,10 @@ gifSearch.addEventListener("input", () => {
   gifSearchTimer = setTimeout(() => fetchGifs(gifSearch.value.trim()), 400);
 });
 
-gifSearch.addEventListener("keydown", (e) => e.stopPropagation());
+gifSearch.addEventListener("keydown", (e) => {
+  e.stopPropagation();
+  if (e.key === "Enter") e.preventDefault(); // no newline in search textarea
+});
 
 document.addEventListener("click", (e) => {
   if (gifPickerOpen && !gifPicker.contains(e.target) && e.target !== gifBtn) {
@@ -1628,7 +1631,7 @@ changeNameBtn.addEventListener("click", () => {
 });
 
 saveNameBtn.addEventListener("click", saveName);
-nameInput.addEventListener("keypress", (e) => { if (e.key === "Enter") saveName(); });
+nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveName(); } });
 
 // ── Swipe-right gesture → Next (mobile) ──────────────────────────────────────
 let touchStartX = 0, touchStartY = 0;
