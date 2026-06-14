@@ -46,8 +46,10 @@
   <!-- GIF Picker Panel -->
   <div id="gifPicker" class="gif-picker" style="display:none">
     <div class="gif-picker-header">
-      <input ="text" id="gifSearch" placeholder="🔍 Search GIFs..."
-             autocomplete="off" inputmode="search" enterkeyhint="search" />
+      <textarea id="gifSearch" placeholder="🔍 Search GIFs..."
+                autocomplete="off" autocorrect="off" autocapitalize="off"
+                spellcheck="false" inputmode="search" enterkeyhint="search"
+                rows="1" maxlength="100"></textarea>
       <button class="gif-picker-close" id="gifPickerClose">✕</button>
     </div>
     <div class="gif-results" id="gifResults">
@@ -124,8 +126,10 @@
         </div>
       </div>
 
-      <input type="text" id="nameInput" placeholder="შეიყვანეთ სახელი..."
-             autocomplete="off" inputmode="text" enterkeyhint="go" maxlength="20" />
+      <textarea id="nameInput" placeholder="შეიყვანეთ სახელი..."
+               autocomplete="off" autocorrect="off" autocapitalize="sentences"
+               spellcheck="false" inputmode="text" enterkeyhint="go"
+               rows="1" maxlength="20"></textarea>
       <div id="nameError" class="name-error"></div>
       <p class="safety-age-confirm">
         საუბრის დაწყებით ადასტურებთ რომ ხართ <strong>18+</strong> და ეთანხმებით
