@@ -1026,7 +1026,7 @@ if (photoInput) {
 // Listen for photo permission request from partner
 socket.on("photo:request", ({ fromId }) => {
   showPhotoPermissionDialog(
-    "ღ파트ნიორი გსურს სურათის გაგზავნა. დასაშვებია?",
+    "პარტნიორი გიგზავნით ფოტოს , გსურთ ნახვა?",
     () => {
       // Partner accepted - send approval
       socket.emit("photo:approved", { toId: fromId });
