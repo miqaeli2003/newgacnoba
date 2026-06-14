@@ -704,9 +704,9 @@ function updateViewportOffsets() {
   chatInputBar.style.bottom     = kbH > 0 ? kbH + "px" : "";
   chatInputBar.style.transition = kbH === 0 ? "bottom 0.22s ease" : "none";
 
-  // GIF picker floats 8 px above the input bar
+  // GIF picker: bottom sheet sits flush above keyboard
   if (gifPickerOpen) {
-    gifPicker.style.bottom = (kbH + chatInputBar.offsetHeight + 8) + "px";
+    gifPicker.style.bottom = kbH + "px";
   }
 
   // Pin scroll to bottom whenever the viewport shifts
@@ -729,22 +729,28 @@ if (window.visualViewport) {
 function updateGifPickerPosition() {
   if (!gifPickerOpen) return;
   const kbH = getKeyboardHeight();
-  gifPicker.style.bottom = (kbH + chatInputBar.offsetHeight + 8) + "px";
+  gifPicker.style.bottom = kbH + "px";
 }
 
 function openGifPicker() {
+  const kbH = getKeyboardHeight();
   gifPicker.style.display = "flex";
+  // Force reflow so the transition fires from off-screen position
+  gifPicker.getBoundingClientRect();
+  gifPicker.style.bottom = kbH + "px";
   gifPickerOpen = true;
   gifSearch.value = "";
   gifSearch.focus();
-  updateGifPickerPosition();
   fetchGifs("");
 }
 
 function closeGifPickerPanel() {
-  gifPicker.style.display = "none";
-  gifPicker.style.bottom  = ""; // reset Visual Viewport override
+  gifPicker.style.bottom = "-100%";
   gifPickerOpen = false;
+  // Hide after slide-out animation
+  setTimeout(() => {
+    if (!gifPickerOpen) gifPicker.style.display = "none";
+  }, 300);
 }
 
 gifBtn.addEventListener("click", (e) => {
@@ -761,7 +767,7 @@ gifSearch.addEventListener("input", () => {
 
 gifSearch.addEventListener("keydown", (e) => {
   e.stopPropagation();
-  if (e.key === "Enter") e.preventDefault(); // no newline in search textarea
+  if (e.key === "Enter") e.preventDefault();
 });
 
 document.addEventListener("click", (e) => {
