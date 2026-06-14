@@ -678,13 +678,15 @@ html, body {
 
 .gif-picker {
   position: fixed;
-  bottom: 72px;
-  right: 12px;
-  width: 320px;
-  height: 420px;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 340px;
   background: #2e3140;
-  border: 1px solid #4a4d63;
-  border-radius: 14px;
+  border: none;
+  border-top: 1px solid #4a4d63;
+  border-radius: 0;
   box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.55);
   z-index: 500;
   flex-direction: column;
@@ -1397,12 +1399,12 @@ html, body {
 
   /* ── GIF PICKER ────────────────────────────────────────────────────────── */
   .gif-picker {
-    width: calc(100vw - 16px);
-    right: 8px;
-    left: 8px;
-    height: 400px;
-    bottom: 80px;
-    border-radius: 18px;
+    width: 100%;
+    left: 0;
+    right: 0;
+    height: 340px;
+    bottom: 0;
+    border-radius: 0;
   }
 
   /* ── CHAT BUBBLES ──────────────────────────────────────────────────────── */
@@ -2093,12 +2095,11 @@ html, body {
   /* ── 10. GIF picker — full-width bottom sheet on iPhone ─────────────────── */
   @media (max-width: 600px) {
     .gif-picker {
-      /* Snap it to bottom edges; JS still moves it above the keyboard */
       left: 0;
       right: 0;
       width: 100%;
-      border-radius: 18px 18px 0 0;
-      bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+      border-radius: 0;
+      bottom: 0;
       /* Respect safe areas on the sides (landscape iPhone notch) */
       padding-left:  env(safe-area-inset-left, 0px);
       padding-right: env(safe-area-inset-right, 0px);
