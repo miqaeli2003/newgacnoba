@@ -1487,6 +1487,30 @@ io.on("connection", (socket) => {
     socket.partner.emit("photo", { dataUrl: data.dataUrl });
   });
 
+  // ── PHOTO PERMISSION REQUEST ───────────────────────────────────────────
+  socket.on("photo:request", (data) => {
+    if (!socket.partner) return;
+    if (socket.partner._isGhost) return;
+    // Forward the permission request to partner
+    socket.partner.emit("photo:request", { fromId: socket.id });
+  });
+
+  // ── PHOTO PERMISSION APPROVED ──────────────────────────────────────────
+  socket.on("photo:approved", (data) => {
+    if (!socket.partner || !data?.toId) return;
+    if (socket.partner._isGhost) return;
+    // Forward approval back to sender
+    socket.partner.emit("photo:approved");
+  });
+
+  // ── PHOTO PERMISSION DECLINED ──────────────────────────────────────────
+  socket.on("photo:declined", (data) => {
+    if (!socket.partner || !data?.toId) return;
+    if (socket.partner._isGhost) return;
+    // Forward decline back to sender
+    socket.partner.emit("photo:declined");
+  });
+
   // ── Reactions ────────────────────────────────────────────────────────────
   socket.on("react", ({ messageId, emoji }) => {
     if (!socket.partner || !messageId || !emoji) return;
