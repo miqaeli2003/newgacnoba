@@ -682,7 +682,7 @@ html, body {
   left: 0;
   right: 0;
   width: 100%;
-  height: 280px;
+  height: 420px;
   background: #2e3140;
   border: none;
   border-top: 1px solid #4a4d63;
@@ -1898,7 +1898,7 @@ html, body {
     max-width: 160px;
   }
 
-  /* ── GIF picker on mobile: compact while typing ── */
+  /* ── GIF PICKER ────────────────────────────────────────────────────────── */
   .gif-picker {
     height: 240px;
   }
