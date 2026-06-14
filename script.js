@@ -704,9 +704,9 @@ function updateViewportOffsets() {
   chatInputBar.style.bottom     = kbH > 0 ? kbH + "px" : "";
   chatInputBar.style.transition = kbH === 0 ? "bottom 0.22s ease" : "none";
 
-  // GIF picker floats 8 px above the input bar
+  // GIF picker sits flush above the keyboard (full-width bottom sheet style)
   if (gifPickerOpen) {
-    gifPicker.style.bottom = (kbH + chatInputBar.offsetHeight + 8) + "px";
+    gifPicker.style.bottom = kbH + "px";
   }
 
   // Pin scroll to bottom whenever the viewport shifts
@@ -729,7 +729,7 @@ if (window.visualViewport) {
 function updateGifPickerPosition() {
   if (!gifPickerOpen) return;
   const kbH = getKeyboardHeight();
-  gifPicker.style.bottom = (kbH + chatInputBar.offsetHeight + 8) + "px";
+  gifPicker.style.bottom = kbH + "px";
 }
 
 function openGifPicker() {
