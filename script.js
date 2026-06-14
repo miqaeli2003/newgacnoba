@@ -435,13 +435,26 @@ function addPhotoMessage(dataUrl, isYou) {
     overlay.appendChild(hint);
     inner.appendChild(overlay);
 
+    let isUnblurred = false;
+
     img.addEventListener("click", () => {
-      // Show fullscreen modal directly without unblurring in chat
-      showPhotoFullscreen(dataUrl);
-      // Don't remove overlay or blur class - keep blurred in chat
+      if (!isUnblurred) {
+        // First click: Unblur the image in chat
+        img.classList.remove("blurred");
+        overlay.remove();
+        isUnblurred = true;
+        // Update hint to show fullscreen is available
+        const newHint = document.createElement("span");
+        newHint.className = "photo-blur-hint";
+        newHint.textContent = "🖼️ დააჭირე გასაქმელად";
+        inner.appendChild(newHint);
+      } else {
+        // Second click: Open fullscreen
+        showPhotoFullscreen(dataUrl);
+      }
     });
   } else {
-    // Your own photos can also be viewed fullscreen
+    // Your own photos open fullscreen directly
     img.addEventListener("click", () => {
       showPhotoFullscreen(dataUrl);
     });
