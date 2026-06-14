@@ -436,9 +436,14 @@ function addPhotoMessage(dataUrl, isYou) {
     inner.appendChild(overlay);
 
     img.addEventListener("click", () => {
-      img.classList.remove("blurred");
-      overlay.remove();
-    }, { once: true });
+      // Show fullscreen modal with unblurred image
+      showPhotoFullscreen(dataUrl);
+    });
+  } else {
+    // Your own photos can also be viewed fullscreen
+    img.addEventListener("click", () => {
+      showPhotoFullscreen(dataUrl);
+    });
   }
 
   const timestamp       = document.createElement("div");
@@ -817,6 +822,83 @@ if (photoBtn) {
   });
 }
 
+// ── Photo Confirmation Dialog ────────────────────────────────────────────────
+function showPhotoConfirmation(dataUrl, onConfirm) {
+  const modal = document.createElement("div");
+  modal.className = "photo-confirm-modal";
+  
+  const backdrop = document.createElement("div");
+  backdrop.className = "photo-confirm-backdrop";
+  
+  const content = document.createElement("div");
+  content.className = "photo-confirm-content";
+  
+  const title = document.createElement("p");
+  title.className = "photo-confirm-title";
+  title.textContent = "გსურთ ამ სურათის გაგზავნა?";
+  
+  const preview = document.createElement("img");
+  preview.className = "photo-confirm-preview";
+  preview.src = dataUrl;
+  
+  const buttonGroup = document.createElement("div");
+  buttonGroup.className = "photo-confirm-buttons";
+  
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "photo-confirm-btn cancel";
+  cancelBtn.textContent = "გაუქმება";
+  cancelBtn.onclick = () => modal.remove();
+  
+  const confirmBtn = document.createElement("button");
+  confirmBtn.className = "photo-confirm-btn confirm";
+  confirmBtn.textContent = "გაგზავნა";
+  confirmBtn.onclick = () => {
+    modal.remove();
+    onConfirm();
+  };
+  
+  buttonGroup.appendChild(cancelBtn);
+  buttonGroup.appendChild(confirmBtn);
+  
+  content.appendChild(title);
+  content.appendChild(preview);
+  content.appendChild(buttonGroup);
+  
+  backdrop.appendChild(content);
+  modal.appendChild(backdrop);
+  
+  document.body.appendChild(modal);
+}
+
+// ── Photo Fullscreen Modal ───────────────────────────────────────────────────
+function showPhotoFullscreen(dataUrl) {
+  const modal = document.createElement("div");
+  modal.className = "photo-fullscreen-modal";
+  
+  const backdrop = document.createElement("div");
+  backdrop.className = "photo-fullscreen-backdrop";
+  
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "photo-fullscreen-close";
+  closeBtn.innerHTML = "✕";
+  closeBtn.onclick = () => modal.remove();
+  
+  const img = document.createElement("img");
+  img.className = "photo-fullscreen-img";
+  img.src = dataUrl;
+  
+  backdrop.appendChild(img);
+  backdrop.appendChild(closeBtn);
+  modal.appendChild(backdrop);
+  
+  document.body.appendChild(modal);
+  
+  // Close on backdrop click
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop) modal.remove();
+  });
+}
+
 // Compress + resize image to fit within socket buffer
 function compressImage(file, callback) {
   const MAX_DIM     = 1280;  // max width or height
@@ -865,8 +947,12 @@ if (photoInput) {
     }
     compressImage(file, (dataUrl) => {
       if (!partnerConnected) return; // recheck after async compress
-      socket.emit("photo", { dataUrl });
-      addPhotoMessage(dataUrl, true);
+      
+      // Show confirmation dialog before sending
+      showPhotoConfirmation(dataUrl, () => {
+        socket.emit("photo", { dataUrl });
+        addPhotoMessage(dataUrl, true);
+      });
     });
   });
 }
