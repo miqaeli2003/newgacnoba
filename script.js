@@ -436,8 +436,9 @@ function addPhotoMessage(dataUrl, isYou) {
     inner.appendChild(overlay);
 
     img.addEventListener("click", () => {
-      // Show fullscreen modal with unblurred image
+      // Show fullscreen modal directly without unblurring in chat
       showPhotoFullscreen(dataUrl);
+      // Don't remove overlay or blur class - keep blurred in chat
     });
   } else {
     // Your own photos can also be viewed fullscreen
