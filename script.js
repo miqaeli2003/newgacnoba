@@ -112,6 +112,33 @@ const replyPreviewName = document.getElementById("replyPreviewName");
 const replyPreviewText = document.getElementById("replyPreviewText");
 const replyPreviewClose = document.getElementById("replyPreviewClose");
 
+// ── Ad Container Management ───────────────────────────────────────────────────
+const adContainer = document.getElementById("adContainer");
+
+function showAdContainer() {
+  if (!adContainer) return;
+  adContainer.style.display = "block";
+  adContainer.classList.remove("hidden", "hide");
+  if (typeof window.monetagAds !== 'undefined') {
+    window.monetagAds.reload?.();
+  }
+}
+
+function hideAdContainer() {
+  if (!adContainer) return;
+  adContainer.classList.add("hide");
+  setTimeout(() => {
+    adContainer.style.display = "none";
+    adContainer.classList.add("hidden");
+  }, 300);
+}
+
+function clearAdContainer() {
+  if (!adContainer) return;
+  adContainer.style.display = "none";
+  adContainer.classList.add("hidden");
+}
+
 // ── Sound ─────────────────────────────────────────────────────────────────────
 let _audioCtx = null;
 
@@ -1479,6 +1506,7 @@ socket.on("partnerReconnecting", (data) => {
 });
 
 socket.on("partnerReconnected", (data) => {
+  hideAdContainer();
   stopSearchRetry();
   partnerWasReconnecting = false;
   partnerName            = data.name || partnerName;
@@ -1529,6 +1557,7 @@ socket.on("partnerTyping", (typing) => {
 });
 
 socket.on("message", (msg) => {
+  hideAdContainer();
   hideTypingIndicator();
   addMessage(msg.text, false, msg.messageId, msg.replyTo || null);
   playNotification("message");
@@ -1551,6 +1580,7 @@ socket.on("partnerTabAway", () => {});
 socket.on("partnerTabBack", () => {});
 
 socket.on("partnerDisconnected", (data) => {
+  hideAdContainer();
   partnerWasReconnecting = false;
   removeReconnectingMessage();
   stopSearchRetry();  // stop any running search — user must press Next manually
@@ -1745,6 +1775,7 @@ nextBtn.addEventListener("click", () => {
   lastPartnerName      = "";
   canBlockDisconnected = false;
   setInputsEnabled(false);   // disables + clears textarea immediately
+  showAdContainer();
   updateBlockBtn();
   hideTypingIndicator();
   closeGifPickerPanel();
