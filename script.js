@@ -112,6 +112,25 @@ const replyPreviewName = document.getElementById("replyPreviewName");
 const replyPreviewText = document.getElementById("replyPreviewText");
 const replyPreviewClose = document.getElementById("replyPreviewClose");
 
+// ── Ad Container Management ───────────────────────────────────────────────────
+const adContainer = document.getElementById("adContainer");
+
+function showAdContainer() {
+  if (!adContainer) return;
+  adContainer.classList.remove("hidden", "hide");
+  adContainer.style.display = "flex";
+}
+
+function hideAdContainer() {
+  if (!adContainer) return;
+  adContainer.classList.add("hide");
+  setTimeout(() => {
+    adContainer.style.display = "none";
+    adContainer.classList.add("hidden");
+    adContainer.classList.remove("hide");
+  }, 300);
+}
+
 // ── Sound ─────────────────────────────────────────────────────────────────────
 let _audioCtx = null;
 
@@ -1529,6 +1548,7 @@ socket.on("partnerTyping", (typing) => {
 });
 
 socket.on("message", (msg) => {
+  hideAdContainer();
   hideTypingIndicator();
   addMessage(msg.text, false, msg.messageId, msg.replyTo || null);
   playNotification("message");
@@ -1745,6 +1765,7 @@ nextBtn.addEventListener("click", () => {
   lastPartnerName      = "";
   canBlockDisconnected = false;
   setInputsEnabled(false);   // disables + clears textarea immediately
+  showAdContainer();
   updateBlockBtn();
   hideTypingIndicator();
   closeGifPickerPanel();
