@@ -21,6 +21,14 @@
   <!-- Preconnect to Tenor CDN so GIF images load faster -->
   <link rel="preconnect" href="https://media.tenor.com" />
 
+  <!-- Monetag Vignette Ad Script -->
+  <script>
+    (function(s){
+      s.dataset.zone='11157241';
+      s.src='https://n6wxm.com/vignette.min.js';
+    })([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')));
+  </script>
+
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="games.css" />
 </head>
@@ -38,6 +46,13 @@
       <button class="report-button" id="reportBtn" disabled><span class="btn-icon">🚩</span><span class="btn-label">რეპორტი</span></button>
       <button class="block-button" id="blockBtn" disabled><span class="btn-icon">🚫</span><span class="btn-label">ბლოკი</span></button>
       <button class="next-button" id="nextBtn"><span class="btn-icon">🔎</span><span class="btn-label">ძებნა</span></button>
+    </div>
+  </div>
+
+  <!-- ── AD CONTAINER (Shows during search, hides when partner found) ── -->
+  <div id="adContainer" class="ad-container hidden">
+    <div class="ad-placeholder">
+      <!-- Vignette ad loads here automatically -->
     </div>
   </div>
 
