@@ -157,6 +157,7 @@ const ROUTE = {
   unban:       "/q6jd1vc8zt4",  // POST unban an IP
   bans:        "/a4hs3oe9lp7",  // list banned IPs JSON
   reported:    "/f8nb5wx2cr1",  // list report-banned IPs JSON
+  unbanReported: "/g7zr4ce2mv9", // POST clear a report-ban (resets strike count)
   visitorLog:  "/t1uy6im0dg8",  // visitor log HTML
   visitorJson: "/e3kp9af5qh2",  // visitor log JSON
   vtLog:       "/v2qw5rn8jx1",  // VirusTotal scan log HTML
@@ -349,22 +350,27 @@ const REPORT_BAN_DURATION_MS = 24 * 60 * 60 * 1000;
 const REPORT_THRESHOLD       = 5;
 const reportStrikes = new Map(); // ip → { count, bannedUntil, reporters: Set, firstReportAt }
 
-function recordReport(reporterSocketId, targetIP) {
+function recordReport(reporterSocketId, targetIP, reason, reporterName) {
   if (!targetIP || targetIP === 'unknown') return false;
   const now   = Date.now();
-  let entry   = reportStrikes.get(targetIP) || { count: 0, bannedUntil: null, reporters: new Set(), firstReportAt: null };
+  let entry   = reportStrikes.get(targetIP) || { count: 0, bannedUntil: null, reporters: new Set(), firstReportAt: null, reasons: [] };
   if (entry.bannedUntil && now < entry.bannedUntil) return true; // already banned
   // After 24h without hitting threshold, reset count to 3 (not 0) — history still matters
   if (entry.firstReportAt && (now - entry.firstReportAt) >= REPORT_BAN_DURATION_MS) {
     const resetTo = Math.min(entry.count, 3);
     console.warn(`[REPORT-RESET] IP ${targetIP} — 24h passed, resetting ${entry.count} → ${resetTo} reports`);
-    entry = { count: resetTo, bannedUntil: null, reporters: new Set(), firstReportAt: resetTo > 0 ? now : null };
+    entry = { count: resetTo, bannedUntil: null, reporters: new Set(), firstReportAt: resetTo > 0 ? now : null, reasons: entry.reasons.slice(-resetTo) };
   }
   // One report per socket id to prevent spam
   if (entry.reporters.has(reporterSocketId)) return false;
   entry.reporters.add(reporterSocketId);
   entry.count++;
   if (entry.count === 1) entry.firstReportAt = now; // start the 24h window
+  entry.reasons.push({
+    reason:   (reason || "").trim().slice(0, 200) || "(no reason provided)",
+    by:       reporterName || "unknown",
+    timestamp: new Date().toISOString(),
+  });
   if (entry.count >= REPORT_THRESHOLD) {
     entry.bannedUntil = now + REPORT_BAN_DURATION_MS;
     console.warn(`[REPORT-BAN] IP ${targetIP} auto-banned 24h after ${entry.count} reports`);
@@ -381,6 +387,10 @@ function isReportBanned(ip) {
   if (!entry || !entry.bannedUntil) return false;
   if (Date.now() >= entry.bannedUntil) { reportStrikes.delete(ip); return false; }
   return true;
+}
+
+function clearReportBan(ip) {
+  return reportStrikes.delete(ip);
 }
 
 const VALID_TAGS = new Set([
@@ -794,9 +804,18 @@ app.get(ROUTE.reported, ownerOnly, (req, res) => {
     if (now >= entry.bannedUntil) continue;
     const remainingMs  = entry.bannedUntil - now;
     const remainingHrs = Math.ceil(remainingMs / (60 * 60 * 1000));
-    result.push({ ip, count: entry.count, remainingHrs });
+    result.push({ ip, count: entry.count, remainingHrs, reasons: entry.reasons || [] });
   }
   res.json({ count: result.length, reported: result });
+});
+
+// POST <unbanReported route>?ip=1.2.3.4  — clear a report-ban early (resets strike count to 0)
+app.post(ROUTE.unbanReported, ownerOnly, (req, res) => {
+  const ip = (req.query.ip || "").trim();
+  if (!ip) return res.status(400).json({ error: "ip param required" });
+  const existed = clearReportBan(ip);
+  console.log(`[ADMIN] Cleared report-ban for IP ${ip} (existed=${existed})`);
+  res.json({ ok: true, ip, wasBanned: existed });
 });
 
 // GET <panel route>  — visual admin panel (IP-only, no key)
@@ -821,6 +840,10 @@ h2{color:#5865f2;font-size:1em;margin:24px 0 10px;text-transform:uppercase;lette
 .unban-btn:hover{background:#2d8a4e}
 .badge{display:inline-block;background:rgba(88,101,242,.2);color:#5865f2;border-radius:4px;font-size:.75em;padding:2px 7px;margin-left:6px}
 .badge.green{background:rgba(59,165,93,.2);color:#3ba55d}
+.reason-list{margin:0;padding:0;list-style:none;max-width:320px}
+.reason-list li{font-size:.85em;color:#dcddde;padding:3px 0;border-bottom:1px solid #1a1b1e}
+.reason-list li:last-child{border-bottom:none}
+.reason-list .meta{color:#72767d;font-size:.85em}
 .refresh-btn{background:#5865f2;color:#fff;border:none;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:.85em;margin-bottom:16px}
 .refresh-btn:hover{background:#4752c4}
 .section{margin-bottom:32px}
@@ -892,6 +915,18 @@ async function unbanIP(ip) {
   loadAll();
 }
 
+async function unbanReportedIP(ip) {
+  if (!confirm("Unban " + ip + "? This clears their report strikes back to 0.")) return;
+  await api("POST", R.unbanReported + "?ip=" + encodeURIComponent(ip));
+  setStatus("✅ Cleared report-ban for " + ip);
+  loadAll();
+}
+
+function reasonsHtml(reasons) {
+  if (!reasons || !reasons.length) return '<span style="color:#72767d">—</span>';
+  return '<ul class="reason-list">' + reasons.map(r => \`<li>\${esc(r.reason)}<br><span class="meta">by \${esc(r.by)} · \${new Date(r.timestamp).toLocaleString()}</span></li>\`).join("") + '</ul>';
+}
+
 async function manualBan() {
   const raw    = document.getElementById("manualIPs").value;
   const reason = document.getElementById("manualReason").value.trim();
@@ -955,12 +990,13 @@ async function loadAll() {
     const el = document.getElementById("reported");
     if (!d.reported || !d.reported.length) { el.innerHTML = '<p style="color:#72767d;font-size:.9em">No reported IPs right now</p>'; }
     else {
-      el.innerHTML = '<table><tr><th>IP</th><th>Reports</th><th>Ban expires in</th><th></th></tr>' +
+      el.innerHTML = '<table><tr><th>IP</th><th>Reports</th><th>Reasons</th><th>Ban expires in</th><th></th></tr>' +
         d.reported.map(r => \`<tr>
           <td style="font-family:monospace;color:#fff">\${esc(r.ip)}</td>
           <td><span style="color:#f23f42;font-weight:700">\${r.count}</span></td>
+          <td>\${reasonsHtml(r.reasons)}</td>
           <td style="color:#72767d">\${r.remainingHrs}h</td>
-          <td><button class="ban-btn" onclick="banIP('\${esc(r.ip)}')">Ban IP</button></td>
+          <td><button class="unban-btn" onclick="unbanReportedIP('\${esc(r.ip)}')">✅ Unban</button></td>
         </tr>\`).join("") + "</table>";
     }
   } catch(e) { document.getElementById("reported").textContent = "Error"; }
@@ -1535,6 +1571,10 @@ io.on("connection", (socket) => {
 
     if (!targetIP) return; // nothing to report
 
+    // A reason is required — reject silently if missing/empty (client UI enforces this too)
+    const cleanReason = (reason || "").trim().slice(0, 200);
+    if (!cleanReason) return;
+
     // Prevent double-reporting the same partner
     if (socket.hasReportedLast) return;
     socket.hasReportedLast = true;
@@ -1547,13 +1587,13 @@ io.on("connection", (socket) => {
       reportedBy:   socket.userName,
       reporterIP:   socket.clientIP,
       targetIP,
-      reason:       (reason || "").slice(0, 200),
+      reason:       cleanReason,
       timestamp:    new Date().toISOString(),
     };
     reportLog.push(entry);
     console.log("REPORT:", JSON.stringify(entry));
 
-    const justBanned = recordReport(socket.id, targetIP);
+    const justBanned = recordReport(socket.id, targetIP, cleanReason, socket.userName);
     if (justBanned) {
       // Kick the reported partner if still connected
       const target = socket.partner || (targetSocketId ? io.sockets.sockets.get(targetSocketId) : null);
