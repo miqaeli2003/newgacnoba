@@ -511,6 +511,30 @@ html, body {
   transform: scale(0.98);
 }
 
+.report-reason-textarea {
+  width: 100%;
+  min-height: 90px;
+  background: #1e1f22;
+  border: 1px solid #3a3c40;
+  border-radius: 8px;
+  color: #dcddde;
+  font-size: 0.95em;
+  font-family: inherit;
+  padding: 10px 12px;
+  resize: vertical;
+  outline: none;
+}
+
+.report-reason-textarea:focus {
+  border-color: #5865f2;
+}
+
+.report-reason-error {
+  color: #f23f42;
+  font-size: 0.82em;
+  margin: -8px 0 0;
+}
+
 /* ── Photo Fullscreen Modal ────────────────────────────────────────────── */
 .photo-fullscreen-modal {
   position: fixed;
