@@ -886,7 +886,71 @@ function showPhotoPermissionDialog(message, onApprove, onDecline) {
   document.body.appendChild(modal);
 }
 
-// ── Photo Confirmation Dialog ────────────────────────────────────────────────
+// ── Report Reason Modal ──────────────────────────────────────────────────────
+function showReportReasonModal(targetName, onSubmit) {
+  const modal = document.createElement("div");
+  modal.className = "photo-confirm-modal";
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "photo-confirm-backdrop";
+
+  const content = document.createElement("div");
+  content.className = "photo-confirm-content";
+
+  const title = document.createElement("p");
+  title.className = "photo-confirm-title";
+  title.textContent = `რატომ მოახსენებთ "${targetName}"-ს?`;
+
+  const textarea = document.createElement("textarea");
+  textarea.className = "report-reason-textarea";
+  textarea.placeholder = "მიუთითეთ მიზეზი (სავალდებულოა)...";
+  textarea.maxLength = 200;
+
+  const errorMsg = document.createElement("p");
+  errorMsg.className = "report-reason-error";
+  errorMsg.textContent = "გთხოვთ, მიუთითოთ მიზეზი.";
+  errorMsg.style.display = "none";
+
+  const buttonGroup = document.createElement("div");
+  buttonGroup.className = "photo-confirm-buttons";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "photo-confirm-btn cancel";
+  cancelBtn.textContent = "გაუქმება";
+  cancelBtn.onclick = () => modal.remove();
+
+  const confirmBtn = document.createElement("button");
+  confirmBtn.className = "photo-confirm-btn confirm";
+  confirmBtn.textContent = "🚩 გაგზავნა";
+  confirmBtn.onclick = () => {
+    const reason = textarea.value.trim();
+    if (reason.length < 3) {
+      errorMsg.style.display = "block";
+      textarea.focus();
+      return;
+    }
+    modal.remove();
+    onSubmit(reason);
+  };
+
+  textarea.addEventListener("input", () => { errorMsg.style.display = "none"; });
+
+  buttonGroup.appendChild(cancelBtn);
+  buttonGroup.appendChild(confirmBtn);
+
+  content.appendChild(title);
+  content.appendChild(textarea);
+  content.appendChild(errorMsg);
+  content.appendChild(buttonGroup);
+
+  backdrop.appendChild(content);
+  modal.appendChild(backdrop);
+
+  document.body.appendChild(modal);
+  setTimeout(() => textarea.focus(), 50);
+}
+
+
 function showPhotoConfirmation(dataUrl, onConfirm) {
   const modal = document.createElement("div");
   modal.className = "photo-confirm-modal";
@@ -1587,10 +1651,12 @@ socket.on("partnerDisconnected", (data) => {
     document.getElementById("reportOfferBtn").addEventListener("click", () => {
       const btn = document.getElementById("reportOfferBtn");
       if (!btn || btn.disabled) return;
-      btn.disabled = true;
-      btn.textContent = "✅ გაგზავნილია";
-      socket.emit("reportUser", { reason: "manual report (disconnect offer)" });
-      socket.emit("blockUser", { targetName: lastPartnerName });
+      showReportReasonModal(lastPartnerName, (reason) => {
+        btn.disabled = true;
+        btn.textContent = "✅ გაგზავნილია";
+        socket.emit("reportUser", { reason });
+        socket.emit("blockUser", { targetName: lastPartnerName });
+      });
     });
   } else {
     scheduleScroll();
@@ -1768,14 +1834,11 @@ reportBtn.addEventListener("click", () => {
   const targetName = partnerName || lastPartnerName;
   if (!partnerConnected && !canBlockDisconnected) return;
   if (!targetName) return;
-  const confirmed = confirm(
-    `მოახსენოთ "${targetName}"? გსურთ დარეპორტება?`
-  );
-  if (confirmed) {
-    socket.emit("reportUser", { reason: "manual report" });
+  showReportReasonModal(targetName, (reason) => {
+    socket.emit("reportUser", { reason });
     // Also block so they can't re-match
     socket.emit("blockUser", { targetName });
-  }
+  });
 });
 
 sendBtn.addEventListener("click", sendMessage);
