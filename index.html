@@ -24,7 +24,6 @@
 
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="games.css" />
-  <link rel="stylesheet" href="PRIVATE-MESSAGING.css" />
 </head>
 <body>
   <div class="top-bar">
@@ -35,7 +34,6 @@
       <div id="userNameDisplay" class="user-name-display" style="display:none"></div>
     </div>
     <div class="right-side">
-      <button class="profile-btn" id="profileBtn" style="display:none"><span class="btn-icon">👤</span><span class="btn-label">Profile</span></button>
       <button class="interests-btn" id="interestsBtn" style="display:none"><span class="btn-icon btn-icon--int">ინტ.</span><span class="btn-label">ინტ</span></button>
       <button class="change-name-btn" id="changeNameBtn"><span class="btn-icon">✏️</span><span class="btn-label">სახელის შეცვლა</span></button>
       <button class="report-button" id="reportBtn" disabled><span class="btn-icon">🚩</span><span class="btn-label">რეპორტი</span></button>
@@ -77,12 +75,6 @@
       </div>
       <button id="replyPreviewClose" class="reply-preview-close" title="Cancel reply">✕</button>
     </div>
-
-    <!-- Add Person Button (visible during logged-in random chat) -->
-    <div id="addPersonContainer" class="add-person-container" style="display:none">
-      <button id="addPersonBtn" class="add-person-btn" title="Add person as friend">➕ Add Person</button>
-    </div>
-
     <div class="chat-input-row">
       <textarea id="messageInput" placeholder="Type..."
              autocomplete="off" autocorrect="off" autocapitalize="sentences"
@@ -97,12 +89,13 @@
     </div>
   </div>
 
-  <!-- ── Entry Modal (Choose: Guest vs Account) ───────────────────────────────── -->
-  <div id="entryChoiceModal" class="modal">
+  <!-- ── Combined Entry Modal ───────────────────────────────────────────────── -->
+  <div id="nameModal" class="modal">
     <div class="modal-content">
+      <button id="nameModalClose" class="modal-close-btn" style="display:none" title="დახურვა">✕</button>
       <img src="/Logo2.png" alt="GAICANI" class="modal-logo" />
 
-      <!-- Welcome info block -->
+      <!-- ── Welcome info block ── -->
       <div class="modal-welcome">
         <p class="modal-welcome-title">👋 მოგესალმებით!</p>
         <p class="modal-welcome-desc">ამ საიტზე შეძლებთ შემთხვევით შერჩეულ უცნობ ადამიანს ესაუბროთ <strong>ანონიმურად</strong>.</p>
@@ -134,116 +127,22 @@
         </div>
       </div>
 
-      <div class="entry-choice-buttons">
-        <button id="guestBtn" class="entry-choice-btn guest-btn">
-          <span class="entry-btn-icon">👤</span>
-          <span class="entry-btn-label">Continue as Guest</span>
-          <span class="entry-btn-desc">Temporary, anonymous</span>
-        </button>
-        <button id="accountBtn" class="entry-choice-btn account-btn">
-          <span class="entry-btn-icon">⭐</span>
-          <span class="entry-btn-label">Sign Up / Log In</span>
-          <span class="entry-btn-desc">Permanent account with friends</span>
-        </button>
-      </div>
-
-      <p class="safety-age-confirm">
-        By continuing, you confirm you are <strong>18+</strong> and agree to
-        <a href="/terms.html" target="_blank" class="safety-link">Terms of Service</a>
-        and
-        <a href="/privacy.html" target="_blank" class="safety-link">Privacy Policy</a>.
-      </p>
-    </div>
-  </div>
-
-  <!-- ── Guest Name Modal ─────────────────────────────────────────────────────── -->
-  <div id="guestNameModal" class="modal">
-    <div class="modal-content">
-      <button id="guestNameModalClose" class="modal-close-btn" style="display:none" title="დახურვა">✕</button>
-      <img src="/Logo2.png" alt="GAICANI" class="modal-logo" />
-      
-      <p class="modal-subtitle">Enter your name (guest)</p>
-      <textarea id="guestNameInput" placeholder="შეიყვანეთ სახელი..."
+      <textarea id="nameInput" placeholder="შეიყვანეთ სახელი..."
                autocomplete="off" autocorrect="off" autocapitalize="sentences"
                spellcheck="false" inputmode="text" enterkeyhint="go"
                rows="1" maxlength="20"></textarea>
-      <div id="guestNameError" class="name-error"></div>
-      <button id="guestStartBtn">საუბრის დაწყება</button>
+      <div id="nameError" class="name-error"></div>
+      <p class="safety-age-confirm">
+        საუბრის დაწყებით ადასტურებთ რომ ხართ <strong>18+</strong> და ეთანხმებით
+        <a href="/terms.html" target="_blank" class="safety-link">Terms of Service</a>-ს
+        და
+        <a href="/privacy.html" target="_blank" class="safety-link">Privacy Policy</a>-ს.
+      </p>
+      <button id="saveNameBtn">საუბრის დაწყება</button>
     </div>
   </div>
 
-  <!-- ── Account Authentication Modal ────────────────────────────────────────────── -->
-  <div id="accountModal" class="modal">
-    <div class="modal-content">
-      <button id="accountModalClose" class="modal-close-btn" style="display:none" title="დახურვა">✕</button>
-      <img src="/Logo2.png" alt="GAICANI" class="modal-logo" />
-      
-      <div id="accountLoginForm" style="display:none">
-        <p class="modal-subtitle">Log In to Your Account</p>
-        <input type="text" id="loginUsername" placeholder="Username" maxlength="20" autocomplete="username" />
-        <input type="password" id="loginPassword" placeholder="Password" maxlength="100" autocomplete="current-password" />
-        <div id="loginError" class="name-error"></div>
-        <button id="loginBtn" class="account-submit-btn">Log In</button>
-        <p class="account-switch-link">
-          Don't have an account? <button type="button" id="switchToSignupBtn" class="link-btn">Sign Up</button>
-        </p>
-      </div>
-
-      <div id="accountSignupForm">
-        <p class="modal-subtitle">Create Your Account</p>
-        <input type="text" id="signupUsername" placeholder="Username (2-20 chars)" maxlength="20" autocomplete="username" />
-        <input type="password" id="signupPassword" placeholder="Password (min 6 chars)" maxlength="100" autocomplete="new-password" />
-        <input type="password" id="signupPasswordConfirm" placeholder="Confirm Password" maxlength="100" autocomplete="new-password" />
-        <div id="signupError" class="name-error"></div>
-        <button id="signupBtn" class="account-submit-btn">Sign Up</button>
-        <p class="account-switch-link">
-          Already have an account? <button type="button" id="switchToLoginBtn" class="link-btn">Log In</button>
-        </p>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── User Profile/Dashboard Modal ────────────────────────────────────────────── -->
-  <div id="userDashboardModal" class="modal" style="display:none">
-    <div class="modal-content">
-      <button id="dashboardCloseBtn" class="modal-close-btn" title="დახურვა">✕</button>
-      <img src="/Logo2.png" alt="GAICANI" class="modal-logo" />
-      
-      <p class="modal-subtitle" id="dashboardUsername"></p>
-      
-      <div class="dashboard-section">
-        <h3>🎮 Start Chat</h3>
-        <button id="startChatBtn" class="dashboard-btn">Start Chat With Strangers</button>
-      </div>
-
-      <div class="dashboard-section">
-        <h3>👥 Added People</h3>
-        <div id="addedPeopleList" class="added-people-list">
-          <p class="empty-message">No friends added yet</p>
-        </div>
-      </div>
-
-      <div class="dashboard-section">
-        <h3>📬 Friend Requests</h3>
-        <div id="friendRequestsList" class="friend-requests-list">
-          <p class="empty-message">No friend requests</p>
-        </div>
-      </div>
-
-      <button id="logoutBtn" class="logout-btn">Log Out</button>
-    </div>
-  </div>
-
-  <!-- ── Friend Request Notification ─────────────────────────────────────────────── -->
-  <div id="friendRequestNotification" class="friend-request-notification" style="display:none">
-    <p id="friendRequestText"></p>
-    <div class="friend-request-actions">
-      <button id="acceptFriendBtn" class="friend-action-btn accept-btn">Accept</button>
-      <button id="declineFriendBtn" class="friend-action-btn decline-btn">Decline</button>
-    </div>
-  </div>
-
-  <!-- ── Bio / Interests Popup ──────────────────────────────────────────────────── -->
+  <!-- ── Bio / Interests Popup ──────────────────────────────────────────────── -->
   <div id="bioPopup" class="bio-popup" style="display:none">
     <div class="bio-popup-content">
       <button id="bioCloseBtn" class="bio-popup-close" title="დახურვა">✕</button>
@@ -260,52 +159,8 @@
     </div>
   </div>
 
-  <!-- ── Legacy name modal (kept for backward compatibility during transitions) ──── -->
-  <div id="nameModal" class="modal" style="display:none">
-    <div class="modal-content">
-      <button id="nameModalClose" class="modal-close-btn" style="display:none" title="დახურვა">✕</button>
-      <img src="/Logo2.png" alt="GAICANI" class="modal-logo" />
-
-      <div class="modal-welcome">
-        <p class="modal-welcome-title">👋 მოგესალმებით!</p>
-        <p class="modal-welcome-desc">ამ საიტზე შეძლებთ შემთხვევით შერჩეულ უცნობ ადამიანს ესაუბროთ <strong>ანონიმურად</strong>.</p>
-      </div>
-
-      <textarea id="nameInput" placeholder="შეიყვანეთ სახელი..."
-               autocomplete="off" autocorrect="off" autocapitalize="sentences"
-               spellcheck="false" inputmode="text" enterkeyhint="go"
-               rows="1" maxlength="20"></textarea>
-      <div id="nameError" class="name-error"></div>
-      <p class="safety-age-confirm">
-        საუბრის დაწყებით ადასტურებთ რომ ხართ <strong>18+</strong> და ეთანხმებით
-        <a href="/terms.html" target="_blank" class="safety-link">Terms of Service</a>-ს
-        და
-        <a href="/privacy.html" target="_blank" class="safety-link">Privacy Policy</a>-ს.
-      </p>
-      <button id="saveNameBtn">საუბრის დაწყება</button>
-    </div>
-  </div>
-
-  <!-- ── Private Chat Modal ────────────────────────────────────────────────── -->
-  <div id="privateChatModal">
-    <div class="private-chat-window">
-      <div class="private-chat-header">
-        <h3 id="privateChatTitle">Private Chat</h3>
-        <span class="message-timer" id="privateChatTimer"></span>
-        <button class="modal-close-btn" id="privateChatClose" title="Close">✕</button>
-      </div>
-      <div class="private-chat-expiry-notice">⏳ Messages auto-delete after 12 hours</div>
-      <div id="privateChatMessagesArea"></div>
-      <div class="private-chat-input-area">
-        <textarea id="privateChatInput" placeholder="Type a message..." rows="1" maxlength="2000"></textarea>
-        <button class="private-chat-send" id="privateChatSend">Send</button>
-      </div>
-    </div>
-  </div>
-
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
   <script src="games.js"></script>
-  <script src="PRIVATE-MESSAGING.js"></script>
 </body>
 </html>
