@@ -2,29 +2,16 @@ const socket = io();
 window.socket = socket;
 
 // ── Bot Detection + Challenge Token ──────────────────────────────────────────
-// Runs silently on page load. Checks for Selenium/WebDriver/headless signals.
-// If detected: token is never fetched → setName fails → bot disconnected.
-
 let _challengeToken  = null;
-let _challengePow    = null; // computed proof-of-work answer
+let _challengePow    = null;
 let _isBotDetected   = false;
 
 function _detectBot() {
   try {
-    // #1 — navigator.webdriver is TRUE in ALL WebDriver sessions
-    //      (Selenium, Playwright, Puppeteer default mode). This is spec-mandated.
     if (navigator.webdriver === true) return true;
-
-    // #2 — No plugins: headless Chrome / most bots have zero plugins
     if (!navigator.plugins || navigator.plugins.length === 0) return true;
-
-    // #3 — No language list: automation tools often skip this
     if (!navigator.languages || navigator.languages.length === 0) return true;
-
-    // #4 — Real Chrome always has window.chrome; modified/headless builds don't
     if (/Chrome/.test(navigator.userAgent) && !window.chrome) return true;
-
-    // #5 — Selenium leaves traces in window properties
     if ('__webdriver_evaluate'        in window) return true;
     if ('__selenium_evaluate'         in window) return true;
     if ('__webdriver_script_function' in window) return true;
@@ -34,25 +21,67 @@ function _detectBot() {
     if ('__nightmare'                 in window) return true;
     if ('domAutomation'               in window) return true;
     if ('domAutomationController'     in window) return true;
-
     return false;
   } catch {
-    return true; // if the check itself throws, treat as bot
+    return true;
   }
 }
 
 _isBotDetected = _detectBot();
 
 if (!_isBotDetected) {
-  // Fetch challenge token and compute proof-of-work
   fetch("/api/challenge")
     .then(r => r.json())
     .then(d => {
       _challengeToken = d.token;
-      // POW: same formula as server expects — (nonce * 31 + nonce % 97)
       _challengePow   = (d.nonce * 31 + d.nonce % 97);
     })
     .catch(() => {});
+}
+
+// ── Account/Authentication State ──────────────────────────────────────────────
+let isLoggedIn        = false;
+let loggedInUsername  = "";
+let addedPeople       = [];
+let friendRequests    = [];
+let currentPartnerUsername = "";
+
+// Load account info from localStorage
+function loadAccountInfo() {
+  try {
+    const stored = localStorage.getItem("gaicani_account");
+    if (stored) {
+      const account = JSON.parse(stored);
+      isLoggedIn = true;
+      loggedInUsername = account.username;
+      return true;
+    }
+  } catch (e) {
+    console.error("Failed to load account info:", e);
+  }
+  return false;
+}
+
+function saveAccountInfo(username) {
+  try {
+    localStorage.setItem("gaicani_account", JSON.stringify({ username }));
+    isLoggedIn = true;
+    loggedInUsername = username;
+  } catch (e) {
+    console.error("Failed to save account info:", e);
+  }
+}
+
+function clearAccountInfo() {
+  try {
+    localStorage.removeItem("gaicani_account");
+    isLoggedIn = false;
+    loggedInUsername = "";
+    addedPeople = [];
+    friendRequests = [];
+  } catch (e) {
+    console.error("Failed to clear account info:", e);
+  }
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -72,12 +101,10 @@ let gifFetchController  = null;
 let gifSearchTimer      = null;
 let gifPickerOpen       = false;
 let unreadCount         = 0;
-let replyTo             = null;   // { text, senderName, messageId }
-let lastPartnerName     = "";     // remember partner name after disconnect for blocking
-let canBlockDisconnected = false; // allow blocking a partner who just left
+let replyTo             = null;
+let lastPartnerName     = "";
+let canBlockDisconnected = false;
 const originalTitle     = document.title;
-
-// Tab-away feature intentionally disabled — nothing happens when partner hides tab
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const chat           = document.getElementById("chat");
@@ -112,6 +139,50 @@ const replyPreviewName = document.getElementById("replyPreviewName");
 const replyPreviewText = document.getElementById("replyPreviewText");
 const replyPreviewClose = document.getElementById("replyPreviewClose");
 
+// New entry/auth modal elements
+const entryChoiceModal = document.getElementById("entryChoiceModal");
+const guestBtn = document.getElementById("guestBtn");
+const accountBtn = document.getElementById("accountBtn");
+
+const guestNameModal = document.getElementById("guestNameModal");
+const guestNameInput = document.getElementById("guestNameInput");
+const guestStartBtn = document.getElementById("guestStartBtn");
+const guestNameError = document.getElementById("guestNameError");
+
+const accountModal = document.getElementById("accountModal");
+const accountLoginForm = document.getElementById("accountLoginForm");
+const accountSignupForm = document.getElementById("accountSignupForm");
+const loginUsername = document.getElementById("loginUsername");
+const loginPassword = document.getElementById("loginPassword");
+const loginBtn = document.getElementById("loginBtn");
+const loginError = document.getElementById("loginError");
+const signupUsername = document.getElementById("signupUsername");
+const signupPassword = document.getElementById("signupPassword");
+const signupPasswordConfirm = document.getElementById("signupPasswordConfirm");
+const signupBtn = document.getElementById("signupBtn");
+const signupError = document.getElementById("signupError");
+const switchToSignupBtn = document.getElementById("switchToSignupBtn");
+const switchToLoginBtn = document.getElementById("switchToLoginBtn");
+const accountModalClose = document.getElementById("accountModalClose");
+
+const userDashboardModal = document.getElementById("userDashboardModal");
+const dashboardUsername = document.getElementById("dashboardUsername");
+const startChatBtn = document.getElementById("startChatBtn");
+const addedPeopleList = document.getElementById("addedPeopleList");
+const friendRequestsList = document.getElementById("friendRequestsList");
+const logoutBtn = document.getElementById("logoutBtn");
+const dashboardCloseBtn = document.getElementById("dashboardCloseBtn");
+
+const profileBtn = document.getElementById("profileBtn");
+
+const addPersonContainer = document.getElementById("addPersonContainer");
+const addPersonBtn = document.getElementById("addPersonBtn");
+
+const friendRequestNotification = document.getElementById("friendRequestNotification");
+const friendRequestText = document.getElementById("friendRequestText");
+const acceptFriendBtn = document.getElementById("acceptFriendBtn");
+const declineFriendBtn = document.getElementById("declineFriendBtn");
+
 // ── Sound ─────────────────────────────────────────────────────────────────────
 let _audioCtx = null;
 
@@ -142,7 +213,7 @@ function playTone(freq, duration = 0.2, volume = 0.07) {
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + duration);
-  } catch (_) { /* audio not supported */ }
+  } catch (_) { }
 }
 
 function playNotification(type) {
@@ -161,13 +232,11 @@ function incrementUnread() {
   }
 }
 
-// ── Tab visibility — reset unread badge + reconnect on foreground ─────────────
+// ── Tab visibility ────────────────────────────────────────────────────────────
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) {
     unreadCount    = 0;
     document.title = originalTitle;
-
-    // If socket dropped while backgrounded, kick it to reconnect immediately
     if (!socket.connected && userName) {
       socket.connect();
     }
@@ -220,9 +289,7 @@ function removeReconnectingMessage()       { document.getElementById("reconnecti
 
 // ── Searching message with random fact ───────────────────────────────────────
 function addSearchingMessage() {
-  // Remove any existing searching block
   document.getElementById("searchingMsg")?.remove();
-  // Ensure inputs are disabled while searching so user can't type into a non-existent chat
   setInputsEnabled(false);
 
   const wrapper     = document.createElement("div");
@@ -234,7 +301,6 @@ function addSearchingMessage() {
   searchText.textContent = "ვეძებთ ახალ პარტნიორს... 🔎";
   wrapper.appendChild(searchText);
 
-  // Fact card
   const factCard       = document.createElement("div");
   factCard.className   = "fact-card";
 
@@ -246,7 +312,6 @@ function addSearchingMessage() {
   factText.className   = "fact-text";
   factText.textContent = "...";
 
-  // Arrow button — bottom-right corner
   const nextFactBtn       = document.createElement("button");
   nextFactBtn.className   = "fact-next-btn";
   nextFactBtn.title       = "სხვა ფაქტი";
@@ -271,7 +336,6 @@ function addSearchingMessage() {
       .then(r => r.json())
       .then(data => {
         if (data.fact) {
-          // Fade out → swap text → fade in
           factText.style.transition = "opacity 0.15s";
           factText.style.opacity    = "0";
           setTimeout(() => {
@@ -288,1723 +352,696 @@ function addSearchingMessage() {
       });
   }
 
-  // Load initial fact
   loadFact();
-
-  // Arrow click → load next fact
   nextFactBtn.addEventListener("click", loadFact);
 }
 
 function addMessage(text, isYou, messageId, replyToData) {
   const id = messageId || generateMsgId();
+  const msgEl = document.createElement("div");
+  msgEl.className = isYou ? "message-you" : "message-partner";
+  msgEl.id = id;
 
-  const wrapper         = document.createElement("div");
-  wrapper.className     = `message-wrapper ${isYou ? "you" : "partner"}`;
-  wrapper.dataset.messageId = id;
+  const wrap = document.createElement("div");
+  wrap.className = "message-wrap";
 
-  // ── Reply quote block ────────────────────────────────────────────────────
-  if (replyToData && replyToData.text) {
-    const quote       = document.createElement("div");
-    quote.className   = `reply-quote ${isYou ? "you" : "partner"}`;
-
-    if (replyToData.senderName) {
-      const quoteName       = document.createElement("span");
-      quoteName.className   = "reply-quote-name";
-      quoteName.textContent = replyToData.senderName;
-      quote.appendChild(quoteName);
-    }
-
-    const quoteText       = document.createElement("span");
-    quoteText.className   = "reply-quote-text";
-    const raw = replyToData.text;
-    quoteText.textContent = raw.length > 80 ? raw.slice(0, 80) + "…" : raw;
-
-    quote.appendChild(quoteText);
-    wrapper.appendChild(quote);
+  if (replyToData) {
+    const replyEl = document.createElement("div");
+    replyEl.className = "message-reply-ref";
+    const nameEl = document.createElement("strong");
+    nameEl.textContent = replyToData.senderName;
+    const textEl = document.createElement("span");
+    textEl.textContent = replyToData.text || "(image)";
+    replyEl.appendChild(nameEl);
+    replyEl.appendChild(textEl);
+    wrap.appendChild(replyEl);
   }
 
-  const msgRow      = document.createElement("div");
-  msgRow.className  = "message-row";
+  const body = document.createElement("div");
+  body.className = "message-body";
 
-  const content     = document.createElement("div");
-  content.className = `message-content${isYou ? " you" : ""}`;
-  content.textContent = text;
+  const content = document.createElement("div");
+  content.className = "message-content";
+  
+  // Handle images
+  if (text.startsWith("data:image") || text.startsWith("blob:")) {
+    const img = document.createElement("img");
+    img.src = text;
+    img.className = "message-image";
+    img.style.maxWidth = "200px";
+    img.style.borderRadius = "8px";
+    content.appendChild(img);
+  } else {
+    content.textContent = text;
+  }
+  
+  body.appendChild(content);
 
-  const timestamp       = document.createElement("div");
-  timestamp.className   = "timestamp inline-ts";
-  timestamp.textContent = formatTimestamp(new Date());
+  const timeEl = document.createElement("div");
+  timeEl.className = "message-time";
+  timeEl.textContent = formatTimestamp(new Date());
+  body.appendChild(timeEl);
 
-  // ── Reply button ──────────────────────────────────────────────────────────
-  const replyBtn     = document.createElement("button");
-  replyBtn.className = "reply-btn";
-  replyBtn.innerHTML = "↩";
-  replyBtn.title     = "Reply";
-  replyBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    setReplyTo({
-      text,
-      senderName: isYou ? userName : (partnerName || "Partner"),
-      messageId: id,
-    });
+  wrap.appendChild(body);
+
+  const btns = document.createElement("div");
+  btns.className = "message-buttons";
+  
+  const replyBtn = document.createElement("button");
+  replyBtn.className = "msg-btn";
+  replyBtn.textContent = "↩";
+  replyBtn.title = "Reply";
+  replyBtn.addEventListener("click", () => {
+    const senderName = isYou ? userName : partnerName;
+    setReply(id, text.substring(0, 50), senderName);
   });
+  btns.appendChild(replyBtn);
 
-  if (isYou) {
-    // You: [reply-btn]  [timestamp]  [bubble]
-    msgRow.appendChild(replyBtn);
-    msgRow.appendChild(timestamp);
-    msgRow.appendChild(content);
+  wrap.appendChild(btns);
+  msgEl.appendChild(wrap);
+  chat.appendChild(msgEl);
+  scheduleScroll();
+}
+
+// ── Add Person Feature ───────────────────────────────────────────────────────
+function showAddPersonButton() {
+  if (isLoggedIn && partnerConnected) {
+    addPersonContainer.style.display = "block";
+  }
+}
+
+function hideAddPersonButton() {
+  addPersonContainer.style.display = "none";
+}
+
+// ── Authentication UI Handlers ───────────────────────────────────────────────
+
+function showEntryChoiceModal() {
+  entryChoiceModal.style.display = "flex";
+  guestNameModal.style.display = "none";
+  accountModal.style.display = "none";
+  userDashboardModal.style.display = "none";
+}
+
+function showGuestNameModal() {
+  entryChoiceModal.style.display = "none";
+  guestNameModal.style.display = "flex";
+  guestNameError.textContent = "";
+  guestNameInput.value = "";
+  setTimeout(() => guestNameInput.focus(), 100);
+}
+
+function showAccountModal() {
+  entryChoiceModal.style.display = "none";
+  accountModal.style.display = "flex";
+  accountLoginForm.style.display = "block";
+  accountSignupForm.style.display = "none";
+  loginError.textContent = "";
+  loginUsername.value = "";
+  loginPassword.value = "";
+  setTimeout(() => loginUsername.focus(), 100);
+}
+
+function showDashboard() {
+  entryChoiceModal.style.display = "none";
+  guestNameModal.style.display = "none";
+  accountModal.style.display = "none";
+  userDashboardModal.style.display = "flex";
+  dashboardUsername.textContent = `Welcome, ${loggedInUsername}`;
+  updateDashboard();
+}
+
+function updateDashboard() {
+  // Update added people list
+  if (addedPeople.length === 0) {
+    addedPeopleList.innerHTML = '<p class="empty-message">No friends added yet</p>';
   } else {
-    // Partner: [bubble]  [react-btn]  [reply-btn]  [timestamp]
-    const reactBtn     = document.createElement("button");
-    reactBtn.className = "react-btn";
-    reactBtn.innerHTML = "🙂";
-    reactBtn.title     = "React";
-    reactBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      showReactionPicker(reactBtn, id);
-    });
-    msgRow.appendChild(content);
-    msgRow.appendChild(reactBtn);
-    msgRow.appendChild(replyBtn);
-    msgRow.appendChild(timestamp);
+    addedPeopleList.innerHTML = addedPeople.map(person => `
+      <div class="added-person-item">
+        <span class="person-name">${person}</span>
+      </div>
+    `).join("");
   }
 
-  const reactionArea    = document.createElement("div");
-  reactionArea.className = "reaction-area";
-  reactionArea.id       = `reactions_${id}`;
-
-  wrapper.appendChild(msgRow);
-  wrapper.appendChild(reactionArea);
-
-  // Seen indicator — only for messages you sent
-  if (isYou) {
-    const seen       = document.createElement("div");
-    seen.className   = "seen-status";
-    seen.id          = `seen_${id}`;
-    seen.textContent = "✓";
-    wrapper.appendChild(seen);
-  }
-
-  chat.appendChild(wrapper);
-  scheduleScroll();
-  return id;
-}
-
-function addGifMessage(gifUrl, isYou) {
-  const wrapper     = document.createElement("div");
-  wrapper.className = `message-wrapper gif-msg-wrapper ${isYou ? "you" : "partner"}`;
-
-  const img       = document.createElement("img");
-  img.src         = gifUrl;
-  img.className   = "gif-message-img";
-  img.loading     = "lazy";
-  img.decoding    = "async";
-
-  const timestamp       = document.createElement("div");
-  timestamp.className   = "timestamp";
-  timestamp.textContent = formatTimestamp(new Date());
-
-  wrapper.appendChild(img);
-  wrapper.appendChild(timestamp);
-  chat.appendChild(wrapper);
-  scheduleScroll();
-}
-
-// ── Photo message ────────────────────────────────────────────────────────────
-function addPhotoMessage(dataUrl, isYou) {
-  const wrapper     = document.createElement("div");
-  wrapper.className = `message-wrapper photo-msg-wrapper ${isYou ? "you" : "partner"}`;
-
-  const inner       = document.createElement("div");
-  inner.className   = "photo-wrapper-inner";
-
-  const img         = document.createElement("img");
-  img.src           = dataUrl;
-  img.className     = "photo-message-img" + (isYou ? "" : " blurred");
-  img.loading       = "lazy";
-  img.decoding      = "async";
-
-  inner.appendChild(img);
-
-  if (!isYou) {
-    const overlay   = document.createElement("div");
-    overlay.className = "photo-blur-overlay";
-    const hint      = document.createElement("span");
-    
-    hint.textContent = "👁 სანახავად დააჭირე";
-    overlay.appendChild(hint);
-    inner.appendChild(overlay);
-
-    let isUnblurred = false;
-
-    img.addEventListener("click", () => {
-      if (!isUnblurred) {
-        // First click: Unblur the image in chat
-        img.classList.remove("blurred");
-        overlay.remove();
-        isUnblurred = true;
-        // Update hint to show fullscreen is available
-        const newHint = document.createElement("span");
-        newHint.className = "photo-blur-hint";
-        inner.appendChild(newHint);
-      } else {
-        // Second click: Open fullscreen
-        showPhotoFullscreen(dataUrl);
-      }
-    });
+  // Update friend requests list
+  if (friendRequests.length === 0) {
+    friendRequestsList.innerHTML = '<p class="empty-message">No friend requests</p>';
   } else {
-    // Your own photos open fullscreen directly
-    img.addEventListener("click", () => {
-      showPhotoFullscreen(dataUrl);
-    });
-  }
-
-  const timestamp       = document.createElement("div");
-  timestamp.className   = "timestamp";
-  timestamp.textContent = formatTimestamp(new Date());
-
-  wrapper.appendChild(inner);
-  wrapper.appendChild(timestamp);
-  chat.appendChild(wrapper);
-  scheduleScroll();
-}
-
-// ── Question card ─────────────────────────────────────────────────────────────
-function addQuestionCard(questionText, isYou) {
-  const card       = document.createElement("div");
-  card.className   = `question-card ${isYou ? "you" : "partner"}`;
-
-  const label      = document.createElement("div");
-  label.className  = "question-card-label";
-  label.textContent = isYou ? "❓ შენ გამოგზავნე კითხვა" : `❓ ${partnerName || "პარტნიორი"} გიგზავნის კითხვას`;
-
-  const text       = document.createElement("div");
-  text.className   = "question-card-text";
-  text.textContent = questionText;
-
-  const ts         = document.createElement("div");
-  ts.className     = "timestamp";
-  ts.textContent   = formatTimestamp(new Date());
-
-  card.appendChild(label);
-  card.appendChild(text);
-  card.appendChild(ts);
-  chat.appendChild(card);
-  scheduleScroll();
-}
-
-// ── Typing indicator (fixed overlay — Instagram style) ────────────────────────
-// The element lives in the HTML outside the chat scroll area so it never
-// appears between messages. We just show/hide it and update its bottom offset.
-
-function updateTypingIndicatorPosition() {
-  const kbH = getKeyboardHeight();
-  const bottom = kbH + chatInputBar.offsetHeight + 8;
-  document.documentElement.style.setProperty("--typing-bottom", bottom + "px");
-}
-
-function showTypingIndicator() {
-  const el = document.getElementById("typingIndicator");
-  if (!el) return;
-  el.style.display = "flex";
-  updateTypingIndicatorPosition();
-  // Add indicator height on top of the existing input-bar padding so the
-  // last message is never hidden behind the dots
-  chat.style.paddingBottom = "calc(72px + env(safe-area-inset-bottom, 0px) + 56px)";
-  scheduleScroll();
-}
-
-function hideTypingIndicator() {
-  const el = document.getElementById("typingIndicator");
-  if (el) el.style.display = "none";
-  // Restore normal padding
-  chat.style.paddingBottom = "";
-}
-
-function clearChat() { chat.innerHTML = ""; clearReply(); }
-
-// Stub — countdown was removed but the call site still references this
-function clearPartnerAwayCountdown() {}
-
-function updateOnlineCount(count) {
-  onlineCountEl.textContent = `Users: ${count + 30}`;
-}
-
-// ── Reply helpers ──────────────────────────────────────────────────────────────
-function setReplyTo({ text, senderName, messageId }) {
-  replyTo = { text, senderName, messageId };
-  replyPreviewName.textContent = senderName;
-  replyPreviewText.textContent = text.length > 80 ? text.slice(0, 80) + "…" : text;
-  replyPreview.style.display = "flex";
-  messageInput.focus();
-}
-
-function clearReply() {
-  replyTo = null;
-  replyPreview.style.display = "none";
-  replyPreviewName.textContent = "";
-  replyPreviewText.textContent = "";
-}
-
-replyPreviewClose.addEventListener("click", () => clearReply());
-
-function setInputsEnabled(enabled) {
-  messageInput.disabled   = !enabled;
-  messageInput.readOnly   = !enabled;
-  messageInput.style.pointerEvents = enabled ? "" : "none";
-  sendBtn.disabled        = !enabled;
-  gifBtn.disabled         = !enabled;
-  if (photoBtn) photoBtn.disabled = !enabled;
-  questionBtn.disabled    = !enabled;
-  if (!enabled) {
-    // Clear any text typed during a race (e.g. keyboard still open while searching)
-    messageInput.value = "";
-    messageInput.style.height = "auto";
-    charCount.textContent = "";
-    charCount.classList.remove("warning");
-    messageInput.blur();
-  }
-  // blockBtn is managed separately via updateBlockBtn()
-}
-
-// Block button is enabled when chatting OR when partner just left normally.
-// Report button is enabled when chatting OR when partner just disconnected.
-// It stays disabled during the reconnecting grace-period.
-function updateBlockBtn() {
-  blockBtn.disabled  = !(partnerConnected || canBlockDisconnected);
-  if (reportBtn) reportBtn.disabled = !(partnerConnected || canBlockDisconnected);
-}
-
-function setPartnerNameDisplay(name) {
-  const el = document.getElementById("partnerNameDisplay");
-  if (!el) return;
-  if (name) {
-    el.textContent = `👤 ${name}`;
-    el.style.opacity = "1";
-    el.style.color = "";
-  } else {
-    el.textContent = "👤 ---";
-    el.style.opacity = "0.25";
+    friendRequestsList.innerHTML = friendRequests.map(req => `
+      <div class="friend-request-item">
+        <span class="request-name">${req.from}</span>
+        <div class="request-actions">
+          <button class="action-btn accept" onclick="acceptFriendRequest('${req.from}')">✓</button>
+          <button class="action-btn decline" onclick="declineFriendRequest('${req.from}')">✕</button>
+        </div>
+      </div>
+    `).join("");
   }
 }
 
-function showNameError(msg) {
-  nameError.textContent   = msg;
-  nameError.style.display = "block";
-  nameInput.classList.add("error");
-}
-
-function clearNameError() {
-  nameError.textContent   = "";
-  nameError.style.display = "none";
-  nameInput.classList.remove("error");
-}
-
-// ── Toast popup — used for name-change confirmation ───────────────────────────
-function showToast(text, duration = 3000) {
-  document.querySelectorAll(".toast-popup").forEach(t => t.remove());
-  const toast       = document.createElement("div");
-  toast.className   = "toast-popup";
-  toast.textContent = text;
-  document.body.appendChild(toast);
-  requestAnimationFrame(() => toast.classList.add("toast-visible"));
-  setTimeout(() => {
-    toast.classList.remove("toast-visible");
-    setTimeout(() => toast.remove(), 350);
-  }, duration);
-}
-
-// ── Search retry ──────────────────────────────────────────────────────────────
-function startSearchRetry() {
-  stopSearchRetry();
-  searchRetryInterval = setInterval(() => {
-    // Double-check both flags before re-emitting — partnerFound can arrive
-    // between ticks and set partnerConnected=true; we must not clobber that.
-    if (!partnerConnected && !isReconnecting && userName) {
-      socket.emit("findPartner");
-    } else if (partnerConnected) {
-      // Already matched — clean up the interval immediately
-      stopSearchRetry();
-    }
-  }, 2000);
-}
-
-function stopSearchRetry() {
-  if (searchRetryInterval !== null) {
-    clearInterval(searchRetryInterval);
-    searchRetryInterval = null;
+// API Handlers for Account System
+async function handleGuestStart() {
+  const name = guestNameInput.value.trim();
+  if (!name) {
+    guestNameError.textContent = "Please enter a name";
+    return;
   }
+  if (name.length < 2 || name.length > 20) {
+    guestNameError.textContent = "Name must be 2-20 characters";
+    return;
+  }
+  
+  userName = name;
+  guestNameModal.style.display = "none";
+  emitSetName(name, false);
 }
 
-// ── GIF Picker ────────────────────────────────────────────────────────────────
-const TENOR_PROXY = "/api/gifs"; // key stays on the server
+async function handleSignup() {
+  const username = signupUsername.value.trim();
+  const password = signupPassword.value;
+  const confirm = signupPasswordConfirm.value;
 
-async function fetchGifs(query) {
-  if (gifFetchController) gifFetchController.abort();
-  gifFetchController = new AbortController();
-  gifResults.innerHTML = '<div class="gif-placeholder">Loading...</div>';
+  signupError.textContent = "";
+
+  if (!username || !password || !confirm) {
+    signupError.textContent = "All fields required";
+    return;
+  }
+  if (username.length < 2 || username.length > 20) {
+    signupError.textContent = "Username must be 2-20 characters";
+    return;
+  }
+  if (password.length < 6) {
+    signupError.textContent = "Password must be at least 6 characters";
+    return;
+  }
+  if (password !== confirm) {
+    signupError.textContent = "Passwords do not match";
+    return;
+  }
 
   try {
-    const url  = query ? `${TENOR_PROXY}?q=${encodeURIComponent(query)}` : TENOR_PROXY;
-    const res  = await fetch(url, { signal: gifFetchController.signal });
+    const res = await fetch("/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password })
+    });
     const data = await res.json();
-    renderGifResults(data.results || []);
+    if (!res.ok) {
+      signupError.textContent = data.error || "Signup failed";
+      return;
+    }
+    saveAccountInfo(username);
+    userName = username;
+    accountModal.style.display = "none";
+    showDashboard();
   } catch (err) {
-    if (err.name !== "AbortError") {
-      gifResults.innerHTML = '<div class="gif-placeholder">Failed to load GIFs 😢</div>';
-    }
-  } finally {
-    gifFetchController = null;
+    signupError.textContent = "Network error";
   }
 }
 
-function renderGifResults(results) {
-  const frag = document.createDocumentFragment();
-  if (!results.length) {
-    const ph = document.createElement("div");
-    ph.className = "gif-placeholder";
-    ph.textContent = "No GIFs found";
-    gifResults.innerHTML = "";
-    gifResults.appendChild(ph);
+async function handleLogin() {
+  const username = loginUsername.value.trim();
+  const password = loginPassword.value;
+
+  loginError.textContent = "";
+
+  if (!username || !password) {
+    loginError.textContent = "All fields required";
     return;
   }
-  const col1 = document.createElement("div");
-  const col2 = document.createElement("div");
-  col1.className = "gif-col";
-  col2.className = "gif-col";
-  results.forEach((result, i) => {
-    const media      = result.media[0];
-    const previewUrl = media.tinygif?.url || media.gif?.url;
-    const fullUrl    = media.gif?.url;
-    if (!previewUrl || !fullUrl) return;
-    const img        = document.createElement("img");
-    img.src          = previewUrl;
-    img.className    = "gif-item";
-    img.loading      = "lazy";
-    img.decoding     = "async";
-    img.addEventListener("click", () => sendGif(fullUrl, previewUrl));
-    (i % 2 === 0 ? col1 : col2).appendChild(img);
-  });
-  frag.appendChild(col1);
-  frag.appendChild(col2);
-  gifResults.innerHTML = "";
-  gifResults.appendChild(frag);
-}
-
-// ── Visual Viewport — drives BOTH the input bar and GIF picker ────────────────
-// On iOS Safari the keyboard (+ its accessory bar) shrinks the visual viewport
-// but NOT the layout viewport, so position:fixed elements stay hidden behind it.
-// We read the gap and push everything up by exactly that amount — the same trick
-// Instagram uses so their input sits flush above the keyboard with no extra bar.
-const chatInputBar = document.querySelector(".chat-input");
-
-function getKeyboardHeight() {
-  if (!window.visualViewport) return 0;
-  const vv = window.visualViewport;
-  return Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-}
-
-function updateViewportOffsets() {
-  const vv  = window.visualViewport;
-  const kbH = getKeyboardHeight();
-
-  // ── iOS Safari: use the actual visual-viewport height to clamp the body ──
-  // This prevents the layout from overflowing when the address bar is visible.
-  document.body.style.height = kbH > 0 ? vv.height + "px" : "";
-
-  // Toggle a class so CSS can zoom out messages slightly when keyboard is open.
-  // Use a small threshold (> 80) to avoid triggering on iOS toolbar-resize jitter.
-  document.body.classList.toggle("keyboard-open", kbH > 80);
-
-  // Input bar is position:fixed (layout-viewport coords) so it needs shifting
-  // up by the full keyboard height (Safari accessory bar included).
-  // When keyboard is closed, reset to 0 so CSS env(safe-area-inset-bottom) takes over.
-  chatInputBar.style.bottom     = kbH > 0 ? kbH + "px" : "";
-  chatInputBar.style.transition = kbH === 0 ? "bottom 0.22s ease" : "none";
-
-  // GIF picker: bottom sheet sits flush above keyboard
-  if (gifPickerOpen) {
-    gifPicker.style.bottom = kbH + "px";
-  }
-
-  // Pin scroll to bottom whenever the viewport shifts
-  scheduleScroll();
-  // Keep typing indicator pinned above the input bar
-  updateTypingIndicatorPosition();
-}
-
-if (window.visualViewport) {
-  window.visualViewport.addEventListener("resize", updateViewportOffsets, { passive: true });
-  window.visualViewport.addEventListener("scroll", updateViewportOffsets, { passive: true });
-  // Run once on load so the input bar and chat area start at the right position
-  // (important on iOS where env(safe-area-inset-bottom) must be applied early)
-  updateViewportOffsets();
-} else {
-  // Fallback for very old iOS Safari that doesn't support visualViewport
-  window.addEventListener("resize", updateViewportOffsets, { passive: true });
-}
-
-function updateGifPickerPosition() {
-  if (!gifPickerOpen) return;
-  const kbH = getKeyboardHeight();
-  gifPicker.style.bottom = kbH + "px";
-}
-
-function openGifPicker() {
-  const kbH = getKeyboardHeight();
-  gifPicker.style.display = "flex";
-  // Force reflow so the transition fires from off-screen position
-  gifPicker.getBoundingClientRect();
-  gifPicker.style.bottom = kbH + "px";
-  gifPickerOpen = true;
-  gifSearch.value = "";
-  gifSearch.focus();
-  fetchGifs("");
-}
-
-function closeGifPickerPanel() {
-  gifPicker.style.bottom = "-100%";
-  gifPickerOpen = false;
-  // Hide after slide-out animation
-  setTimeout(() => {
-    if (!gifPickerOpen) gifPicker.style.display = "none";
-  }, 300);
-}
-
-gifBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  gifPickerOpen ? closeGifPickerPanel() : openGifPicker();
-});
-
-gifPickerClose.addEventListener("click", (e) => { e.stopPropagation(); closeGifPickerPanel(); });
-
-gifSearch.addEventListener("input", () => {
-  clearTimeout(gifSearchTimer);
-  gifSearchTimer = setTimeout(() => fetchGifs(gifSearch.value.trim()), 400);
-});
-
-gifSearch.addEventListener("keydown", (e) => {
-  e.stopPropagation();
-  if (e.key === "Enter") e.preventDefault();
-});
-
-document.addEventListener("click", (e) => {
-  if (gifPickerOpen && !gifPicker.contains(e.target) && e.target !== gifBtn) {
-    closeGifPickerPanel();
-  }
-});
-
-function sendGif(fullUrl, previewUrl) {
-  if (!partnerConnected) return;
-  socket.emit("gif", { url: fullUrl, preview: previewUrl });
-  addGifMessage(fullUrl, true);
-  closeGifPickerPanel();
-}
-
-socket.on("gif", (data) => addGifMessage(data.url, false));
-
-// ── Photo send ────────────────────────────────────────────────────────────────
-
-if (photoBtn) {
-  photoBtn.addEventListener("click", () => {
-    // Show inline confirmation in chat
-    const existing = document.getElementById("cameraConfirmEl");
-    if (existing) { existing.remove(); return; }
-
-    const confirmEl = document.createElement("div");
-    confirmEl.id = "cameraConfirmEl";
-    confirmEl.className = "block-offer";
-    confirmEl.style.borderColor = "rgba(88,101,242,0.4)";
-    confirmEl.style.background = "rgba(88,101,242,0.07)";
-    confirmEl.innerHTML =
-      `<span style="color:#dcddde;font-size:0.95em;">🖼️ გსურთ კამერის გახსნა?</span>` +
-      `<div style="display:flex;gap:8px;margin-top:4px;">` +
-        `<button id="cameraYesBtn" class="block-offer-btn" style="background:linear-gradient(135deg,#5865f2,#3b44c0);padding:6px 20px;">კი</button>` +
-        `<button id="cameraNoBtn" class="block-offer-btn" style="background:rgba(255,255,255,0.08);color:#aaa;padding:6px 20px;">არა</button>` +
-      `</div>`;
-    chat.appendChild(confirmEl);
-    scheduleScroll();
-
-    document.getElementById("cameraYesBtn").addEventListener("click", () => {
-      confirmEl.remove();
-      if (photoInput) photoInput.click();
-    });
-    document.getElementById("cameraNoBtn").addEventListener("click", () => {
-      confirmEl.remove();
-    });
-  });
-}
-
-// ── Photo Permission Request Dialog (for partner to approve) ────────────────
-function showPhotoPermissionDialog(message, onApprove, onDecline) {
-  const modal = document.createElement("div");
-  modal.className = "photo-permission-modal";
-  
-  const backdrop = document.createElement("div");
-  backdrop.className = "photo-permission-backdrop";
-  
-  const content = document.createElement("div");
-  content.className = "photo-permission-content";
-  
-  const icon = document.createElement("div");
-  icon.className = "photo-permission-icon";
-  icon.textContent = "📸";
-  
-  const text = document.createElement("p");
-  text.className = "photo-permission-text";
-  text.textContent = message;
-  
-  const buttonGroup = document.createElement("div");
-  buttonGroup.className = "photo-permission-buttons";
-  
-  const declineBtn = document.createElement("button");
-  declineBtn.className = "photo-permission-btn decline";
-  declineBtn.textContent = "უარი";
-  declineBtn.onclick = () => {
-    modal.remove();
-    onDecline();
-  };
-  
-  const approveBtn = document.createElement("button");
-  approveBtn.className = "photo-permission-btn approve";
-  approveBtn.textContent = "დამტკიცება";
-  approveBtn.onclick = () => {
-    modal.remove();
-    onApprove();
-  };
-  
-  buttonGroup.appendChild(declineBtn);
-  buttonGroup.appendChild(approveBtn);
-  
-  content.appendChild(icon);
-  content.appendChild(text);
-  content.appendChild(buttonGroup);
-  
-  backdrop.appendChild(content);
-  modal.appendChild(backdrop);
-  
-  document.body.appendChild(modal);
-}
-
-// ── Report Reason Modal ──────────────────────────────────────────────────────
-function showReportReasonModal(targetName, onSubmit) {
-  const modal = document.createElement("div");
-  modal.className = "photo-confirm-modal";
-
-  const backdrop = document.createElement("div");
-  backdrop.className = "photo-confirm-backdrop";
-
-  const content = document.createElement("div");
-  content.className = "photo-confirm-content";
-
-  const title = document.createElement("p");
-  title.className = "photo-confirm-title";
-  title.textContent = `რატომ მოახსენებთ "${targetName}"-ს?`;
-
-  const textarea = document.createElement("textarea");
-  textarea.className = "report-reason-textarea";
-  textarea.placeholder = "მიუთითეთ მიზეზი (სავალდებულოა)...";
-  textarea.maxLength = 200;
-
-  const errorMsg = document.createElement("p");
-  errorMsg.className = "report-reason-error";
-  errorMsg.textContent = "გთხოვთ, მიუთითოთ მიზეზი.";
-  errorMsg.style.display = "none";
-
-  const buttonGroup = document.createElement("div");
-  buttonGroup.className = "photo-confirm-buttons";
-
-  const cancelBtn = document.createElement("button");
-  cancelBtn.className = "photo-confirm-btn cancel";
-  cancelBtn.textContent = "გაუქმება";
-  cancelBtn.onclick = () => modal.remove();
-
-  const confirmBtn = document.createElement("button");
-  confirmBtn.className = "photo-confirm-btn confirm";
-  confirmBtn.textContent = "🚩 გაგზავნა";
-  confirmBtn.onclick = () => {
-    const reason = textarea.value.trim();
-    if (reason.length < 3) {
-      errorMsg.style.display = "block";
-      textarea.focus();
-      return;
-    }
-    modal.remove();
-    onSubmit(reason);
-  };
-
-  textarea.addEventListener("input", () => { errorMsg.style.display = "none"; });
-
-  buttonGroup.appendChild(cancelBtn);
-  buttonGroup.appendChild(confirmBtn);
-
-  content.appendChild(title);
-  content.appendChild(textarea);
-  content.appendChild(errorMsg);
-  content.appendChild(buttonGroup);
-
-  backdrop.appendChild(content);
-  modal.appendChild(backdrop);
-
-  document.body.appendChild(modal);
-  setTimeout(() => textarea.focus(), 50);
-}
-
-
-function showPhotoConfirmation(dataUrl, onConfirm) {
-  const modal = document.createElement("div");
-  modal.className = "photo-confirm-modal";
-  
-  const backdrop = document.createElement("div");
-  backdrop.className = "photo-confirm-backdrop";
-  
-  const content = document.createElement("div");
-  content.className = "photo-confirm-content";
-  
-  const title = document.createElement("p");
-  title.className = "photo-confirm-title";
-  title.textContent = "გსურთ ამ სურათის გაგზავნა?";
-  
-  const preview = document.createElement("img");
-  preview.className = "photo-confirm-preview";
-  preview.src = dataUrl;
-  
-  const buttonGroup = document.createElement("div");
-  buttonGroup.className = "photo-confirm-buttons";
-  
-  const cancelBtn = document.createElement("button");
-  cancelBtn.className = "photo-confirm-btn cancel";
-  cancelBtn.textContent = "გაუქმება";
-  cancelBtn.onclick = () => modal.remove();
-  
-  const confirmBtn = document.createElement("button");
-  confirmBtn.className = "photo-confirm-btn confirm";
-  confirmBtn.textContent = "გაგზავნა";
-  confirmBtn.onclick = () => {
-    modal.remove();
-    onConfirm();
-  };
-  
-  buttonGroup.appendChild(cancelBtn);
-  buttonGroup.appendChild(confirmBtn);
-  
-  content.appendChild(title);
-  content.appendChild(preview);
-  content.appendChild(buttonGroup);
-  
-  backdrop.appendChild(content);
-  modal.appendChild(backdrop);
-  
-  document.body.appendChild(modal);
-}
-
-// ── Photo Fullscreen Modal ───────────────────────────────────────────────────
-function showPhotoFullscreen(dataUrl) {
-  const modal = document.createElement("div");
-  modal.className = "photo-fullscreen-modal";
-  
-  const backdrop = document.createElement("div");
-  backdrop.className = "photo-fullscreen-backdrop";
-  
-  const closeBtn = document.createElement("button");
-  closeBtn.className = "photo-fullscreen-close";
-  closeBtn.innerHTML = "✕";
-  closeBtn.onclick = () => modal.remove();
-  
-  const img = document.createElement("img");
-  img.className = "photo-fullscreen-img";
-  img.src = dataUrl;
-  
-  backdrop.appendChild(img);
-  backdrop.appendChild(closeBtn);
-  modal.appendChild(backdrop);
-  
-  document.body.appendChild(modal);
-  
-  // Close on backdrop click
-  backdrop.addEventListener("click", (e) => {
-    if (e.target === backdrop) modal.remove();
-  });
-}
-
-// Compress + resize image to fit within socket buffer
-function compressImage(file, callback) {
-  const MAX_DIM     = 1280;  // max width or height
-  const QUALITY     = 0.82;  // JPEG quality
-  const MAX_B64_LEN = 2.8 * 1024 * 1024; // ~2MB file after base64
-
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const img = new Image();
-    img.onload = () => {
-      let { width, height } = img;
-      // Scale down if needed
-      if (width > MAX_DIM || height > MAX_DIM) {
-        if (width > height) { height = Math.round(height * MAX_DIM / width); width = MAX_DIM; }
-        else                { width  = Math.round(width  * MAX_DIM / height); height = MAX_DIM; }
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width  = width;
-      canvas.height = height;
-      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-
-      // Try JPEG first, fall back to lower quality if still too large
-      let dataUrl = canvas.toDataURL("image/jpeg", QUALITY);
-      if (dataUrl.length > MAX_B64_LEN) {
-        dataUrl = canvas.toDataURL("image/jpeg", 0.65);
-      }
-      if (dataUrl.length > MAX_B64_LEN) {
-        dataUrl = canvas.toDataURL("image/jpeg", 0.45);
-      }
-      callback(dataUrl);
-    };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
-}
-
-let pendingPhotoData = null; // Store pending photo waiting for approval
-
-if (photoInput) {
-  photoInput.addEventListener("change", () => {
-    const file = photoInput.files[0];
-    photoInput.value = ""; // reset so same file can be re-sent
-    if (!file) return;
-    if (!partnerConnected) return; // guard: don't send if no partner
-    if (!file.type.startsWith("image/")) {
-      addSystemMessage("⚠️ მხოლოდ სურათების გაგზავნაა შესაძლებელი.");
-      return;
-    }
-    compressImage(file, (dataUrl) => {
-      if (!partnerConnected) return; // recheck after async compress
-      
-      // Store the photo and ask partner for permission
-      pendingPhotoData = dataUrl;
-      socket.emit("photo:request", { fromId: socket.id });
-      addSystemMessage("📸 სურათის გაგზავნის მოთხოვნა შეთავაზებულია...");
-    });
-  });
-}
-
-// Listen for photo permission request from partner
-socket.on("photo:request", ({ fromId }) => {
-  showPhotoPermissionDialog(
-    "პარტნიორი გიგზავნით ფოტოს , გსურთ ნახვა?",
-    () => {
-      // Partner accepted - send approval
-      socket.emit("photo:approved", { toId: fromId });
-    },
-    () => {
-      // Partner declined - send rejection
-      socket.emit("photo:declined", { toId: fromId });
-    }
-  );
-});
-
-// Listen for approval from partner
-socket.on("photo:approved", () => {
-  if (pendingPhotoData) {
-    socket.emit("photo", { dataUrl: pendingPhotoData });
-    addPhotoMessage(pendingPhotoData, true);
-    addSystemMessage("✅ პარტნიორმა დაამტკიცა სურათის მიღება");
-    pendingPhotoData = null;
-  }
-});
-
-// Listen for rejection from partner
-socket.on("photo:declined", () => {
-  pendingPhotoData = null;
-  addSystemMessage("❌ პარტნიორმა უარყო სურათის მიღება");
-});
-
-socket.on("photo", (data) => {
-  if (data?.dataUrl) addPhotoMessage(data.dataUrl, false);
-});
-
-// ── Question button ───────────────────────────────────────────────────────────
-let questionBtnCooldown = false;
-
-questionBtn.addEventListener("click", async () => {
-  if (!partnerConnected || questionBtnCooldown) return;
-  questionBtnCooldown = true;
-  questionBtn.disabled = true;
-  questionBtn.textContent = "⌛";
 
   try {
-    const res  = await fetch("/api/random-question");
-    const data = await res.json();
-    if (data.question) {
-      // Show question card locally for you
-      addQuestionCard(data.question, true);
-      // Relay to partner via socket
-      socket.emit("sendQuestion", { text: data.question });
-    }
-  } catch {
-    addSystemMessage("კითხვა ვერ ჩაიტვირთა 😕");
-  } finally {
-    setTimeout(() => {
-      questionBtnCooldown  = false;
-      questionBtn.disabled = !partnerConnected;
-      questionBtn.textContent = "?";
-    }, 3000); // 3 s cooldown
-  }
-});
-
-// Partner received a question card from us
-socket.on("partnerQuestion", ({ text }) => {
-  addQuestionCard(text, false);
-  playNotification("message");
-  incrementUnread();
-});
-
-// ── Reactions ─────────────────────────────────────────────────────────────────
-const REACTIONS          = ["❤️","😂","😢"];
-let activeReactionPicker = null;
-
-function showReactionPicker(anchorEl, messageId) {
-  closeReactionPicker();
-  const picker      = document.createElement("div");
-  picker.className  = "reaction-picker";
-  const frag = document.createDocumentFragment();
-  REACTIONS.forEach(emoji => {
-    const btn       = document.createElement("button");
-    btn.className   = "reaction-emoji-btn";
-    btn.textContent = emoji;
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      reactToMessage(messageId, emoji);
-      closeReactionPicker();
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password })
     });
-    frag.appendChild(btn);
-  });
-  picker.appendChild(frag);
-  document.body.appendChild(picker);
-  activeReactionPicker = picker;
-  requestAnimationFrame(() => {
-    const rect = anchorEl.getBoundingClientRect();
-    const pw = picker.offsetWidth, ph = picker.offsetHeight;
-    let left = rect.left, top = rect.top - ph - 8;
-    if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
-    if (top < 4) top = rect.bottom + 8;
-    picker.style.cssText += `left:${left}px;top:${top}px;opacity:1;transform:scale(1)`;
-  });
-}
-
-function closeReactionPicker() {
-  activeReactionPicker?.remove();
-  activeReactionPicker = null;
-}
-
-document.addEventListener("click", () => closeReactionPicker());
-
-function reactToMessage(messageId, emoji) {
-  socket.emit("react", { messageId, emoji });
-  displayReaction(messageId, emoji, true);
-}
-
-function displayReaction(messageId, emoji, isMine) {
-  const area = document.getElementById(`reactions_${messageId}`);
-  if (!area) return;
-  const cls = isMine ? "reaction-mine" : "reaction-partner";
-  let pill   = area.querySelector(`.${cls}`);
-  if (pill) {
-    pill.classList.remove("reaction-pop");
-    void pill.offsetWidth;
-    pill.textContent = emoji;
-    pill.classList.add("reaction-pop");
-  } else {
-    pill = document.createElement("span");
-    pill.className   = `reaction-pill ${cls} reaction-pop`;
-    pill.textContent = emoji;
-    area.appendChild(pill);
+    const data = await res.json();
+    if (!res.ok) {
+      loginError.textContent = data.error || "Login failed";
+      return;
+    }
+    saveAccountInfo(username);
+    userName = username;
+    accountModal.style.display = "none";
+    showDashboard();
+  } catch (err) {
+    loginError.textContent = "Network error";
   }
 }
 
-// ── Message sending ───────────────────────────────────────────────────────────
-function sendMessage() {
-  const message = messageInput.value.trim();
-  if (!message) return;
-  if (!partnerConnected || !userName || messageInput.disabled || messageInput.readOnly) return;
-  const msgId = generateMsgId();
-  const currentReply = replyTo ? { ...replyTo } : null;
-  addMessage(message, true, msgId, currentReply);
-  socket.emit("message", { text: message, messageId: msgId, replyTo: currentReply });
-  messageInput.value = "";
-  messageInput.style.height = "auto";
-  messageInput.style.overflowY = "hidden";
-  charCount.textContent = "";
-  charCount.classList.remove("warning");
-  clearReply();
-  // Keep focus on input so the keyboard stays open on mobile
-  messageInput.focus();
-}
-
-// ── Bio / Interests popup ─────────────────────────────────────────────────────
-let bioPopupOpen = false;
-
-function openBioPopup() {
-  bioInput.value       = userBio;
-  bioCharCount.textContent = `${userBio.length}/60`;
-  bioPopup.style.display = "flex";
-  bioPopupOpen = true;
-  setTimeout(() => bioInput.focus(), 50);
-}
-
-function closeBioPopup() {
-  bioPopup.style.display = "none";
-  bioPopupOpen = false;
-}
-
-interestsBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  bioPopupOpen ? closeBioPopup() : openBioPopup();
-});
-
-bioInput.addEventListener("input", () => {
-  bioCharCount.textContent = `${bioInput.value.length}/60`;
-});
-
-bioInput.addEventListener("keydown", (e) => {
-  e.stopPropagation();
-  if (e.key === "Enter") { e.preventDefault(); saveBio(); }
-  if (e.key === "Escape") closeBioPopup();
-});
-
-function saveBio() {
-  const text = bioInput.value.trim().slice(0, 60);
-  userBio = text;
-  socket.emit("setBio", text);
-  interestsBtn.classList.toggle("has-bio", text.length > 0);
-  closeBioPopup();
-  if (text) showToast("✅ ინფო შენახულია!");
-}
-
-function clearBio() {
-  bioInput.value = "";
-  bioCharCount.textContent = "0/60";
-  userBio = "";
-  socket.emit("setBio", "");
-  interestsBtn.classList.remove("has-bio");
-}
-
-bioSaveBtn.addEventListener("click", saveBio);
-bioClearBtn.addEventListener("click", clearBio);
-document.getElementById("bioCloseBtn").addEventListener("click", (e) => { e.stopPropagation(); closeBioPopup(); });
-
-// Close popup when clicking outside it
-document.addEventListener("click", (e) => {
-  if (bioPopupOpen && !bioPopup.contains(e.target) && e.target !== interestsBtn) {
-    closeBioPopup();
-  }
-});
-
-// ── Name modal ────────────────────────────────────────────────────────────────
-let _saveNameTimeout = null; // tracks the freeze-recovery timer
-
-function _resetSaveBtn() {
-  clearTimeout(_saveNameTimeout);
-  _saveNameTimeout        = null;
-  saveNameBtn.disabled    = false;
-  saveNameBtn.textContent = isFirstLogin ? "საუბრის დაწყება" : "Save Name";
-}
-
-function saveName() {
-  const name = nameInput.value.trim();
-  if (!name)            { showNameError("შეიყვანეთ სახელი ..."); return; }
-  if (name.length < 2)  { showNameError("სახელი უნდა შედგებოდეს მინიმუმ ორი სიმბოლოსგან!"); return; }
-  if (name.length > 20) { showNameError("20 სიმბოლოზე მეტი ვერ იქნება სახელი ! "); return; }
-  clearNameError();
-
-  // If socket isn't connected yet, don't freeze — show a clear error
-  if (!socket.connected) {
-    showNameError("იტვირთება საიტი, კიდევ სცადეთ 🔄");
+// Friend Request Handlers
+async function sendFriendRequest() {
+  if (!isLoggedIn || !partnerConnected || !currentPartnerUsername) {
+    addSystemMessage("❌ Can only add friends who are logged in!");
     return;
   }
+  
+  try {
+    const res = await fetch("/api/friends/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: loggedInUsername,
+        to: currentPartnerUsername
+      })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      addSystemMessage(`✅ Friend request sent to ${currentPartnerUsername}!`);
+    } else {
+      addSystemMessage(`❌ ${data.error || "Failed to send friend request"}`);
+    }
+  } catch (err) {
+    addSystemMessage("❌ Network error");
+  }
+}
 
-  saveNameBtn.disabled    = true;
-  saveNameBtn.textContent = "Checking...";
+async function acceptFriendRequest(from) {
+  try {
+    const res = await fetch("/api/friends/accept", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: loggedInUsername,
+        from: from
+      })
+    });
+    if (res.ok) {
+      friendRequests = friendRequests.filter(r => r.from !== from);
+      addedPeople.push(from);
+      updateDashboard();
+    }
+  } catch (err) {
+    console.error("Error accepting friend request:", err);
+  }
+}
 
-  // ── Token not ready yet (slow network on page load) ──────────────────────
-  // Re-fetch and retry once rather than sending null and getting a tokenInvalid loop
-  if (!_challengeToken || !_challengePow) {
+async function declineFriendRequest(from) {
+  try {
+    await fetch("/api/friends/decline", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: loggedInUsername,
+        from: from
+      })
+    });
+    friendRequests = friendRequests.filter(r => r.from !== from);
+    updateDashboard();
+  } catch (err) {
+    console.error("Error declining friend request:", err);
+  }
+}
+
+// ── Socket Listeners ──────────────────────────────────────────────────────────
+
+socket.on("connect", () => {
+  // Auto-reconnect logged-in users
+  if (isLoggedIn && userName) {
     fetch("/api/challenge")
       .then(r => r.json())
       .then(d => {
         _challengeToken = d.token;
-        _challengePow   = (d.nonce * 31 + d.nonce % 97);
-        _doSetName(name);
+        _challengePow = (d.nonce * 31 + d.nonce % 97);
+        isReconnecting = true;
+        emitSetName(userName, isLoggedIn);
       })
       .catch(() => {
-        showNameError("კავშირის შეცდომა. გთხოვთ გვერდი განაახლოთ.");
-        _resetSaveBtn();
+        showEntryChoiceModal();
       });
+  }
+});
+
+function emitSetName(name, isAccount) {
+  if (!_challengeToken) {
+    console.warn("No challenge token, retrying...");
+    setTimeout(() => emitSetName(name, isAccount), 500);
     return;
   }
 
-  _doSetName(name);
-}
-
-function _doSetName(name) {
-  // Safety timeout — re-enable button if server never replies within 8 s
-  clearTimeout(_saveNameTimeout);
-  _saveNameTimeout = setTimeout(() => {
-    showNameError("სერვერი არ პასუხობს. სცადეთ ხელახლა. 🔄");
-    _resetSaveBtn();
-  }, 8000);
-
   socket.emit("setName", {
-    name,
-    token:     _challengeToken,
+    name: name,
+    isAccount: isAccount,
+    token: _challengeToken,
     powAnswer: _challengePow,
     webdriver: !!navigator.webdriver,
   });
 }
 
-// ── Socket events ─────────────────────────────────────────────────────────────
-
-socket.on("connect", () => {
-  _reconnectNameRetries = 0; // reset on every fresh connect
-  if (userName && !isFirstLogin) {
-    isReconnecting = true;
-    // Hide the name modal — silently reconnecting, not asking for a new name
-    if (nameModal) nameModal.style.display = "none";
-    // Fetch a fresh token — the previous one was one-time-use and already consumed
-    fetch("/api/challenge")
-      .then(r => r.json())
-      .then(d => {
-        _challengeToken = d.token;
-        _challengePow   = (d.nonce * 31 + d.nonce % 97);
-        socket.emit("setName", { name: userName, token: _challengeToken, powAnswer: _challengePow });
-      })
-      .catch(() => {
-        // Token fetch failed — send empty so server replies tokenInvalid → retry loop
-        socket.emit("setName", { name: userName, token: "", powAnswer: 0 });
-      });
-  }
-});
-
-// Challenge token was missing or expired — silently re-fetch and retry
-socket.on("tokenInvalid", () => {
-  fetch("/api/challenge")
-    .then(r => r.json())
-    .then(d => {
-      _challengeToken = d.token;
-      _challengePow   = (d.nonce * 31 + d.nonce % 97);
-      const name = userName || nameInput.value.trim();
-      if (name) {
-        socket.emit("setName", { name, token: _challengeToken, powAnswer: _challengePow });
-      }
-    })
-    .catch(() => {
-      if (!isReconnecting) {
-        showNameError("კავშირის შეცდომა. გთხოვთ გვერდი განაახლოთ.");
-        saveNameBtn.disabled    = false;
-        saveNameBtn.textContent = isFirstLogin ? "საუბრის დაწყება" : "Save Name";
-      }
-    });
-});
-
-socket.on("nameAccepted", (acceptedName) => {
-  const wasNameChange = !isFirstLogin && !isReconnecting;
-  _resetSaveBtn(); // cancel the 8-second safety timeout and re-enable button
-  userName                = acceptedName;
-  nameModal.style.display = "none";
-  clearNameError();
-
-  // Persist username so a page reload (iOS background kill) auto-reconnects
-  try { sessionStorage.setItem("gaicani_username", acceptedName); } catch (_) {}
-
-  // Show the username in the top bar
-  const displayEl = document.getElementById("userNameDisplay");
-  if (displayEl) {
-    displayEl.textContent = `👤 ${acceptedName}`;
-    displayEl.style.display = "block";
-  }
-
-  // Show interests/bio button
-  if (interestsBtn) interestsBtn.style.display = "inline-block";
-
-  if (isFirstLogin) {
-    isFirstLogin = false;
-    clearChat();
-    addSearchingMessage();
-    socket.emit("findPartner");
-    startSearchRetry();
-  } else if (isReconnecting) {
-    isReconnecting = false;
-    _reconnectNameRetries = 0; // reset retry counter on success
-    removeReconnectingMessage();
-    // Keep inputs and chat as-is — server follows with partnerRestored or partnerDisconnected
-  }
-  // else: mid-session name change — no extra action
-  if (wasNameChange) {
-    addSystemMessage(`🟢 თქვენ წარმატებით შეიცვალეთ სახელი „${acceptedName}" 🟢`);
-  }
-});
-
-// Tracks how many times we've retried the original name after a reconnect collision
-let _reconnectNameRetries = 0;
-const _RECONNECT_NAME_MAX_RETRIES = 5;
-
-socket.on("nameTaken", () => {
-  saveNameBtn.disabled    = false;
-  saveNameBtn.textContent = isFirstLogin ? "საუბრის დაწყება" : "Save Name";
-
-  if (isReconnecting) {
-    // The server still has our old socket registered under our name.
-    // Wait a short moment and retry with the SAME original name — the old
-    // socket entry will be cleaned up within a second or two.
-    if (_reconnectNameRetries < _RECONNECT_NAME_MAX_RETRIES) {
-      _reconnectNameRetries++;
-      const delay = 800 + _reconnectNameRetries * 400; // back off slightly each attempt
-      setTimeout(() => {
-        if (!socket.connected) return; // don't retry if socket dropped again
-        const originalName = userName || nameInput.value.trim();
-        fetch("/api/challenge")
-          .then(r => r.json())
-          .then(d => {
-            _challengeToken = d.token;
-            _challengePow   = (d.nonce * 31 + d.nonce % 97);
-            socket.emit("setName", { name: originalName, token: _challengeToken, powAnswer: _challengePow });
-          })
-          .catch(() => {
-            // Network error — give up silently, user is still logged in with old name
-            isReconnecting = false;
-            _reconnectNameRetries = 0;
-          });
-      }, delay);
-      return; // still reconnecting — do not reset isReconnecting yet
-    }
-
-    // Exhausted retries — name is genuinely taken by someone else.
-    // Keep the user's existing session intact without renaming them.
-    isReconnecting = false;
-    _reconnectNameRetries = 0;
-    // Don't show modal or change name — just continue as-is
-    return;
-  }
-
-  _reconnectNameRetries = 0;
-  isReconnecting = false;
-  showNameError("ეს სახელი დაკავებულია. სხვა აირჩიეთ. 😟 ");
-  nameInput.focus();
-  nameInput.select();
-});
-
-socket.on("onlineCount", (count) => updateOnlineCount(count));
-
-socket.on("queuePosition", ({ position, total }) => {
-  const wrapper = document.getElementById("searchingMsg");
-  if (wrapper) {
-    const msg = wrapper.querySelector(".system-message");
-    if (msg) msg.textContent = `ვეძებთ ახალ პარტნიორს... 🔎 `;
-  }
-});
-
-socket.on("partnerFound", (partner) => {
-  stopSearchRetry();
-  clearChat();
-  isReconnecting       = false;  // clear any lingering reconnect state
-  partnerName          = partner.name || "Anonymous";
-  partnerConnected     = true;
-  lastPartnerName      = "";
-  canBlockDisconnected = false;
-  setPartnerNameDisplay(partnerName);
-  addSystemMessage(`გილოცავთ პარტნიორი ნაპოვნია 🥳 : ${partnerName}`);
-
-  // Show partner's bio if they set one
-  if (partner.partnerBio) {
-    const bioEl       = document.createElement("div");
-    bioEl.className   = "partner-bio-line";
-    bioEl.textContent = `💬 ${partner.partnerBio}`;
-    chat.appendChild(bioEl);
-    scheduleScroll();
-  }
-
-  setInputsEnabled(true);
-  // Safety: explicitly clear readOnly/disabled in case a race left them set
-  messageInput.disabled  = false;
-  messageInput.readOnly  = false;
-  messageInput.style.pointerEvents = "";
-  updateBlockBtn();
-  hideTypingIndicator();
-  playNotification("partnerFound");
-  incrementUnread();
-  // Focus the input so the user can start typing immediately (especially on mobile)
-  setTimeout(() => messageInput.focus(), 100);
-});
-
-// Reconnect grace-period events
-let partnerWasReconnecting = false;
-
-socket.on("partnerReconnecting", (data) => {
-  partnerWasReconnecting = true;
-  // Silent — keep chat and inputs running
-});
-
-socket.on("partnerReconnected", (data) => {
-  stopSearchRetry();
-  partnerWasReconnecting = false;
-  partnerName            = data.name || partnerName;
-  partnerConnected       = true;
-  canBlockDisconnected   = false;
-  removeReconnectingMessage();
-  clearPartnerAwayCountdown();
-  setPartnerNameDisplay(partnerName);
-  setInputsEnabled(true);
-  // Explicitly unlock — race-safe double-clear
-  messageInput.disabled  = false;
-  messageInput.readOnly  = false;
-  messageInput.style.pointerEvents = "";
-  updateBlockBtn();
-  hideTypingIndicator();
-  setTimeout(() => messageInput.focus(), 100);
-});
-
-// Own socket restored to previous partner after reconnecting
-socket.on("partnerRestored", (data) => {
-  stopSearchRetry();
-  isReconnecting       = false;   // clear reconnecting flag — we're back
-  partnerName          = data.name || "Anonymous";
-  partnerConnected     = true;
-  lastPartnerName      = "";
-  canBlockDisconnected = false;
-  removeReconnectingMessage();
-  setPartnerNameDisplay(partnerName);  // restore name in header (cleared on disconnect)
-  setInputsEnabled(true);
-  updateBlockBtn();
-  hideTypingIndicator();
-  setTimeout(() => messageInput.focus(), 100);
-  // No clearChat() — messages stay, chat resumes silently
-});
-
-socket.on("waitingForPartner", () => {
-  // Guard: never disable inputs if partnerConnected is already true
-  // (race condition: partnerFound can arrive just before waitingForPartner)
-  if (!partnerConnected) {
-    partnerName = ""; setPartnerNameDisplay("");
+socket.on("nameSet", (data) => {
+  userName = data.name;
+  currentPartnerUsername = "";
+  isFirstLogin = false;
+  
+  if (isLoggedIn) {
+    showDashboard();
+  } else {
+    entryChoiceModal.style.display = "none";
+    guestNameModal.style.display = "none";
+    accountModal.style.display = "none";
     setInputsEnabled(false);
+    messageInput.disabled = true;
   }
-  // If partnerConnected is true, partnerFound already won the race — do nothing
 });
 
-socket.on("partnerTyping", (typing) => {
-  typing ? showTypingIndicator() : hideTypingIndicator();
+socket.on("partnerFound", (data) => {
+  playNotification("partnerFound");
+  partnerConnected = true;
+  partnerName = data.name;
+  currentPartnerUsername = data.username || "";
+  
+  setPartnerNameDisplay(partnerName);
+  document.getElementById("searchingMsg")?.remove();
+  setInputsEnabled(true);
+  messageInput.disabled = false;
+  
+  // Show Add Person button only if both are logged in
+  if (isLoggedIn && currentPartnerUsername) {
+    showAddPersonButton();
+  } else {
+    hideAddPersonButton();
+  }
 });
 
-socket.on("message", (msg) => {
-  hideTypingIndicator();
-  addMessage(msg.text, false, msg.messageId, msg.replyTo || null);
+socket.on("messageReceived", (data) => {
   playNotification("message");
   incrementUnread();
-  // Only send seen receipt if the tab is actually visible
-  if (msg.messageId && !document.hidden) socket.emit("seen", { messageId: msg.messageId });
+  addMessage(data.text, false, data.id, data.replyTo);
 });
 
-socket.on("partnerSeen", ({ messageId }) => {
-  const el = document.getElementById(`seen_${messageId}`);
-  if (el) { el.textContent = "✓✓"; el.classList.add("seen"); }
-});
-
-socket.on("reacted", ({ messageId, emoji }) => {
-  displayReaction(messageId, emoji, false);
-});
-
-// Tab-away events disabled — intentionally ignored
-socket.on("partnerTabAway", () => {});
-socket.on("partnerTabBack", () => {});
-
-socket.on("partnerDisconnected", (data) => {
-  partnerWasReconnecting = false;
-  removeReconnectingMessage();
-  stopSearchRetry();  // stop any running search — user must press Next manually
-  partnerConnected     = false;
-  partnerName = ""; setPartnerNameDisplay("");
-  lastPartnerName      = data.name || lastPartnerName || "";
-  canBlockDisconnected = !!lastPartnerName;
+socket.on("partnerDisconnected", () => {
+  partnerConnected = false;
+  partnerName = "";
+  setPartnerNameDisplay("");
+  lastPartnerName = partnerName;
+  hideAddPersonButton();
+  addDisconnectMessage("Partner disconnected");
   setInputsEnabled(false);
-  updateBlockBtn();
+});
 
-  // Show disconnect notice + inline block offer
-  const disconnectEl = document.createElement("div");
-  disconnectEl.className = "system-message-disconnect";
-  disconnectEl.textContent = `❌ ${lastPartnerName || "პარტნიორი"} გათიშა.`;
-  chat.appendChild(disconnectEl);
-
-  if (lastPartnerName) {
-    const offerEl = document.createElement("div");
-    offerEl.className = "block-offer";
-    offerEl.innerHTML =
-      `<span>გსურთ დაბლოკოთ <strong>"${lastPartnerName}"</strong>? ის ვეღარ შეძლებს თქვენს შეწუხებას.</span>` +
-      `<button class="block-offer-btn" id="blockOfferBtn">🚫 დაბლოკვა</button>` +
-      `<div class="block-offer-report-row">` +
-        `<button class="report-offer-btn" id="reportOfferBtn">🚩 რეპორტი</button>` +
-      `</div>`;
-    chat.appendChild(offerEl);
-    scheduleScroll();
-
-    document.getElementById("blockOfferBtn").addEventListener("click", () => {
-      offerEl.remove();
-      socket.emit("blockUser", { targetName: lastPartnerName });
-    });
-
-    document.getElementById("reportOfferBtn").addEventListener("click", () => {
-      const btn = document.getElementById("reportOfferBtn");
-      if (!btn || btn.disabled) return;
-      showReportReasonModal(lastPartnerName, (reason) => {
-        btn.disabled = true;
-        btn.textContent = "✅ გაგზავნილია";
-        socket.emit("reportUser", { reason });
-        socket.emit("blockUser", { targetName: lastPartnerName });
-      });
-    });
-  } else {
-    scheduleScroll();
+socket.on("friendRequest", (data) => {
+  const req = { from: data.from };
+  if (!friendRequests.find(r => r.from === data.from)) {
+    friendRequests.push(req);
   }
-
+  
+  friendRequestText.textContent = `${data.from} sent you a friend request!`;
+  friendRequestNotification.style.display = "flex";
+  
+  acceptFriendBtn.onclick = () => {
+    acceptFriendRequest(data.from);
+    friendRequestNotification.style.display = "none";
+  };
+  declineFriendBtn.onclick = () => {
+    declineFriendRequest(data.from);
+    friendRequestNotification.style.display = "none";
+  };
 });
 
-socket.on("userBlocked", (data) => {
-  const blockedName = data.name || lastPartnerName || "მომხმარებელი";
-  stopSearchRetry();
-  clearChat();
-  partnerConnected     = false;
-  partnerName = ""; setPartnerNameDisplay("");
-  lastPartnerName      = "";
-  canBlockDisconnected = false;
-  updateBlockBtn();
-  closeGifPickerPanel();
-  addSystemMessage(`🔴 „${blockedName}" -  წარმატებით იქნა დაბლოკილი 🔴`);
-  setInputsEnabled(false);
-  // Do NOT auto-search — user must press Next manually
-});
+// ── Remaining button handlers ──────────────────────────────────────────────────
 
-socket.on("blockLimitReached", () => {
-  addSystemMessage("🚫 ბლოკირების ლიმიტს მიაღწიეთ ამ სესიისთვის.");
-});
-
-socket.on("youWereBlocked", (data) => {
-  const blockerName = data.name || "მომხმარებელი";
-  partnerConnected     = false;
-  partnerName = ""; setPartnerNameDisplay("");
-  lastPartnerName      = "";
-  canBlockDisconnected = false;
-  stopSearchRetry();
-  hideTypingIndicator();
-  setInputsEnabled(false);
-  updateBlockBtn();
-  closeGifPickerPanel();
-  addDisconnectMessage(`${blockerName} -მა დაგბლოკათ :(`);
-  // Do NOT auto-search — user must press Next manually
-});
-
-socket.on("reportConfirmed", () => {
-  addSystemMessage("შეტყობინება გაგზავნილია. გმადლობთ. 🙏");
-  if (reportBtn) reportBtn.disabled = true; // one report per partner
-  // If reporting a disconnected partner, also clear the block state
-  canBlockDisconnected = false;
-  updateBlockBtn();
-});
-
-socket.on("reportBanned", () => {
-  partnerConnected     = false;
-  partnerName = ""; setPartnerNameDisplay("");
-  lastPartnerName      = "";
-  canBlockDisconnected = false;
-  stopSearchRetry();
-  hideTypingIndicator();
-  setInputsEnabled(false);
-  updateBlockBtn();
-  closeGifPickerPanel();
-  clearChat();
-  addDisconnectMessage("🚫 თქვენ დაიბლოკეთ 24 საათით — მრავალი მომხმარებლის მიერ მოხსენების გამო.");
-});
-
-socket.on("messageFlagged", () => {
-  // silently drop — no notice shown to user
-});
-
-// First offence — warning, chat continues
-socket.on("linkWarning", () => {
-  addSystemMessage("⚠️ ლინკების გაზიარება არ შეიძლება! განმეორებით შემთხვევაში ერთი დღით დაიბლოკებით საიტიდან!");
-});
-
-// Second offence — banned
-socket.on("linkBanned", () => {
-  partnerConnected     = false;
-  partnerName = ""; setPartnerNameDisplay("");
-  lastPartnerName      = "";
-  canBlockDisconnected = false;
-  stopSearchRetry();
-  hideTypingIndicator();
-  setInputsEnabled(false);
-  updateBlockBtn();
-  closeGifPickerPanel();
-  clearChat();
-  addDisconnectMessage("🚫 თქვენ დაიბლოკეთ 24 საათით ლინკების გაგზავნის გამო.");
-});
-
-// Legacy event kept for safety
-socket.on("linkKicked", () => {
-  partnerConnected     = false;
-  partnerName = ""; setPartnerNameDisplay("");
-  lastPartnerName      = "";
-  canBlockDisconnected = false;
-  stopSearchRetry();
-  hideTypingIndicator();
-  setInputsEnabled(false);
-  updateBlockBtn();
-  closeGifPickerPanel();
-  clearChat();
-  addDisconnectMessage("🚫 ლინკების გაგზავნა აკრძალულია! თქვენ გაირიცხეთ საიტიდან.");
-});
-
-// Partner of the link-sender sees a notice and gets unlinked
-socket.on("partnerLinkKicked", () => {
-  partnerConnected     = false;
-  partnerName = ""; setPartnerNameDisplay("");
-  lastPartnerName      = "";
-  canBlockDisconnected = false;
-  stopSearchRetry();
-  hideTypingIndicator();
-  setInputsEnabled(false);
-  updateBlockBtn();
-  closeGifPickerPanel();
-  addDisconnectMessage("🚫 ლინკების გაგზავნა აკრძალულია! პარტნიორი გაირიცხა საიტიდან.");
-});
-
-socket.on("autoKicked", () => {
-  try { sessionStorage.removeItem("gaicani_username"); } catch (_) {}
-  partnerConnected     = false;
-  partnerName = ""; setPartnerNameDisplay("");
-  lastPartnerName      = "";
-  canBlockDisconnected = false;
-  stopSearchRetry();
-  hideTypingIndicator();
-  setInputsEnabled(false);
-  updateBlockBtn();
-  closeGifPickerPanel();
-  clearChat();
-  // Show ban notice on the entry modal
-  const nameModal = document.getElementById("nameModal");
-  const nameError = document.getElementById("nameError");
-  const saveBtn   = document.getElementById("saveNameBtn");
-  if (nameModal) nameModal.style.display = "flex";
-  if (nameError) {
-    nameError.textContent = "🚫 თქვენ დაიბლოკეთ 24 საათით ლინკების გაგზავნის გამო. სცადეთ ხვალ.";
-    nameError.style.display = "block";
+function setPartnerNameDisplay(name) {
+  const el = document.getElementById("partnerNameDisplay");
+  if (el) {
+    if (name) {
+      el.textContent = name;
+      el.style.display = "inline";
+    } else {
+      el.style.display = "none";
+    }
   }
-  if (saveBtn) saveBtn.disabled = true;
-});
+}
 
-// awayTimeout disabled — intentionally ignored
-socket.on("awayTimeout", () => {});
+function setUserNameDisplay(name) {
+  const el = document.getElementById("userNameDisplay");
+  if (el) {
+    if (name && isLoggedIn) {
+      el.textContent = `@${name}`;
+      el.style.display = "inline";
+    } else {
+      el.style.display = "none";
+    }
+  }
+}
 
-// ── Button handlers ───────────────────────────────────────────────────────────
+function setInputsEnabled(enabled) {
+  messageInput.disabled = !enabled;
+  sendBtn.disabled = !enabled;
+  gifBtn.disabled = !enabled;
+  photoBtn.disabled = !enabled;
+  questionBtn.disabled = !enabled;
+}
 
-nextBtn.addEventListener("click", () => {
-  nextBtn.disabled = true;
-  setTimeout(() => { nextBtn.disabled = false; }, 1000);
-  // Lock state FIRST before any async/emit so no message can slip through
-  partnerConnected     = false;
-  partnerName = ""; setPartnerNameDisplay("");
-  lastPartnerName      = "";
-  canBlockDisconnected = false;
-  setInputsEnabled(false);   // disables + clears textarea immediately
-  updateBlockBtn();
-  hideTypingIndicator();
-  closeGifPickerPanel();
-  clearReply();
-  clearChat();
-  addSearchingMessage();
-  socket.emit("next");
-  startSearchRetry();
-});
+function clearChat() {
+  chat.innerHTML = "";
+}
 
-blockBtn.addEventListener("click", () => {
-  const targetName = partnerName || lastPartnerName;
-  if (!targetName) return;
-  const confirmed = confirm(
-    `Block "${targetName}"? თქვენ ვეღარ შეხვდებით ამ იუზერს ბლოკის შემდეგ. 😡 `
-  );
-  if (confirmed) socket.emit("blockUser", { targetName });
-});
+function setReply(msgId, text, senderName) {
+  replyTo = { messageId: msgId, text, senderName };
+  replyPreview.style.display = "block";
+  replyPreviewName.textContent = senderName;
+  replyPreviewText.textContent = text;
+}
 
-reportBtn.addEventListener("click", () => {
-  const targetName = partnerName || lastPartnerName;
-  if (!partnerConnected && !canBlockDisconnected) return;
-  if (!targetName) return;
-  showReportReasonModal(targetName, (reason) => {
-    socket.emit("reportUser", { reason });
-    // Also block so they can't re-match
-    socket.emit("blockUser", { targetName });
+function clearReply() {
+  replyTo = null;
+  replyPreview.style.display = "none";
+}
+
+function sendMessage() {
+  const text = messageInput.value.trim();
+  if (!text) return;
+  
+  const msgId = generateMsgId();
+  addMessage(text, true, msgId, replyTo);
+  
+  socket.emit("message", {
+    text: text,
+    replyTo: replyTo ? { text: replyTo.text, senderName: replyTo.senderName, messageId: replyTo.messageId } : null
   });
-});
-
-sendBtn.addEventListener("click", sendMessage);
-
-messageInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault();
-    if (!messageInput.disabled && !messageInput.readOnly) sendMessage();
-  }
-});
-
-messageInput.addEventListener("input", () => {
-  // Auto-resize textarea
+  
+  messageInput.value = "";
   messageInput.style.height = "auto";
-  messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + "px";
-  messageInput.style.overflowY = messageInput.scrollHeight > 120 ? "auto" : "hidden";
-
-  // Character counter
-  const len = messageInput.value.length;
-  charCount.textContent = len > 0 ? `${len}/2000` : ``;
-  charCount.classList.toggle("warning", len > 1800);
-
-  // Typing indicator
-  if (!partnerConnected) return;
-  if (!isTyping) { isTyping = true; socket.emit("typing", true); }
-  clearTimeout(typingTimeout);
-  typingTimeout = setTimeout(() => {
-    isTyping = false;
-    socket.emit("typing", false);
-  }, 1500);
-});
-
-changeNameBtn.addEventListener("click", () => {
-  nameInput.value         = userName;
-  saveNameBtn.textContent = "Save Name";
-  clearNameError();
-  nameModal.style.display = "flex";
-  const closeBtn = document.getElementById("nameModalClose");
-  if (closeBtn) closeBtn.style.display = "block";
-  setTimeout(() => nameInput.focus(), 50);
-});
-
-saveNameBtn.addEventListener("click", saveName);
-nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveName(); } });
-
-// ── Swipe-right gesture → Next (mobile) ──────────────────────────────────────
-let touchStartX = 0, touchStartY = 0;
-
-document.addEventListener("touchstart", (e) => {
-  touchStartX = e.touches[0].clientX;
-  touchStartY = e.touches[0].clientY;
-}, { passive: true });
-
-document.addEventListener("touchend", (e) => {
-  const dx = e.changedTouches[0].clientX - touchStartX;
-  const dy = Math.abs(e.changedTouches[0].clientY - touchStartY);
-  // Swipe right > 150 px, mostly horizontal (dy < 30% of dx),
-  // AND must start from the left edge (first 30px) to avoid accidental triggers
-  if (dx > 150 && dy < dx * 0.3 && touchStartX < 30 && !nextBtn.disabled) {
-    nextBtn.click();
-  }
-}, { passive: true });
-
-// ── Welcome page / logo home ──────────────────────────────────────────────────
-// Called when user clicks the GAICANI logo to return to the welcome screen.
-function goToWelcome() {
-  // Lock state FIRST so no message can slip through
-  partnerConnected     = false;
-  partnerName = ""; setPartnerNameDisplay("");
-  lastPartnerName      = "";
-  canBlockDisconnected = false;
-  userName             = "";
-  isFirstLogin         = true;
-  isReconnecting       = false;
-  setInputsEnabled(false);
-  updateBlockBtn();
-
-  // 🚫 CLEAR ALL BLOCKS — fresh session means fresh block list
-  blockedUsers = new Set();
-  blockedNames = [];
-
-  socket.emit("next"); // tell server we're leaving current chat
-  stopSearchRetry();
-  hideTypingIndicator();
-  closeGifPickerPanel();
-  clearChat();
+  charCount.textContent = "";
   clearReply();
+}
 
-  // Clear saved name so a page reload also shows welcome
-  try { sessionStorage.removeItem("gaicani_username"); } catch (_) {}
+function closeGifPickerPanel() {
+  gifPicker.style.display = "none";
+  gifPickerOpen = false;
+}
 
-  // Show the welcome/name modal fresh
-  const nameModalClose = document.getElementById("nameModalClose");
-  if (nameModalClose) nameModalClose.style.display = "none";
-  nameInput.value         = "";
-  saveNameBtn.textContent = "საუბრის დაწყება";
-  clearNameError();
-  nameModal.style.display = "flex";
-  setTimeout(() => nameInput.focus(), 100);
+function goToWelcome() {
+  clearAccountInfo();
+  showEntryChoiceModal();
+  clearChat();
+  partnerConnected = false;
+  partnerName = "";
+  currentPartnerUsername = "";
+  setPartnerNameDisplay("");
+}
+
+function startSearchRetry() {
+  if (searchRetryInterval) return;
+  searchRetryInterval = setInterval(() => {
+    if (!partnerConnected) {
+      socket.emit("next");
+    }
+  }, 15000);
+}
+
+function stopSearchRetry() {
+  if (searchRetryInterval) {
+    clearInterval(searchRetryInterval);
+    searchRetryInterval = null;
+  }
+}
+
+function hideTypingIndicator() {
+  const el = document.getElementById("typingIndicator");
+  if (el) el.style.display = "none";
+  isTyping = false;
+  if (typingTimeout) clearTimeout(typingTimeout);
+}
+
+function updateBlockBtn() {
+  blockBtn.disabled = !partnerConnected && !canBlockDisconnected;
+}
+
+function clearNameError() {
+  if (nameError) nameError.textContent = "";
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
-  userName       = "";
-  isFirstLogin   = true;
-  isReconnecting = false;
-  stopSearchRetry();
-  setInputsEnabled(false);
-  updateBlockBtn();
-  setPartnerNameDisplay("");
-  saveNameBtn.textContent  = "საუბრის დაწყება";
-  charCount.textContent    = "";
-
-  // X button on name modal — only active during mid-session name change
-  const nameModalClose = document.getElementById("nameModalClose");
-  if (nameModalClose) {
-    nameModalClose.addEventListener("click", () => {
-      nameModal.style.display = "none";
-      nameModalClose.style.display = "none";
-      clearNameError();
-    });
-  }
-
-  // ── Auto-reconnect after iOS page kill ───────────────────────────────────
-  // iOS Safari can fully unload the page when the app is backgrounded.
-  // If we have a saved username, skip the modal and reconnect silently.
-  // If site data was cleared, sessionStorage returns null → show welcome modal.
-  const savedName = (() => { try { return sessionStorage.getItem("gaicani_username"); } catch(_) { return null; } })();
-
-  if (savedName) {
-    // Pre-fill the modal but don't show it — submit automatically once socket connects
-    nameInput.value = savedName;
-    nameModal.style.display = "none";
-
-    const autoReconnect = () => {
-      if (socket.connected) {
-        // Fetch a fresh challenge token then set name
+  // Load account info if available
+  loadAccountInfo();
+  
+  if (isLoggedIn) {
+    // Logged in user: try to auto-connect
+    setUserNameDisplay(loggedInUsername);
+    if (socket.connected) {
+      fetch("/api/challenge")
+        .then(r => r.json())
+        .then(d => {
+          _challengeToken = d.token;
+          _challengePow = (d.nonce * 31 + d.nonce % 97);
+          emitSetName(loggedInUsername, true);
+        })
+        .catch(() => {
+          showDashboard();
+        });
+    } else {
+      socket.once("connect", () => {
         fetch("/api/challenge")
           .then(r => r.json())
           .then(d => {
             _challengeToken = d.token;
-            _challengePow   = (d.nonce * 31 + d.nonce % 97);
-            isReconnecting  = true;
-            socket.emit("setName", {
-              name:      savedName,
-              token:     _challengeToken,
-              powAnswer: _challengePow,
-              webdriver: !!navigator.webdriver,
-            });
+            _challengePow = (d.nonce * 31 + d.nonce % 97);
+            emitSetName(loggedInUsername, true);
           })
           .catch(() => {
-            // Token fetch failed — fall back to showing the welcome modal
-            nameInput.value = "";
-            nameModal.style.display = "flex";
-            setTimeout(() => nameInput.focus(), 100);
+            showDashboard();
           });
-      } else {
-        // Socket not yet connected — wait for the connect event
-        socket.once("connect", autoReconnect);
-      }
-    };
-    autoReconnect();
-    return; // don't show the modal
+      });
+    }
+  } else {
+    // Not logged in: show entry choice
+    showEntryChoiceModal();
   }
 
-  // No saved name (fresh visit OR site data cleared) — always show welcome modal
-  nameModal.style.display = "flex";
-  setTimeout(() => nameInput.focus(), 100);
+  // Entry choice handlers
+  guestBtn.addEventListener("click", showGuestNameModal);
+  accountBtn.addEventListener("click", showAccountModal);
+
+  // Guest name modal
+  guestStartBtn.addEventListener("click", handleGuestStart);
+  guestNameInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") handleGuestStart();
+  });
+
+  // Account form toggle
+  switchToSignupBtn.addEventListener("click", () => {
+    accountLoginForm.style.display = "none";
+    accountSignupForm.style.display = "block";
+    loginError.textContent = "";
+    signupError.textContent = "";
+    signupUsername.focus();
+  });
+
+  switchToLoginBtn.addEventListener("click", () => {
+    accountLoginForm.style.display = "block";
+    accountSignupForm.style.display = "none";
+    loginError.textContent = "";
+    signupError.textContent = "";
+    loginUsername.focus();
+  });
+
+  // Account form handlers
+  signupBtn.addEventListener("click", handleSignup);
+  loginBtn.addEventListener("click", handleLogin);
+
+  signupPassword.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") handleSignup();
+  });
+  loginPassword.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") handleLogin();
+  });
+
+  // Dashboard
+  profileBtn.addEventListener("click", showDashboard);
+  logoutBtn.addEventListener("click", () => {
+    clearAccountInfo();
+    userDashboardModal.style.display = "none";
+    showEntryChoiceModal();
+  });
+  dashboardCloseBtn.addEventListener("click", () => {
+    userDashboardModal.style.display = "none";
+  });
+
+  startChatBtn.addEventListener("click", () => {
+    userDashboardModal.style.display = "none";
+    setInputsEnabled(false);
+    clearChat();
+    addSearchingMessage();
+    socket.emit("next");
+    startSearchRetry();
+    showAddPersonButton();
+  });
+
+  // Add Person button
+  addPersonBtn.addEventListener("click", sendFriendRequest);
+
+  // Modal close buttons
+  accountModalClose.addEventListener("click", () => {
+    accountModal.style.display = "none";
+    showEntryChoiceModal();
+  });
+
+  // Legacy name input (for backward compatibility)
+  changeNameBtn.addEventListener("click", () => {
+    if (isLoggedIn) {
+      showDashboard();
+    } else {
+      showGuestNameModal();
+    }
+  });
+
+  // Message input handlers
+  messageInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!messageInput.disabled) sendMessage();
+    }
+  });
+
+  messageInput.addEventListener("input", () => {
+    messageInput.style.height = "auto";
+    messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + "px";
+    messageInput.style.overflowY = messageInput.scrollHeight > 120 ? "auto" : "hidden";
+    const len = messageInput.value.length;
+    charCount.textContent = len > 0 ? `${len}/2000` : ``;
+    charCount.classList.toggle("warning", len > 1800);
+  });
+
+  sendBtn.addEventListener("click", sendMessage);
+  replyPreviewClose.addEventListener("click", clearReply);
+
+  // Interests button (if needed)
+  if (interestsBtn) {
+    interestsBtn.addEventListener("click", () => {
+      bioPopup.style.display = "flex";
+    });
+  }
+
+  // Bio popup
+  if (bioPopup) {
+    document.getElementById("bioCloseBtn").addEventListener("click", () => {
+      bioPopup.style.display = "none";
+    });
+    bioSaveBtn.addEventListener("click", () => {
+      userBio = bioInput.value;
+      bioPopup.style.display = "none";
+    });
+    bioClearBtn.addEventListener("click", () => {
+      bioInput.value = "";
+    });
+    bioInput.addEventListener("input", () => {
+      bioCharCount.textContent = `${bioInput.value.length}/60`;
+    });
+  }
+
+  // Gif picker (basic)
+  if (gifPickerClose) {
+    gifPickerClose.addEventListener("click", closeGifPickerPanel);
+  }
+
+  // Online count
+  socket.on("onlineCount", (count) => {
+    if (onlineCountEl) {
+      onlineCountEl.textContent = `${count} online`;
+    }
+  });
 });
