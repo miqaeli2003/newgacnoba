@@ -1047,6 +1047,190 @@ app.get("/api/challenge", (req, res) => {
   res.json({ token, nonce });
 });
 
+// ── Account / Auth system ─────────────────────────────────────────────────────
+// In-memory user store: username (lowercase) → { username, passwordHash, friends: Set, pendingRequests: Set }
+// NOTE: Resets on server restart. For production, use a database.
+const users = new Map();
+const ACCOUNTS_FILE = path.join(__dirname, "accounts.json");
+
+function hashPassword(password) {
+  return crypto.createHash("sha256").update(password + "gaicani_salt_2025").digest("hex");
+}
+
+function loadAccounts() {
+  try {
+    const data = JSON.parse(fs.readFileSync(ACCOUNTS_FILE, "utf8"));
+    if (Array.isArray(data)) {
+      data.forEach(u => {
+        users.set(u.username.toLowerCase(), {
+          username: u.username,
+          passwordHash: u.passwordHash,
+          friends: new Set(u.friends || []),
+          pendingRequests: new Set(u.pendingRequests || []),
+        });
+      });
+      console.log(`[AUTH] Loaded ${users.size} account(s)`);
+    }
+  } catch { /* file doesn't exist yet */ }
+}
+
+function saveAccounts() {
+  try {
+    const arr = [...users.values()].map(u => ({
+      username: u.username,
+      passwordHash: u.passwordHash,
+      friends: [...u.friends],
+      pendingRequests: [...u.pendingRequests],
+    }));
+    fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(arr, null, 2), "utf8");
+  } catch (e) { console.error("[AUTH] Failed to save accounts:", e.message); }
+}
+
+loadAccounts();
+
+// ── Auth HTTP routes ──────────────────────────────────────────────────────────
+app.post("/api/auth/signup", express.json(), (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) return res.status(400).json({ error: "Username and password required" });
+  const u = username.trim();
+  if (u.length < 2 || u.length > 20) return res.status(400).json({ error: "Username must be 2-20 characters" });
+  if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
+  if (!/^[a-zA-Z0-9_]+$/.test(u)) return res.status(400).json({ error: "Only letters, numbers and underscores allowed" });
+  const key = u.toLowerCase();
+  if (users.has(key)) return res.status(409).json({ error: "Username already taken" });
+  users.set(key, {
+    username: u,
+    passwordHash: hashPassword(password),
+    friends: new Set(),
+    pendingRequests: new Set(),
+  });
+  saveAccounts();
+  console.log(`[AUTH] New account: ${u}`);
+  res.json({ ok: true, username: u });
+});
+
+app.post("/api/auth/login", express.json(), (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) return res.status(400).json({ error: "Username and password required" });
+  const key = username.trim().toLowerCase();
+  const user = users.get(key);
+  if (!user) return res.status(401).json({ error: "Invalid username or password" });
+  if (user.passwordHash !== hashPassword(password)) return res.status(401).json({ error: "Invalid username or password" });
+  console.log(`[AUTH] Login: ${user.username}`);
+  res.json({ ok: true, username: user.username });
+});
+
+// ── Friends HTTP routes ───────────────────────────────────────────────────────
+app.post("/api/friends/request", express.json(), (req, res) => {
+  const { from, to } = req.body || {};
+  if (!from || !to) return res.status(400).json({ error: "from and to required" });
+  const fromKey = from.toLowerCase();
+  const toKey   = to.toLowerCase();
+  if (fromKey === toKey) return res.status(400).json({ error: "Cannot add yourself" });
+  const fromUser = users.get(fromKey);
+  const toUser   = users.get(toKey);
+  if (!fromUser || !toUser) return res.status(404).json({ error: "User not found" });
+  if (fromUser.friends.has(toKey)) return res.status(409).json({ error: "Already friends" });
+  if (toUser.pendingRequests.has(fromKey)) return res.status(409).json({ error: "Request already sent" });
+  toUser.pendingRequests.add(fromKey);
+  saveAccounts();
+  // Notify the target if they are online via socket
+  for (const [, sock] of io.sockets.sockets) {
+    if (sock.isAccount && sock.userName && sock.userName.toLowerCase() === toKey) {
+      sock.emit("friendRequest", { from: fromUser.username });
+    }
+  }
+  res.json({ ok: true });
+});
+
+app.post("/api/friends/accept", express.json(), (req, res) => {
+  const { username, from } = req.body || {};
+  if (!username || !from) return res.status(400).json({ error: "username and from required" });
+  const userKey = username.toLowerCase();
+  const fromKey = from.toLowerCase();
+  const user     = users.get(userKey);
+  const fromUser = users.get(fromKey);
+  if (!user || !fromUser) return res.status(404).json({ error: "User not found" });
+  if (!user.pendingRequests.has(fromKey)) return res.status(400).json({ error: "No pending request from that user" });
+  user.pendingRequests.delete(fromKey);
+  user.friends.add(fromKey);
+  fromUser.friends.add(userKey);
+  saveAccounts();
+  res.json({ ok: true });
+});
+
+app.post("/api/friends/decline", express.json(), (req, res) => {
+  const { username, from } = req.body || {};
+  if (!username || !from) return res.status(400).json({ error: "username and from required" });
+  const userKey = username.toLowerCase();
+  const fromKey = from.toLowerCase();
+  const user = users.get(userKey);
+  if (!user) return res.status(404).json({ error: "User not found" });
+  user.pendingRequests.delete(fromKey);
+  saveAccounts();
+  res.json({ ok: true });
+});
+
+app.get("/api/friends/list", (req, res) => {
+  const { username } = req.query;
+  if (!username) return res.status(400).json({ error: "username required" });
+  const user = users.get(username.toLowerCase());
+  if (!user) return res.status(404).json({ error: "User not found" });
+  res.json({
+    friends: [...user.friends],
+    pendingRequests: [...user.pendingRequests],
+  });
+});
+
+// ── Private messages (12-hour auto-delete) ────────────────────────────────────
+const privateMessages = new Map(); // "user1:user2" (sorted, lowercase) → [msg]
+const PM_EXPIRY_MS = 12 * 60 * 60 * 1000;
+
+function pmKey(a, b) { return [a, b].map(s => s.toLowerCase()).sort().join(":"); }
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, msgs] of privateMessages) {
+    const kept = msgs.filter(m => m.expiresAt > now);
+    if (kept.length === 0) privateMessages.delete(k);
+    else if (kept.length < msgs.length) privateMessages.set(k, kept);
+  }
+}, 60 * 60 * 1000);
+
+app.post("/api/messages/send", express.json(), (req, res) => {
+  const { from, to, text } = req.body || {};
+  if (!from || !to || !text) return res.status(400).json({ error: "from, to, text required" });
+  const fromUser = users.get(from.toLowerCase());
+  const toUser   = users.get(to.toLowerCase());
+  if (!fromUser || !toUser) return res.status(404).json({ error: "User not found" });
+  if (!fromUser.friends.has(to.toLowerCase())) return res.status(403).json({ error: "Not friends" });
+  const msg = {
+    id: `${from}:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+    from: fromUser.username,
+    text: text.slice(0, 2000),
+    timestamp: Date.now(),
+    expiresAt: Date.now() + PM_EXPIRY_MS,
+    read: false,
+  };
+  const k = pmKey(from, to);
+  if (!privateMessages.has(k)) privateMessages.set(k, []);
+  privateMessages.get(k).push(msg);
+  // Notify recipient if online
+  for (const [, sock] of io.sockets.sockets) {
+    if (sock.isAccount && sock.userName && sock.userName.toLowerCase() === to.toLowerCase()) {
+      sock.emit("privateMessageReceived", { from: fromUser.username, text: msg.text, timestamp: msg.timestamp });
+    }
+  }
+  res.json({ ok: true, messageId: msg.id });
+});
+
+app.get("/api/messages/:user1/:user2", (req, res) => {
+  const { user1, user2 } = req.params;
+  const msgs = privateMessages.get(pmKey(user1, user2)) || [];
+  const now  = Date.now();
+  res.json({ messages: msgs.filter(m => m.expiresAt > now) });
+});
+
 // ── In-memory state ───────────────────────────────────────────────────────────
 let waitingQueue         = [];
 const activeUsernames    = new Set();
@@ -1249,8 +1433,12 @@ io.on("connection", (socket) => {
     const trimmed = name.trim();
     if (trimmed.length < NAME_MIN || trimmed.length > NAME_MAX) return;
 
+    // Track whether this is an account user (vs guest)
+    const isAccountUser = data && data.isAccount === true;
+
     if (socket.userName.toLowerCase() === trimmed.toLowerCase()) {
-      socket.emit("nameAccepted", socket.userName);
+      socket.isAccount = isAccountUser;
+      socket.emit("nameSet", { name: socket.userName, isAccount: isAccountUser });
       tryRestorePartnership(socket, trimmed.toLowerCase());
       return;
     }
@@ -1269,9 +1457,10 @@ io.on("connection", (socket) => {
     }
 
     if (socket.userName) activeUsernames.delete(socket.userName.toLowerCase());
-    socket.userName = trimmed;
+    socket.userName  = trimmed;
+    socket.isAccount = isAccountUser;
     activeUsernames.add(lowerTrimmed);
-    socket.emit("nameAccepted", trimmed);
+    socket.emit("nameSet", { name: trimmed, isAccount: isAccountUser });
     tryRestorePartnership(socket, lowerTrimmed);
   });
 
@@ -1378,9 +1567,9 @@ io.on("connection", (socket) => {
 
     const sharedTags = (socket.interests || []).filter(t => (partnerSocket.interests || []).includes(t));
 
-    socket.emit("partnerFound",        { name: partnerSocket.userName, sharedTags, partnerBio: partnerSocket.bio });
+    socket.emit("partnerFound",        { name: partnerSocket.userName, username: partnerSocket.isAccount ? partnerSocket.userName : "", sharedTags, partnerBio: partnerSocket.bio });
     recordChatStarted();
-    partnerSocket.emit("partnerFound", { name: socket.userName,        sharedTags, partnerBio: socket.bio });
+    partnerSocket.emit("partnerFound", { name: socket.userName, username: socket.isAccount ? socket.userName : "", sharedTags, partnerBio: socket.bio });
 
     // ── Reset anti-bot state for both users ────────────────────────────────
     const now = Date.now();
