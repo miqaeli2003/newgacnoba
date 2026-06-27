@@ -24,6 +24,7 @@
 
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="games.css" />
+  <link rel="stylesheet" href="PRIVATE-MESSAGING.css" />
 </head>
 <body>
   <div class="top-bar">
@@ -285,8 +286,26 @@
     </div>
   </div>
 
+  <!-- ── Private Chat Modal ────────────────────────────────────────────────── -->
+  <div id="privateChatModal">
+    <div class="private-chat-window">
+      <div class="private-chat-header">
+        <h3 id="privateChatTitle">Private Chat</h3>
+        <span class="message-timer" id="privateChatTimer"></span>
+        <button class="modal-close-btn" id="privateChatClose" title="Close">✕</button>
+      </div>
+      <div class="private-chat-expiry-notice">⏳ Messages auto-delete after 12 hours</div>
+      <div id="privateChatMessagesArea"></div>
+      <div class="private-chat-input-area">
+        <textarea id="privateChatInput" placeholder="Type a message..." rows="1" maxlength="2000"></textarea>
+        <button class="private-chat-send" id="privateChatSend">Send</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
   <script src="games.js"></script>
+  <script src="PRIVATE-MESSAGING.js"></script>
 </body>
 </html>
