@@ -1,111 +1,593 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   REG MENU ADDON — Three-dots (⋮) menu functionality for registered users
-   
-   HOW TO INTEGRATE:
-   1. Add this code INSIDE the auth-client.js IIFE, after the updateAuthBadge() 
-      function (around line 180).
-   2. Make sure to add the CSS file: <link rel="stylesheet" href="auth-menu.css" />
-   3. The menu will automatically show/hide based on login status
+   auth.css — GAICANI Auth, Friends, Private Chat, Dashboard, Menu Styles
    ════════════════════════════════════════════════════════════════════════════ */
 
-  /* ══════════════════════════════════════════════════════════════════
-     REGISTERED USER MENU (⋮)
-     ══════════════════════════════════════════════════════════════════ */
+/* ── Auth Tabs ─────────────────────────────────────────────────────────────── */
+.auth-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 18px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 10px;
+  padding: 4px;
+}
+.auth-tab {
+  flex: 1;
+  padding: 8px 6px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: #72767d;
+  font-size: 0.78em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.auth-tab.active {
+  background: rgba(88,101,242,0.25);
+  color: #a78bfa;
+}
+.auth-tab:hover:not(.active) {
+  background: rgba(255,255,255,0.07);
+  color: #b5bac1;
+}
 
-  // Update menu visibility based on auth status
-  function updateRegMenuVisibility() {
-    const menuBtn = $("regMenuBtn");
-    if (!menuBtn) return;
-    menuBtn.style.display = authUser ? "flex" : "none";
-    closeRegMenu(); // Close menu if user logs out
+/* ── Auth Form ─────────────────────────────────────────────────────────────── */
+.auth-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.auth-input {
+  width: 100%;
+  padding: 11px 14px;
+  background: rgba(255,255,255,0.06);
+  border: 1.5px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  color: #dcddde;
+  font-size: 0.88em;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+.auth-input:focus {
+  border-color: rgba(88,101,242,0.6);
+}
+.auth-input::placeholder { color: #5a5e74; }
+.auth-form-error {
+  display: none;
+  color: #f23f42;
+  font-size: 0.8em;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: rgba(242,63,66,0.1);
+  border-radius: 8px;
+  border-left: 3px solid #f23f42;
+}
+.auth-submit-btn {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #5865f2, #4348d4);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.9em;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.1s;
+  margin-bottom: 10px;
+}
+.auth-submit-btn:hover  { filter: brightness(1.1); }
+.auth-submit-btn:active { transform: scale(0.98); }
+.auth-submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.auth-form-note {
+  text-align: center;
+  font-size: 0.75em;
+  color: #72767d;
+  margin: 0;
+  line-height: 1.6;
+}
+.auth-form-note a { color: #a78bfa; }
+
+/* ── Auth Badge (top bar) ──────────────────────────────────────────────────── */
+#auth-user-badge {
+  font-size: 0.78em;
+  font-weight: 700;
+  color: #a78bfa;
+  background: rgba(88,101,242,0.12);
+  padding: 4px 10px;
+  border-radius: 6px;
+  display: none;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Partner Registered Banner ─────────────────────────────────────────────── */
+#partner-reg-banner {
+  display: none;
+  background: linear-gradient(135deg, rgba(88,101,242,0.18), rgba(124,132,248,0.12));
+  border: 1px solid rgba(88,101,242,0.3);
+  border-radius: 0;
+  padding: 9px 16px;
+  font-size: 0.84em;
+  color: #c4c7d9;
+  text-align: center;
+  animation: bannerSlideIn 0.3s ease;
+  position: relative;
+  z-index: 10;
+}
+@keyframes bannerSlideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Add Friend Icon Button (➕) ───────────────────────────────────────────── */
+.add-friend-icon-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(59,165,93,0.2);
+  color: #3ba55d;
+  font-size: 0.82em;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  flex-shrink: 0;
+}
+.add-friend-icon-btn:hover {
+  background: rgba(59,165,93,0.35);
+  transform: scale(1.1);
+}
+.add-friend-icon-btn:active { transform: scale(0.95); }
+
+/* ── Three-dot Menu ────────────────────────────────────────────────────────── */
+.reg-menu-container {
+  position: relative;
+}
+.reg-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  color: #b5bac1;
+  font-size: 1.2em;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  letter-spacing: 0.1em;
+}
+.reg-menu-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.reg-menu-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 170px;
+  background: #2b2d31;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  z-index: 500;
+  animation: menuFadeIn 0.15s ease;
+}
+@keyframes menuFadeIn {
+  from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.reg-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #dcddde;
+  font-size: 0.87em;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  text-align: left;
+}
+.reg-menu-item:hover {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+}
+.reg-menu-icon {
+  font-size: 1em;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.reg-menu-divider {
+  height: 1px;
+  background: rgba(255,255,255,0.07);
+  margin: 4px 6px;
+}
+.reg-menu-logout { color: #f23f42 !important; }
+.reg-menu-logout:hover { background: rgba(242,63,66,0.12) !important; }
+
+/* ── Friend Request Notification ──────────────────────────────────────────── */
+#notif-container {
+  position: fixed;
+  top: 60px;
+  right: 12px;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 300px;
+  pointer-events: none;
+}
+.friend-request-notif {
+  background: #2b2d31;
+  border: 1px solid rgba(88,101,242,0.4);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+  animation: notifSlideIn 0.25s ease;
+  pointer-events: all;
+}
+@keyframes notifSlideIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.frn-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.frn-icon {
+  font-size: 1.5em;
+  flex-shrink: 0;
+}
+.frn-text {
+  font-size: 0.82em;
+  color: #c4c7d9;
+  line-height: 1.5;
+}
+.frn-btns {
+  display: flex;
+  gap: 8px;
+}
+.frn-accept, .frn-decline {
+  flex: 1;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.8em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+.frn-accept  { background: rgba(59,165,93,0.25); color: #3ba55d; }
+.frn-decline { background: rgba(242,63,66,0.15); color: #f23f42; }
+.frn-accept:hover  { filter: brightness(1.2); }
+.frn-decline:hover { filter: brightness(1.2); }
+
+/* ── Private Chat Panel ────────────────────────────────────────────────────── */
+#priv-panel {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  width: 100%;
+  max-width: 380px;
+  height: 60vh;
+  max-height: 500px;
+  background: #2b2d31;
+  border: 1px solid rgba(88,101,242,0.3);
+  border-radius: 16px 16px 0 0;
+  flex-direction: column;
+  z-index: 800;
+  box-shadow: 0 -8px 32px rgba(0,0,0,0.5);
+  overflow: hidden;
+}
+.pc-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  background: #313338;
+  flex-shrink: 0;
+}
+.pc-header button {
+  background: transparent;
+  border: none;
+  color: #72767d;
+  font-size: 1em;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+}
+.pc-header button:hover { color: #f23f42; background: rgba(242,63,66,0.1); }
+#priv-title {
+  flex: 1;
+  font-size: 0.92em;
+  font-weight: 700;
+  color: #dcddde;
+}
+#priv-expiry {
+  font-size: 0.7em;
+  color: #72767d;
+}
+#priv-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.priv-msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 78%;
+}
+.priv-msg-me  { align-self: flex-end; align-items: flex-end; }
+.priv-msg-them { align-self: flex-start; align-items: flex-start; }
+.priv-bubble {
+  padding: 8px 12px;
+  border-radius: 14px;
+  font-size: 0.87em;
+  line-height: 1.5;
+  word-break: break-word;
+}
+.priv-msg-me   .priv-bubble { background: linear-gradient(135deg, #5865f2, #4348d4); color: #fff; border-bottom-right-radius: 4px; }
+.priv-msg-them .priv-bubble { background: #3b3e45; color: #dcddde; border-bottom-left-radius: 4px; }
+.priv-ts {
+  font-size: 0.68em;
+  color: #72767d;
+  margin-top: 2px;
+  padding: 0 4px;
+}
+.pc-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  background: #313338;
+  flex-shrink: 0;
+}
+#priv-input {
+  flex: 1;
+  padding: 9px 12px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  color: #dcddde;
+  font-size: 0.85em;
+  resize: none;
+  outline: none;
+  min-height: 38px;
+  max-height: 90px;
+  overflow-y: auto;
+  transition: border-color 0.15s;
+  font-family: inherit;
+}
+#priv-input:focus { border-color: rgba(88,101,242,0.6); }
+#priv-send {
+  padding: 9px 16px;
+  background: #5865f2;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.82em;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+#priv-send:hover { background: #4752c4; }
+
+/* ── Dashboard Sheet ───────────────────────────────────────────────────────── */
+#dashboard-panel {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 700;
+}
+.dash-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.dash-sheet {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: 400px;
+  background: #1e1f22;
+  overflow-y: auto;
+  box-shadow: -8px 0 32px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+}
+.dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: #2b2d31;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.dash-title {
+  font-size: 0.95em;
+  font-weight: 700;
+  color: #fff;
+}
+.dash-close {
+  background: transparent;
+  border: none;
+  color: #72767d;
+  font-size: 1.1em;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color 0.15s;
+}
+.dash-close:hover { color: #f23f42; }
+.dash-user-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.dash-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #5865f2, #7c84f8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4em;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(88,101,242,0.4);
+}
+.dash-username {
+  font-size: 1em;
+  font-weight: 700;
+  color: #a78bfa;
+}
+.dash-user-meta { font-size: 0.72em; color: #72767d; margin-top: 2px; }
+.dash-actions { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.dash-action-btn {
+  width: 100%;
+  padding: 11px;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.88em;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.1s;
+}
+.dash-action-primary { background: #5865f2; color: #fff; }
+.dash-action-primary:hover { filter: brightness(1.1); }
+.dash-section {
+  padding: 0 8px 12px;
+}
+.dash-section-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px 8px;
+  font-size: 0.7em;
+  font-weight: 700;
+  color: #72767d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.dash-badge {
+  background: rgba(88,101,242,0.2);
+  color: #a78bfa;
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-size: 0.9em;
+}
+.dash-friends-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dash-empty {
+  color: #72767d;
+  font-size: 0.82em;
+  text-align: center;
+  padding: 18px 12px;
+  line-height: 1.7;
+}
+.dash-friend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #2b2d31;
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+.dash-friend-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(88,101,242,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.88em;
+  font-weight: 700;
+  color: #a78bfa;
+  flex-shrink: 0;
+}
+.dash-friend-name {
+  flex: 1;
+  font-size: 0.86em;
+  color: #dcddde;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.dash-friend-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.dash-act-btn {
+  background: rgba(255,255,255,0.07);
+  border: none;
+  border-radius: 7px;
+  padding: 5px 9px;
+  font-size: 0.8em;
+  cursor: pointer;
+  color: #b5bac1;
+  transition: background 0.13s, color 0.13s;
+}
+.dash-act-btn:hover { background: rgba(255,255,255,0.14); color: #fff; }
+.dash-act-chat:hover   { background: rgba(88,101,242,0.25); color: #a78bfa; }
+.dash-act-remove:hover { background: rgba(242,63,66,0.18); color: #f23f42; }
+.dash-act-block:hover  { background: rgba(250,166,26,0.15); color: #faa61a; }
+.dash-act-unblock:hover { background: rgba(59,165,93,0.2); color: #3ba55d; }
+
+/* ── Mobile adjustments ─────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  #priv-panel {
+    max-width: 100%;
+    height: 65vh;
   }
-
-  // Open/toggle the menu
-  function toggleRegMenu(e) {
-    const dropdown = $("regMenuDropdown");
-    if (!dropdown) return;
-    if (dropdown.style.display === "none" || !dropdown.style.display) {
-      openRegMenu();
-    } else {
-      closeRegMenu();
-    }
-    e.stopPropagation();
+  .dash-sheet {
+    max-width: 100%;
   }
-
-  function openRegMenu() {
-    const dropdown = $("regMenuDropdown");
-    if (dropdown) dropdown.style.display = "block";
+  .reg-menu-dropdown {
+    right: -4px;
+    min-width: 155px;
   }
-
-  function closeRegMenu() {
-    const dropdown = $("regMenuDropdown");
-    if (dropdown) dropdown.style.display = "none";
-  }
-
-  // Close menu when clicking outside
-  document.addEventListener("click", () => {
-    closeRegMenu();
-  });
-
-  // Menu button click
-  $("regMenuBtn")?.addEventListener("click", toggleRegMenu);
-
-  /* ── Menu item actions ─────────────────────────────────────────── */
-
-  // Interests (Bio)
-  $("regMenuInt")?.addEventListener("click", () => {
-    closeRegMenu();
-    const bioPopup = $("bioPopup");
-    if (bioPopup) bioPopup.style.display = "flex";
-  });
-
-  // Games
-  $("regMenuGames")?.addEventListener("click", () => {
-    closeRegMenu();
-    // Trigger the games button if it exists on chat screen
-    const interestsBtn = $("interestsBtn");
-    if (interestsBtn && interestsBtn.style.display !== "none") {
-      interestsBtn.click();
-    } else {
-      showToast("🎮 თამაშები მხოლოდ ჩატის დროს ხელმისაწვდომია");
-    }
-  });
-
-  // Dashboard (My Page)
-  $("regMenuDash")?.addEventListener("click", () => {
-    closeRegMenu();
-    openDashboard();
-  });
-
-  // Logout
-  $("regMenuLogout")?.addEventListener("click", () => {
-    closeRegMenu();
-    if (!confirm("გამოხვიდეთ სისტემიდან?")) return;
-    clearAuth();
-    window.location.reload();
-  });
-
-  // Update menu when auth changes
-  const originalHandleAuthSuccess = window.handleAuthSuccess || null;
-  if (originalHandleAuthSuccess) {
-    window.handleAuthSuccess = function(...args) {
-      originalHandleAuthSuccess(...args);
-      updateRegMenuVisibility();
-    };
-  }
-
-  // Also update when listening for auth events
-  const originalBindSocketEvents = window.bindSocketEvents || null;
-
-  /* ════════════════════════════════════════════════════════════════════
-     INTEGRATION NOTE:
-     This code hooks into:
-     - updateAuthBadge() → also calls updateRegMenuVisibility()
-     - Socket auth events to trigger updateRegMenuVisibility()
-     
-     The menu automatically:
-     ✓ Shows when user logs in
-     ✓ Hides when user logs out
-     ✓ Closes when clicking outside
-     ✓ Provides access to interests, games, dashboard, and logout
-     ════════════════════════════════════════════════════════════════════ */
+}
