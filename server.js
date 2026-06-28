@@ -1655,9 +1655,12 @@ io.on("connection", (socket) => {
       setTimeout(() => {
         socket.recentPartnerIds.delete(oldPartnerId);
         if (oldPartner.connected) oldPartner.recentPartnerIds.delete(socket.id);
-        // NOTE: we do NOT re-queue either socket here.
-        // The user who clicked Next is already in the queue via tryFindPartner() below.
-        // The partner who was left must press Next themselves — no auto-search.
+        // After cooldown, re-queue both sockets if still waiting — fixes small-pool deadlock
+        if (socket.connected && !socket.partner && socket.userName) {
+          if (!waitingQueue.some(s => s.id === socket.id)) waitingQueue.push(socket);
+          broadcastQueuePositions();
+        }
+        // oldPartner was left — do NOT auto-queue them; they must press Next themselves
       }, 5000);
 
     // Cancel any active game for both sides
@@ -2702,11 +2705,35 @@ io.on("connection", (socket) => {
     onlineRegSockets.get(entry.usernameLower).add(socket.id);
 
     socket.join(`user:${entry.usernameLower}`);
-    socket.emit("auth:success", { username: user.username, friends: user.friends || [] });
+    socket.emit("auth:authenticated", { username: user.username, friends: user.friends || [], pendingRequests: user.pendingRequests || [] });
     console.log(`[AUTH] ${user.username} logged in`);
   });
 
-  // ── Friend request ───────────────────────────────────────────────────────
+  // ── auth:token — alias kept for backwards compat ─────────────────────────
+  socket.on("auth:token", (token) => {
+    // Normalise: old client sent raw string, new client sends { token }
+    const t = (typeof token === "string") ? token : token?.token;
+    if (t) socket.emit("auth:login:internal", { token: t }); // reuse handler logic
+    // Just delegate to the auth:login handler
+    socket.emit.call(socket, "auth:login", { token: t });
+  });
+
+  // ── auth:checkPartner — tell client if current partner is registered ──────
+  socket.on("auth:checkPartner", () => {
+    if (!socket.partner || !socket._regUser) return;
+    const partnerReg = socket.partner._regUser;
+    if (!partnerReg) return; // partner is a guest, nothing to report
+    const myUser = registeredUsers.get(socket._regUser.usernameLower);
+    const isFriend = (myUser?.friends || []).includes(partnerReg.usernameLower);
+    const roomId = privRoomId(socket._regUser.usernameLower, partnerReg.usernameLower);
+    socket.emit("auth:partnerRegInfo", {
+      partnerRegName: partnerReg.username,
+      isFriend,
+      roomId,
+    });
+  });
+
+
   socket.on("friend:request", ({ toUsername }) => {
     if (!socket._regUser) return;
     const targetLc = String(toUsername).toLowerCase().trim();
