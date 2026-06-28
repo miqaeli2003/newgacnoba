@@ -38,6 +38,29 @@
       <button class="block-button" id="blockBtn" disabled><span class="btn-icon">🚫</span><span class="btn-label">ბლოკი</span></button>
       <button class="next-button" id="nextBtn"><span class="btn-icon">🔎</span><span class="btn-label">ძებნა</span></button>
 
+      <!-- Three-dots menu for registered users -->
+      <div class="reg-menu-container">
+        <button class="reg-menu-btn" id="regMenuBtn" style="display:none" title="მენიუ">⋮</button>
+        <div class="reg-menu-dropdown" id="regMenuDropdown" style="display:none">
+          <button class="reg-menu-item" id="regMenuInt" data-action="interests">
+            <span class="reg-menu-icon">ინტ</span>
+            <span class="reg-menu-label">ინტერესები</span>
+          </button>
+          <button class="reg-menu-item" id="regMenuGames" data-action="games">
+            <span class="reg-menu-icon">🎮</span>
+            <span class="reg-menu-label">თამაში</span>
+          </button>
+          <button class="reg-menu-item" id="regMenuDash" data-action="dashboard">
+            <span class="reg-menu-icon">👤</span>
+            <span class="reg-menu-label">ჩემი გვერდი</span>
+          </button>
+          <div class="reg-menu-divider"></div>
+          <button class="reg-menu-item reg-menu-logout" id="regMenuLogout" data-action="logout">
+            <span class="reg-menu-icon">🚪</span>
+            <span class="reg-menu-label">გამოხვევა</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
