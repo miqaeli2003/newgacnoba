@@ -591,6 +591,9 @@ function setPartnerNameDisplay(name) {
 function showNameError(msg) {
   nameError.textContent   = msg;
   nameError.style.display = "block";
+  const _ov = document.getElementById("modalLoadingOverlay");
+  if (_ov) _ov.style.display = "none";
+}
   nameInput.classList.add("error");
 }
 
@@ -1300,6 +1303,8 @@ function _resetSaveBtn() {
   _saveNameTimeout        = null;
   saveNameBtn.disabled    = false;
   saveNameBtn.textContent = isFirstLogin ? "საუბრის დაწყება" : "Save Name";
+  const _ov = document.getElementById("modalLoadingOverlay");
+  if (_ov) _ov.style.display = "none";
 }
 
 function saveName() {
@@ -1317,6 +1322,10 @@ function saveName() {
 
   saveNameBtn.disabled    = true;
   saveNameBtn.textContent = "Checking...";
+
+  // Show loading overlay to blur the form content
+  const _overlay = document.getElementById("modalLoadingOverlay");
+  if (_overlay) _overlay.style.display = "flex";
 
   // ── Token not ready yet (slow network on page load) ──────────────────────
   // Re-fetch and retry once rather than sending null and getting a tokenInvalid loop

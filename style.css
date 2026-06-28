@@ -62,9 +62,9 @@ html, body {
 .user-name-display {
   font-size: 0.82em;
   font-weight: 600;
-  color: #5865f2;
-  background: rgba(88, 101, 242, 0.12);
-  border: 1px solid rgba(88, 101, 242, 0.35);
+  color: #a855f7;
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid rgba(168, 85, 247, 0.35);
   border-radius: 20px;
   padding: 8px 15px;
   white-space: nowrap;
@@ -1355,6 +1355,42 @@ html, body {
   max-height: 90vh;
   overflow-y: auto;
   overscroll-behavior: contain;
+  position: relative;
+}
+
+/* ── Modal loading overlay ── */
+#modalLoadingOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(46, 49, 64, 0.92);
+  border-radius: 20px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.modal-loading-spinner {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(168, 85, 247, 0.2);
+  border-top-color: #a855f7;
+  border-radius: 50%;
+  animation: modalSpin 0.75s linear infinite;
+}
+
+@keyframes modalSpin {
+  to { transform: rotate(360deg); }
+}
+
+.modal-loading-text {
+  font-size: 0.9em;
+  color: #b5bac1;
+  letter-spacing: 0.02em;
 }
 
 .modal-logo {

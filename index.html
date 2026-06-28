@@ -130,6 +130,11 @@
   <!-- ── Combined Entry Modal ───────────────────────────────────────────────── -->
   <div id="nameModal" class="modal">
     <div class="modal-content">
+      <!-- Loading overlay shown while setName is processing -->
+      <div id="modalLoadingOverlay" style="display:none">
+        <div class="modal-loading-spinner"></div>
+        <div class="modal-loading-text">იტვირთება...</div>
+      </div>
       <button id="nameModalClose" class="modal-close-btn" style="display:none" title="დახურვა">✕</button>
       <img src="/Logo2.png" alt="GAICANI" class="modal-logo" />
 
