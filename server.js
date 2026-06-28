@@ -2452,4 +2452,648 @@ app.post("/api/auth/register", authLimiter, express.json({ limit: "5kb" }), (req
     return res.status(409).json({ error: "ეს სახელი უკვე დაკავებულია" });
 
   const user = {
-    username: clean, passwordHash: authHashPassword(password)
+    username: clean,
+    passwordHash: authHashPassword(password),
+    createdAt: new Date().toISOString(),
+    friends: [],
+    pendingRequests: []
+  };
+
+  registeredUsers.set(lc, user);
+  authReservedNames.add(lc);
+  saveAuthUsers();
+
+  const token = authToken();
+  authTokens.set(token, { usernameLower: lc, expiry: Date.now() + AUTH_TOKEN_TTL });
+
+  res.status(201).json({ success: true, token, username: user.username });
+});
+
+// POST /api/auth/login
+app.post("/api/auth/login", authLimiter, express.json({ limit: "5kb" }), (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password)
+    return res.status(400).json({ error: "სახელი და პაროლი სავალდებულოა" });
+
+  const lc = String(username).toLowerCase().trim();
+  const user = registeredUsers.get(lc);
+  if (!user || !authVerifyPassword(password, user.passwordHash))
+    return res.status(401).json({ error: "არასწორი სახელი ან პაროლი" });
+
+  const token = authToken();
+  authTokens.set(token, { usernameLower: lc, expiry: Date.now() + AUTH_TOKEN_TTL });
+
+  res.json({
+    success: true,
+    token,
+    username: user.username,
+    friends: user.friends || [],
+    pendingRequests: user.pendingRequests || []
+  });
+});
+
+// POST /api/auth/logout
+app.post("/api/auth/logout", express.json({ limit: "1kb" }), (req, res) => {
+  const { token } = req.body || {};
+  if (token) authTokens.delete(token);
+  res.json({ success: true });
+});
+
+// POST /api/auth/verify
+app.post("/api/auth/verify", express.json({ limit: "1kb" }), (req, res) => {
+  const { token } = req.body || {};
+  if (!token) return res.status(401).json({ error: "No token" });
+
+  const entry = authTokens.get(token);
+  if (!entry || Date.now() >= entry.expiry) {
+    authTokens.delete(token);
+    return res.status(401).json({ error: "Token expired" });
+  }
+
+  const user = registeredUsers.get(entry.usernameLower);
+  if (!user) return res.status(401).json({ error: "User not found" });
+
+  res.json({
+    success: true,
+    username: user.username,
+    friends: user.friends || [],
+    pendingRequests: user.pendingRequests || []
+  });
+});
+
+// POST /api/friends/request
+app.post("/api/friends/request", express.json({ limit: "2kb" }), (req, res) => {
+  const token = req.headers.authorization?.replace("Bearer ", "");
+  const { toUsername } = req.body || {};
+  if (!token || !toUsername) return res.status(400).json({ error: "Invalid request" });
+
+  const entry = authTokens.get(token);
+  if (!entry || Date.now() >= entry.expiry) return res.status(401).json({ error: "Unauthorized" });
+
+  const fromUser = registeredUsers.get(entry.usernameLower);
+  const toLc = String(toUsername).toLowerCase().trim();
+  const toUser = registeredUsers.get(toLc);
+
+  if (!fromUser || !toUser || toLc === entry.usernameLower)
+    return res.status(400).json({ error: "Invalid target" });
+
+  if (!toUser.pendingRequests) toUser.pendingRequests = [];
+  if (!toUser.pendingRequests.includes(entry.usernameLower)) {
+    toUser.pendingRequests.push(entry.usernameLower);
+    saveAuthUsers();
+  }
+
+  res.json({ success: true });
+});
+
+// POST /api/friends/accept
+app.post("/api/friends/accept", express.json({ limit: "2kb" }), (req, res) => {
+  const token = req.headers.authorization?.replace("Bearer ", "");
+  const { fromUsername } = req.body || {};
+  if (!token || !fromUsername) return res.status(400).json({ error: "Invalid request" });
+
+  const entry = authTokens.get(token);
+  if (!entry || Date.now() >= entry.expiry) return res.status(401).json({ error: "Unauthorized" });
+
+  const toUser = registeredUsers.get(entry.usernameLower);
+  const fromLc = String(fromUsername).toLowerCase().trim();
+  const fromUser = registeredUsers.get(fromLc);
+
+  if (!toUser || !fromUser) return res.status(400).json({ error: "Invalid users" });
+
+  if (!toUser.friends) toUser.friends = [];
+  if (!fromUser.friends) fromUser.friends = [];
+  if (!toUser.pendingRequests) toUser.pendingRequests = [];
+
+  if (!toUser.friends.includes(fromLc)) toUser.friends.push(fromLc);
+  if (!fromUser.friends.includes(entry.usernameLower)) fromUser.friends.push(entry.usernameLower);
+  toUser.pendingRequests = toUser.pendingRequests.filter(u => u !== fromLc);
+
+  saveAuthUsers();
+  res.json({ success: true, friends: toUser.friends });
+});
+
+// POST /api/friends/decline
+app.post("/api/friends/decline", express.json({ limit: "2kb" }), (req, res) => {
+  const token = req.headers.authorization?.replace("Bearer ", "");
+  const { fromUsername } = req.body || {};
+  if (!token || !fromUsername) return res.status(400).json({ error: "Invalid request" });
+
+  const entry = authTokens.get(token);
+  if (!entry || Date.now() >= entry.expiry) return res.status(401).json({ error: "Unauthorized" });
+
+  const user = registeredUsers.get(entry.usernameLower);
+  if (!user) return res.status(400).json({ error: "User not found" });
+
+  if (!user.pendingRequests) user.pendingRequests = [];
+  const fromLc = String(fromUsername).toLowerCase().trim();
+  user.pendingRequests = user.pendingRequests.filter(u => u !== fromLc);
+  saveAuthUsers();
+
+  res.json({ success: true });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// SOCKET.IO CONNECTION HANDLER
+// ════════════════════════════════════════════════════════════════════════════
+
+// Game helper functions
+function rand(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function generateMathQuestion() {
+  const ops = ['+', '-', '*'];
+  const op = ops[rand(0, 2)];
+  let a, b, answer;
+
+  if (op === '+') {
+    a = rand(1, 50); b = rand(1, 50); answer = a + b;
+  } else if (op === '-') {
+    a = rand(10, 99); b = rand(1, a); answer = a - b;
+  } else {
+    a = rand(2, 12); b = rand(2, 12); answer = a * b;
+  }
+
+  const display = op === '*' ? `${a} × ${b}` : `${a} ${op} ${b}`;
+  return { display, answer };
+}
+
+function checkTTTWinner(board) {
+  const LINES = [
+    [0,1,2],[3,4,5],[6,7,8],
+    [0,3,6],[1,4,7],[2,5,8],
+    [0,4,8],[2,4,6]
+  ];
+  for (const [a,b,c] of LINES) {
+    if (board[a] && board[a] === board[b] && board[a] === board[c])
+      return { symbol: board[a], line: [a,b,c] };
+  }
+  return null;
+}
+
+function getRPSWinner(c1, c2) {
+  if (c1 === c2) return 'draw';
+  if (
+    (c1 === 'rock' && c2 === 'scissors') ||
+    (c1 === 'scissors' && c2 === 'paper') ||
+    (c1 === 'paper' && c2 === 'rock')
+  ) return 'p1';
+  return 'p2';
+}
+
+function cleanupGame(game) {
+  game.players.forEach(pid => gameBySocket.delete(pid));
+  gameById.delete(game.id);
+}
+
+function cleanupGameForSocket(socketId) {
+  const gameId = gameBySocket.get(socketId);
+  if (!gameId) return;
+  const game = gameById.get(gameId);
+  if (!game) { gameBySocket.delete(socketId); return; }
+
+  const partnerId = game.players.find(id => id !== socketId);
+  const partnerSocket = partnerId && io.sockets.sockets.get(partnerId);
+  if (partnerSocket) partnerSocket.emit('game:partnerLeft');
+
+  cleanupGame(game);
+}
+
+// ── Main connection handler ──────────────────────────────────────────────────
+io.on("connection", (socket) => {
+  socket.clientIP = (
+    socket.handshake.headers["x-forwarded-for"]?.split(",")[0].trim() ||
+    socket.handshake.address ||
+    "unknown"
+  );
+
+  // Check if IP is banned
+  if (bannedIPs.has(socket.clientIP)) {
+    console.log(`[BAN] Rejected banned IP: ${socket.clientIP}`);
+    socket.emit("autoKicked");
+    socket.disconnect(true);
+    return;
+  }
+
+  // Check for VirusTotal
+  if (socket.clientIP !== "unknown" && socket.clientIP !== "127.0.0.1") {
+    const isGeorgian = /^(193\.|195\.|196\.110|196\.111)/.test(socket.clientIP);
+    if (!isGeorgian) enqueueForVT(socket.clientIP);
+  }
+
+  console.log(`[SOCKET] Connected: ${socket.id} from ${socket.clientIP}`);
+
+  // ── Login (registered user) ──────────────────────────────────────────────
+  socket.on("auth:login", ({ token }) => {
+    if (!token) return;
+    const entry = authTokens.get(token);
+    if (!entry || Date.now() >= entry.expiry) {
+      socket.emit("auth:error", { error: "Token expired" });
+      return;
+    }
+
+    const user = registeredUsers.get(entry.usernameLower);
+    if (!user) return;
+
+    socket._regUser = { usernameLower: entry.usernameLower, username: user.username };
+    socket.userName = user.username;
+
+    if (!onlineRegSockets.has(entry.usernameLower)) {
+      onlineRegSockets.set(entry.usernameLower, new Set());
+    }
+    onlineRegSockets.get(entry.usernameLower).add(socket.id);
+
+    socket.join(`user:${entry.usernameLower}`);
+    socket.emit("auth:success", { username: user.username, friends: user.friends || [] });
+    console.log(`[AUTH] ${user.username} logged in`);
+  });
+
+  // ── Friend request ───────────────────────────────────────────────────────
+  socket.on("friend:request", ({ toUsername }) => {
+    if (!socket._regUser) return;
+    const targetLc = String(toUsername).toLowerCase().trim();
+    const targetUser = registeredUsers.get(targetLc);
+    if (!targetUser) return;
+
+    if (!targetUser.pendingRequests) targetUser.pendingRequests = [];
+    if (!targetUser.pendingRequests.includes(socket._regUser.usernameLower)) {
+      targetUser.pendingRequests.push(socket._regUser.usernameLower);
+      saveAuthUsers();
+    }
+
+    io.to(`user:${targetLc}`).emit("friend:incomingRequest", {
+      fromUsername: socket._regUser.username
+    });
+  });
+
+  // ── Accept friend request ────────────────────────────────────────────────
+  socket.on("friend:accept", ({ fromUsername }) => {
+    if (!socket._regUser) return;
+    const fromLc = String(fromUsername).toLowerCase().trim();
+    const myUser = registeredUsers.get(socket._regUser.usernameLower);
+    const fromUser = registeredUsers.get(fromLc);
+
+    if (!myUser || !fromUser) return;
+    if (!myUser.friends) myUser.friends = [];
+    if (!fromUser.friends) fromUser.friends = [];
+    if (!myUser.pendingRequests) myUser.pendingRequests = [];
+
+    if (!myUser.friends.includes(fromLc)) myUser.friends.push(fromLc);
+    if (!fromUser.friends.includes(socket._regUser.usernameLower)) {
+      fromUser.friends.push(socket._regUser.usernameLower);
+    }
+    myUser.pendingRequests = myUser.pendingRequests.filter(u => u !== fromLc);
+
+    saveAuthUsers();
+    socket.emit("friend:accepted", { friends: myUser.friends });
+    io.to(`user:${fromLc}`).emit("friend:acceptedByOther", {
+      byUsername: socket._regUser.username
+    });
+  });
+
+  // ── Decline friend request ───────────────────────────────────────────────
+  socket.on("friend:decline", ({ fromUsername }) => {
+    if (!socket._regUser) return;
+    const fromLc = String(fromUsername).toLowerCase().trim();
+    const myUser = registeredUsers.get(socket._regUser.usernameLower);
+    if (!myUser) return;
+
+    if (!myUser.pendingRequests) myUser.pendingRequests = [];
+    myUser.pendingRequests = myUser.pendingRequests.filter(u => u !== fromLc);
+    saveAuthUsers();
+
+    socket.emit("friend:declined");
+    io.to(`user:${fromLc}`).emit("friend:declinedByOther", {
+      byUsername: socket._regUser.username
+    });
+  });
+
+  // ── Remove friend ────────────────────────────────────────────────────────
+  socket.on("friend:remove", ({ friendUsername }) => {
+    if (!socket._regUser || !friendUsername) return;
+    const myLc = socket._regUser.usernameLower;
+    const targetLc = String(friendUsername).toLowerCase().trim();
+    if (!targetLc || targetLc === myLc) return;
+
+    const myUser = registeredUsers.get(myLc);
+    const targetUser = registeredUsers.get(targetLc);
+
+    if (!myUser) return;
+    myUser.friends = (myUser.friends || []).filter(f => f !== targetLc);
+
+    if (targetUser) {
+      targetUser.friends = (targetUser.friends || []).filter(f => f !== myLc);
+    }
+
+    saveAuthUsers();
+    socket.emit("friend:removed", { friends: myUser.friends });
+
+    if (targetUser) {
+      io.to(`user:${targetLc}`).emit("friend:removedByOther", {
+        byUsername: socket._regUser.username
+      });
+    }
+  });
+
+  // ── Session block ────────────────────────────────────────────────────────
+  socket.on("reg:sessionBlock", ({ targetUsername }) => {
+    if (!socket._regUser || !targetUsername) return;
+    const targetLc = String(targetUsername).toLowerCase().trim();
+    if (!targetLc || targetLc === socket._regUser.usernameLower) return;
+
+    if (!socket.blockedNames) socket.blockedNames = [];
+    if (!socket.blockedNames.includes(targetLc)) {
+      socket.blockedNames.push(targetLc);
+    }
+
+    if (socket.partner && socket.partner.userName &&
+        socket.partner.userName.toLowerCase() === targetLc) {
+      socket.partner.emit("partnerDisconnected", { name: socket.userName || "" });
+      socket.partner.partner = null;
+      socket.partner = null;
+    }
+
+    socket.emit("reg:sessionBlockAck", { targetUsername: targetLc });
+  });
+
+  // ── Session unblock ──────────────────────────────────────────────────────
+  socket.on("reg:sessionUnblock", ({ targetUsername }) => {
+    if (!socket._regUser || !targetUsername) return;
+    const targetLc = String(targetUsername).toLowerCase().trim();
+    if (!socket.blockedNames) return;
+    socket.blockedNames = socket.blockedNames.filter(n => n !== targetLc);
+  });
+
+  // ── Private message request ──────────────────────────────────────────────
+  socket.on("privateMsg:send", ({ toUsername, message }) => {
+    if (!socket._regUser || !toUsername || !message) return;
+    const toLc = String(toUsername).toLowerCase().trim();
+    const roomId = privRoomId(socket._regUser.usernameLower, toLc);
+    let room = privateRooms.get(roomId);
+
+    if (!room) {
+      room = { messages: [], createdAt: Date.now(), expiresAt: Date.now() + PRIVATE_MSG_TTL };
+      privateRooms.set(roomId, room);
+    }
+
+    const msg = {
+      from: socket._regUser.usernameLower,
+      text: String(message).slice(0, MSG_MAX),
+      ts: new Date().toISOString()
+    };
+
+    room.messages.push(msg);
+    if (room.messages.length > 100) room.messages.shift();
+    room.expiresAt = Date.now() + PRIVATE_MSG_TTL;
+
+    savePrivateMsgs();
+
+    io.to(`user:${toLc}`).emit("privateMsg:received", {
+      fromUsername: socket._regUser.username,
+      message: msg.text,
+      timestamp: msg.ts
+    });
+
+    socket.emit("privateMsg:sent", { success: true });
+  });
+
+  // ── Anonymous chat pairing ──────────────────────────────────────────────
+  socket.on("next", () => {
+    if (socket.partner) {
+      socket.partner.emit("partnerDisconnected", { name: socket.userName || "" });
+      socket.partner.partner = null;
+      socket.partner = null;
+    }
+
+    cleanupGameForSocket(socket.id);
+
+    let match = null;
+
+    for (const [, s] of io.sockets.sockets) {
+      if (s.id === socket.id || s.partner || !s.connected) continue;
+      if (socket.blockedNames && socket.blockedNames.includes(s.userName?.toLowerCase())) continue;
+      if (s.blockedNames && s.blockedNames.includes(socket.userName?.toLowerCase())) continue;
+
+      match = s;
+      break;
+    }
+
+    if (match) {
+      socket.partner = match;
+      match.partner = socket;
+      socket.emit("paired", { name: match.userName });
+      match.emit("paired", { name: socket.userName });
+      console.log(`[PAIR] ${socket.id} ↔ ${match.id}`);
+    } else {
+      socket.emit("waiting");
+    }
+  });
+
+  // ── Message handling ─────────────────────────────────────────────────────
+  socket.on("message", (data) => {
+    if (!socket.partner || !socket.partner.connected) {
+      socket.emit("error", { msg: "Partner disconnected" });
+      return;
+    }
+
+    let msg = String(data.msg || "").trim().slice(0, MSG_MAX);
+    if (!msg) return;
+
+    // Rate limiting
+    if (!socket.msgTimes) socket.msgTimes = [];
+    const now = Date.now();
+    socket.msgTimes = socket.msgTimes.filter(t => now - t < MSG_RATE_WINDOW_MS);
+
+    if (socket.msgTimes.length >= MSG_RATE_MAX) {
+      socket.emit("rateLimited");
+      return;
+    }
+    socket.msgTimes.push(now);
+
+    socket.partner.emit("message", { msg, name: socket.userName });
+  });
+
+  // ── Typing indicator ─────────────────────────────────────────────────────
+  socket.on("typing", () => {
+    if (socket.partner) socket.partner.emit("partnerTyping");
+  });
+
+  // ── Name change ──────────────────────────────────────────────────────────
+  socket.on("namechange", ({ name }) => {
+    if (!name || typeof name !== "string") return;
+    const clean = String(name).trim().slice(0, NAME_MAX);
+    if (clean.length < NAME_MIN) return;
+
+    socket.userName = clean;
+    if (socket.partner) socket.partner.emit("partnerName", { name: clean });
+  });
+
+  // ── Game request ─────────────────────────────────────────────────────────
+  socket.on("game:request", ({ gameType }) => {
+    const partner = socket.partner;
+    if (!partner) return;
+    partner.emit("game:invite", { gameType, fromId: socket.id });
+  });
+
+  // ── Game response ────────────────────────────────────────────────────────
+  socket.on("game:response", ({ accepted, gameType, toId }) => {
+    const requesterSocket = io.sockets.sockets.get(toId);
+    if (!requesterSocket) return;
+
+    if (!accepted) {
+      requesterSocket.emit("game:declined");
+      return;
+    }
+
+    const gameId = `${toId}:${socket.id}`;
+    const players = [toId, socket.id];
+
+    let state;
+    if (gameType === "ttt") {
+      state = { board: Array(9).fill(null), currentTurnSocketId: toId };
+    } else if (gameType === "rps") {
+      state = { choices: {} };
+    } else if (gameType === "math") {
+      state = { question: generateMathQuestion(), answered: false };
+    }
+
+    const game = { id: gameId, type: gameType, players, state };
+    gameById.set(gameId, game);
+    gameBySocket.set(toId, gameId);
+    gameBySocket.set(socket.id, gameId);
+
+    const roles = { [toId]: "X", [socket.id]: "O" };
+
+    [toId, socket.id].forEach(pid => {
+      const s = io.sockets.sockets.get(pid);
+      if (s) s.emit("game:start", {
+        gameId,
+        gameType,
+        role: roles[pid] ?? null,
+        opponentId: pid === toId ? socket.id : toId,
+        state
+      });
+    });
+  });
+
+  // ── Game move ────────────────────────────────────────────────────────────
+  socket.on("game:move", (data) => {
+    const gameId = gameBySocket.get(socket.id);
+    if (!gameId) return;
+    const game = gameById.get(gameId);
+    if (!game) return;
+
+    const [p1Id, p2Id] = game.players;
+    const partnerId = socket.id === p1Id ? p2Id : p1Id;
+    const partnerSocket = io.sockets.sockets.get(partnerId);
+
+    if (game.type === "ttt") {
+      const { index } = data;
+      const { board, currentTurnSocketId } = game.state;
+
+      if (currentTurnSocketId !== socket.id) return;
+      if (board[index] !== null) return;
+
+      const symbol = socket.id === p1Id ? "X" : "O";
+      board[index] = symbol;
+      const winResult = checkTTTWinner(board);
+      const draw = !winResult && board.every(Boolean);
+
+      if (!winResult && !draw)
+        game.state.currentTurnSocketId = partnerId;
+
+      const update = {
+        board,
+        currentTurnSocketId: game.state.currentTurnSocketId,
+        winnerSocketId: winResult ? socket.id : undefined,
+        winLine: winResult ? winResult.line : undefined,
+        draw: draw || undefined
+      };
+
+      socket.emit("game:update", update);
+      if (partnerSocket) partnerSocket.emit("game:update", update);
+
+      if (winResult || draw) cleanupGame(game);
+    } else if (game.type === "rps") {
+      if (game.state.choices[socket.id]) return;
+      game.state.choices[socket.id] = data.choice;
+
+      if (partnerSocket)
+        partnerSocket.emit("game:update", { opponentChose: true });
+
+      if (Object.keys(game.state.choices).length === 2) {
+        const c1 = game.state.choices[p1Id];
+        const c2 = game.state.choices[p2Id];
+        const result = getRPSWinner(c1, c2);
+        const winnerSocketId = result === "draw" ? null : result === "p1" ? p1Id : p2Id;
+
+        const update = {
+          choices: game.state.choices,
+          winnerSocketId,
+          draw: result === "draw"
+        };
+        socket.emit("game:update", update);
+        if (partnerSocket) partnerSocket.emit("game:update", update);
+        cleanupGame(game);
+      }
+    } else if (game.type === "math") {
+      if (game.state.answered) return;
+      const { answer: submitted } = data;
+
+      if (submitted === game.state.question.answer) {
+        game.state.answered = true;
+        const update = {
+          winnerSocketId: socket.id,
+          answer: game.state.question.answer,
+          question: game.state.question
+        };
+        socket.emit("game:update", update);
+        if (partnerSocket) partnerSocket.emit("game:update", update);
+        cleanupGame(game);
+      } else {
+        socket.emit("game:update", { wrong: true });
+      }
+    }
+  });
+
+  // ── Rematch ──────────────────────────────────────────────────────────────
+  socket.on("game:rematch", ({ gameType, toId }) => {
+    const target = io.sockets.sockets.get(toId);
+    if (!target) return;
+    target.emit("game:invite", { gameType, fromId: socket.id, isRematch: true });
+  });
+
+  // ── Disconnect ───────────────────────────────────────────────────────────
+  socket.on("disconnect", () => {
+    console.log(`[SOCKET] Disconnected: ${socket.id}`);
+
+    if (socket._regUser) {
+      const sockets = onlineRegSockets.get(socket._regUser.usernameLower);
+      if (sockets) {
+        sockets.delete(socket.id);
+        if (sockets.size === 0) onlineRegSockets.delete(socket._regUser.usernameLower);
+      }
+    }
+
+    if (socket.partner) {
+      socket.partner.emit("partnerDisconnected", { name: socket.userName || "" });
+      socket.partner.partner = null;
+      socket.partner = null;
+    }
+
+    cleanupGameForSocket(socket.id);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// START SERVER
+// ════════════════════════════════════════════════════════════════════════════
+
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log(`\n🚀 GAICANI Server running on port ${PORT}\n`);
+  console.log(`   URL: http://localhost:${PORT}`);
+  console.log(`   Admin panel: http://localhost:${PORT}${ROUTE.panel}`);
+  console.log(`   Stats: http://localhost:${PORT}${ROUTE.stats}\n`);
+});
