@@ -238,6 +238,43 @@
 .prb-private { background: #3ba55d; color: #fff; }
 .prb-private:hover { background: #2d8a4e; }
 
+/* ── Add-Friend icon button (next to partner name in the top bar) ──
+   The only way to send a friend request to the current chat partner.
+   Stays visible for the whole chat with a registered, non-friend
+   partner — independent of the 5s auto-hide on #partner-reg-banner. */
+.add-friend-icon-btn {
+  order: 2;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: #5865f2;
+  color: #fff;
+  font-size: .9em;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s, transform .1s;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+}
+.add-friend-icon-btn:hover    { background: #4752c4; }
+.add-friend-icon-btn:active   { transform: scale(.92); }
+.add-friend-icon-btn:disabled { background: #3ba55d; cursor: not-allowed; opacity: .9; }
+
+@media (max-width: 600px) {
+  .add-friend-icon-btn {
+    order: 1;
+    width: 24px;
+    height: 24px;
+    font-size: .72em;
+  }
+}
+
 /* ── Purple name for registered users ───────────────────────────── */
 /* Applied to the partner name display when they are registered */
 .reg-partner-name,
