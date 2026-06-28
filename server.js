@@ -1655,12 +1655,9 @@ io.on("connection", (socket) => {
       setTimeout(() => {
         socket.recentPartnerIds.delete(oldPartnerId);
         if (oldPartner.connected) oldPartner.recentPartnerIds.delete(socket.id);
-        // After cooldown, re-queue both sockets if still waiting — fixes small-pool deadlock
-        if (socket.connected && !socket.partner && socket.userName) {
-          if (!waitingQueue.some(s => s.id === socket.id)) waitingQueue.push(socket);
-          broadcastQueuePositions();
-        }
-        // oldPartner was left — do NOT auto-queue them; they must press Next themselves
+        // NOTE: we do NOT re-queue either socket here.
+        // The user who clicked Next is already in the queue via tryFindPartner() below.
+        // The partner who was left must press Next themselves — no auto-search.
       }, 5000);
 
     // Cancel any active game for both sides
