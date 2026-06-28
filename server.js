@@ -1647,7 +1647,7 @@ io.on("connection", (socket) => {
       socket.partner              = null;
       oldPartner.partner          = null;
       socket.lastPartnerName      = "";
-      oldPartner.lastPartnerName  = "";   // prevent stale block target on the skipped side
+      oldPartner.lastPartnerName  = "";
       oldPartner.emit("partnerDisconnected", { name: socket.userName });
 
       socket.recentPartnerIds.add(oldPartnerId);
@@ -1655,21 +1655,16 @@ io.on("connection", (socket) => {
       setTimeout(() => {
         socket.recentPartnerIds.delete(oldPartnerId);
         if (oldPartner.connected) oldPartner.recentPartnerIds.delete(socket.id);
-        // After cooldown, re-queue both sockets if still waiting — fixes small-pool deadlock
-        if (socket.connected && !socket.partner && socket.userName) {
-          if (!waitingQueue.some(s => s.id === socket.id)) waitingQueue.push(socket);
-          broadcastQueuePositions();
-        }
-        // oldPartner was left — do NOT auto-queue them; they must press Next themselves
+        // Do NOT auto-queue either side — both must press Search themselves
       }, 5000);
 
-    // Cancel any active game for both sides
       cleanupGameForSocket(socket.id);
       cleanupGameForSocket(oldPartnerId);
     }
 
+    // Remove from queue — do NOT call tryFindPartner()
+    // User must press the Search button to start searching
     waitingQueue = waitingQueue.filter(s => s.id !== socket.id);
-    tryFindPartner();
   });
 
   socket.on("blockUser", (data) => {
@@ -2591,29 +2586,6 @@ app.post("/api/friends/decline", express.json({ limit: "2kb" }), (req, res) => {
   saveAuthUsers();
 
   res.json({ success: true });
-});
-
-// GET /api/priv/history — fetch private message history between two friends
-app.get("/api/priv/history", (req, res) => {
-  const authHeader = req.headers.authorization || "";
-  const token = authHeader.replace("Bearer ", "").trim();
-  const { username, friend } = req.query;
-
-  if (!token || !username || !friend)
-    return res.status(400).json({ error: "Missing params" });
-
-  const entry = authTokens.get(token);
-  if (!entry || Date.now() >= entry.expiry)
-    return res.status(401).json({ error: "Unauthorized" });
-
-  if (entry.usernameLower !== username.toLowerCase())
-    return res.status(403).json({ error: "Forbidden" });
-
-  const roomId = privRoomId(username.toLowerCase(), friend.toLowerCase());
-  const room = privateRooms.get(roomId);
-  const msgs = room ? room.messages.filter(m => Date.now() < room.expiresAt) : [];
-
-  res.json({ messages: msgs });
 });
 
 // ════════════════════════════════════════════════════════════════════════════
