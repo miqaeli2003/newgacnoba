@@ -1034,6 +1034,8 @@
       transports: ["websocket", "polling"],
     });
 
+    setupMediaGameSocketListeners();
+
     socket.on("connect", () => {
       socket.emit("auth:login", { token });
     });
@@ -1159,6 +1161,7 @@
     });
   }
 
+  function setupMediaGameSocketListeners() {
   socket.on("friendChat:photo", ({ fromUsername, dataUrl, timestamp }) => {
     if (fromUsername.toLowerCase() !== friendName.toLowerCase()) return;
     hideTyping();
@@ -1357,6 +1360,7 @@
     showToast("😢 მოწინააღმდეგე გავიდა");
     closeGameOverlay();
   });
+  } // end setupMediaGameSocketListeners
 
   function renderFCGame(type, state, role, update) {
     elGameBoard.innerHTML = "";
