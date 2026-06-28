@@ -618,15 +618,17 @@ function showToast(text, duration = 3000) {
 function startSearchRetry() {
   stopSearchRetry();
   searchRetryInterval = setInterval(() => {
-    // Double-check both flags before re-emitting — partnerFound can arrive
-    // between ticks and set partnerConnected=true; we must not clobber that.
-    if (!partnerConnected && !isReconnecting && userName) {
-      socket.emit("findPartner");
-    } else if (partnerConnected) {
-      // Already matched — clean up the interval immediately
+    // Stop immediately if we are already connected to a partner
+    if (partnerConnected) {
       stopSearchRetry();
+      return;
     }
-  }, 2000);
+    // Don't emit while reconnecting — server is handling that separately
+    if (isReconnecting) return;
+    // Only emit if we have a name and the socket is actually live
+    if (!userName || !socket.connected) return;
+    socket.emit("findPartner");
+  }, 3000); // 3s — gives server enough time to respond before we retry
 }
 
 function stopSearchRetry() {
@@ -1224,7 +1226,10 @@ function displayReaction(messageId, emoji, isMine) {
 function sendMessage() {
   const message = messageInput.value.trim();
   if (!message) return;
-  if (!partnerConnected || !userName || messageInput.disabled || messageInput.readOnly) return;
+  // Guard every possible way the chat can be in a non-connected state
+  if (!partnerConnected || !userName) return;
+  if (messageInput.disabled || messageInput.readOnly) return;
+  if (!socket.connected) return; // don't queue messages if socket is down
   const msgId = generateMsgId();
   const currentReply = replyTo ? { ...replyTo } : null;
   addMessage(message, true, msgId, currentReply);
@@ -1428,8 +1433,12 @@ socket.on("nameAccepted", (acceptedName) => {
     isFirstLogin = false;
     clearChat();
     addSearchingMessage();
+    stopSearchRetry(); // clear any stale interval before starting fresh
     socket.emit("findPartner");
-    startSearchRetry();
+    // Small delay before retry loop so the initial findPartner has time to land
+    setTimeout(() => {
+      if (!partnerConnected && !isReconnecting && userName) startSearchRetry();
+    }, 500);
   } else if (isReconnecting) {
     isReconnecting = false;
     _reconnectNameRetries = 0; // reset retry counter on success
@@ -1502,13 +1511,20 @@ socket.on("queuePosition", ({ position, total }) => {
 });
 
 socket.on("partnerFound", (partner) => {
+  // ── Stop everything searching-related immediately ──────────────────────
   stopSearchRetry();
-  clearChat();
+  // Abort any in-flight fact fetch so stale async work doesn't land after match
+  if (gifFetchController) { gifFetchController.abort(); gifFetchController = null; }
+
+  // ── Set state atomically before touching the DOM ───────────────────────
   isReconnecting       = false;  // clear any lingering reconnect state
-  partnerName          = partner.name || "Anonymous";
   partnerConnected     = true;
+  partnerName          = partner.name || "Anonymous";
   lastPartnerName      = "";
   canBlockDisconnected = false;
+
+  // ── DOM updates ────────────────────────────────────────────────────────
+  clearChat();
   setPartnerNameDisplay(partnerName);
   addSystemMessage(`გილოცავთ პარტნიორი ნაპოვნია 🥳 : ${partnerName}`);
 
@@ -1521,11 +1537,13 @@ socket.on("partnerFound", (partner) => {
     scheduleScroll();
   }
 
+  // ── Enable inputs — do this last so the DOM is fully ready ────────────
   setInputsEnabled(true);
-  // Safety: explicitly clear readOnly/disabled in case a race left them set
-  messageInput.disabled  = false;
-  messageInput.readOnly  = false;
+  // Safety: explicitly unlock in case a prior race left these locked
+  messageInput.disabled        = false;
+  messageInput.readOnly        = false;
   messageInput.style.pointerEvents = "";
+  messageInput.style.opacity       = "";
   updateBlockBtn();
   hideTypingIndicator();
   playNotification("partnerFound");
@@ -1544,6 +1562,7 @@ socket.on("partnerReconnecting", (data) => {
 
 socket.on("partnerReconnected", (data) => {
   stopSearchRetry();
+  isReconnecting         = false;
   partnerWasReconnecting = false;
   partnerName            = data.name || partnerName;
   partnerConnected       = true;
@@ -1553,8 +1572,8 @@ socket.on("partnerReconnected", (data) => {
   setPartnerNameDisplay(partnerName);
   setInputsEnabled(true);
   // Explicitly unlock — race-safe double-clear
-  messageInput.disabled  = false;
-  messageInput.readOnly  = false;
+  messageInput.disabled        = false;
+  messageInput.readOnly        = false;
   messageInput.style.pointerEvents = "";
   updateBlockBtn();
   hideTypingIndicator();
@@ -1579,13 +1598,14 @@ socket.on("partnerRestored", (data) => {
 });
 
 socket.on("waitingForPartner", () => {
-  // Guard: never disable inputs if partnerConnected is already true
-  // (race condition: partnerFound can arrive just before waitingForPartner)
-  if (!partnerConnected) {
-    partnerName = ""; setPartnerNameDisplay("");
-    setInputsEnabled(false);
-  }
-  // If partnerConnected is true, partnerFound already won the race — do nothing
+  // Guard: if partnerFound already arrived (race), do nothing at all.
+  // This can happen when partnerFound and waitingForPartner are queued
+  // back-to-back and arrive in the same microtask flush.
+  if (partnerConnected) return;
+  // Also ignore during reconnecting — server handles that path
+  if (isReconnecting) return;
+  partnerName = ""; setPartnerNameDisplay("");
+  setInputsEnabled(false);
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1707,6 +1727,10 @@ socket.on("partnerTyping", (typing) => {
 });
 
 socket.on("message", (msg) => {
+  // Drop messages that arrive after partner has already disconnected/changed.
+  // This handles the race where "next" was clicked but the server hadn't
+  // processed it yet and forwarded one last message from the old partner.
+  if (!partnerConnected) return;
   hideTypingIndicator();
   addMessage(msg.text, false, msg.messageId, msg.replyTo || null);
   playNotification("message");
@@ -1731,13 +1755,14 @@ socket.on("partnerTabBack", () => {});
 socket.on("partnerDisconnected", (data) => {
   partnerWasReconnecting = false;
   removeReconnectingMessage();
-  stopSearchRetry();  // stop any running search — user must press Next manually
+  stopSearchRetry();          // stop any running search — user must press Next manually
   partnerConnected     = false;
   partnerName = ""; setPartnerNameDisplay("");
   lastPartnerName      = data.name || lastPartnerName || "";
   canBlockDisconnected = !!lastPartnerName;
   setInputsEnabled(false);
   updateBlockBtn();
+  hideTypingIndicator();      // clear typing dots if they were showing
 
   // Show disconnect notice + inline block offer
   const disconnectEl = document.createElement("div");
@@ -1918,8 +1943,14 @@ socket.on("awayTimeout", () => {});
 
 nextBtn.addEventListener("click", () => {
   nextBtn.disabled = true;
-  setTimeout(() => { nextBtn.disabled = false; }, 1000);
-  // Lock state FIRST before any async/emit so no message can slip through
+  setTimeout(() => { nextBtn.disabled = false; }, 1200);
+
+  // ── Tear down current state synchronously FIRST ───────────────────────
+  // Stop any running search/retry before changing partnerConnected so that
+  // the interval callback can't slip a findPartner emit through while we
+  // are mid-teardown.
+  stopSearchRetry();
+
   partnerConnected     = false;
   partnerName = ""; setPartnerNameDisplay("");
   lastPartnerName      = "";
@@ -1931,8 +1962,18 @@ nextBtn.addEventListener("click", () => {
   clearReply();
   clearChat();
   addSearchingMessage();
+
+  // ── Tell server, then start retry loop ───────────────────────────────
+  // We emit "next" first so the server tears down the old pairing before
+  // we start hammering it with findPartner retries.
   socket.emit("next");
-  startSearchRetry();
+
+  // Small delay before starting retry so server has processed "next"
+  setTimeout(() => {
+    if (!partnerConnected && !isReconnecting && userName) {
+      startSearchRetry();
+    }
+  }, 400);
 });
 
 blockBtn.addEventListener("click", () => {
@@ -1975,13 +2016,13 @@ messageInput.addEventListener("input", () => {
   charCount.textContent = len > 0 ? `${len}/2000` : ``;
   charCount.classList.toggle("warning", len > 1800);
 
-  // Typing indicator
-  if (!partnerConnected) return;
+  // Typing indicator — only when actually connected to a partner
+  if (!partnerConnected || !socket.connected) return;
   if (!isTyping) { isTyping = true; socket.emit("typing", true); }
   clearTimeout(typingTimeout);
   typingTimeout = setTimeout(() => {
     isTyping = false;
-    socket.emit("typing", false);
+    if (partnerConnected) socket.emit("typing", false);
   }, 1500);
 });
 
