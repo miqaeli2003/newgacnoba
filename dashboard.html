@@ -502,7 +502,7 @@
           body: JSON.stringify({ token }),
         });
         const d = await r.json();
-        if (!d.ok) {
+        if (!d.ok && !d.success) {
           clearAuth();
           if (loading) loading.style.display = "none";
           if (authScr) authScr.style.display = "flex";
