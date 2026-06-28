@@ -13,6 +13,9 @@
   let expiryInterval  = null;
   let privPanelOpen   = false;
 
+  // Expose registration status globally so script.js can read it
+  window.gaicaniAuthUser = null;
+
   // Session-only blocked registered users: Set of lowercase usernames
   let sessionBlockedReg = new Set();
 
@@ -155,6 +158,8 @@
   function updateAuthBadge() {
     const b = $("auth-user-badge");
     if (!b) return;
+    // Keep global in sync so script.js can check registration status
+    window.gaicaniAuthUser = authUser;
     if (authUser) {
       b.textContent = `🔐 ${esc(authUser.username)}`;
       b.style.display = "inline-flex";
@@ -166,10 +171,20 @@
       const da = $("dashAvatar");
       if (du) du.textContent = authUser.username;
       if (da) da.textContent = authUser.username.charAt(0).toUpperCase();
+      // Registered users: hide Change Name button and dropdown item (name is permanent)
+      const cnb = document.getElementById("changeNameBtn");
+      if (cnb) cnb.style.display = "none";
+      const dmName = document.getElementById("dm-name");
+      if (dmName) dmName.style.display = "none";
     } else {
       b.style.display = "none";
       const lb = $("auth-logout-btn");
       if (lb) lb.style.display = "none";
+      // Guest: restore Change Name button and dropdown item
+      const cnb = document.getElementById("changeNameBtn");
+      if (cnb) cnb.style.display = "";
+      const dmName = document.getElementById("dm-name");
+      if (dmName) dmName.style.display = "";
     }
   }
 
@@ -263,35 +278,9 @@
       }
       return;
     }
-    renderDashFriends(authUser.friends || []);
-    renderDashBlocked();
-    const du = $("dashUsername");
-    const da = $("dashAvatar");
-    if (du) du.textContent = authUser.username;
-    if (da) da.textContent = authUser.username.charAt(0).toUpperCase();
-    const fc = $("dashFriendCount");
-    if (fc) fc.textContent = (authUser.friends || []).length;
-    $("dashboard-panel").style.display = "flex";
+    // Redirect to the dedicated dashboard page
+    window.location.href = "/dashboard.html";
   }
-
-  function closeDashboard() {
-    const p = $("dashboard-panel");
-    if (p) p.style.display = "none";
-  }
-
-  $("dashClose")?.addEventListener("click", closeDashboard);
-  $("dashOverlay")?.addEventListener("click", closeDashboard);
-
-  // "Random Chat" button in dashboard → close dashboard and start searching
-  $("dashRandomChat")?.addEventListener("click", () => {
-    closeDashboard();
-    // Close the friends panel too if open
-    const fp = $("friends-panel");
-    if (fp) fp.style.display = "none";
-    // Trigger the Next/Search button
-    const nextBtn = document.getElementById("nextBtn");
-    if (nextBtn && !nextBtn.disabled) nextBtn.click();
-  });
 
   /* ── Dashboard: friends list ────────────────────────────────────── */
   function renderDashFriends(friends) {
@@ -718,6 +707,20 @@
     renderDashFriends([]);
     bindSocketEvents();
     await tryAutoLogin();
+
+    // Handle private-chat redirect coming from dashboard.html
+    try {
+      const privRedirect = sessionStorage.getItem("gaicani_open_priv");
+      if (privRedirect && authUser) {
+        sessionStorage.removeItem("gaicani_open_priv");
+        const { friend } = JSON.parse(privRedirect);
+        if (friend && authUser) {
+          const rid = [authUser.username.toLowerCase(), friend.toLowerCase()].sort().join("::");
+          // Wait a moment for socket to be ready, then open private chat
+          setTimeout(() => openPrivateChat(rid, friend), 1200);
+        }
+      }
+    } catch (_) {}
   });
 
 })();
