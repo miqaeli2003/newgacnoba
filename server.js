@@ -2882,11 +2882,11 @@ io.on("connection", (socket) => {
     if (match) {
       socket.partner = match;
       match.partner = socket;
-      socket.emit("paired", { name: match.userName });
-      match.emit("paired", { name: socket.userName });
+      socket.emit("partnerFound", { name: match.userName });
+      match.emit("partnerFound", { name: socket.userName });
       console.log(`[PAIR] ${socket.id} ↔ ${match.id}`);
     } else {
-      socket.emit("waiting");
+      socket.emit("waitingForPartner");
     }
   });
 
