@@ -1905,6 +1905,11 @@ document.addEventListener("touchend", (e) => {
 // ── Welcome page / logo home ──────────────────────────────────────────────────
 // Called when user clicks the GAICANI logo to return to the welcome screen.
 function goToWelcome() {
+  // Registered users: logo click → go to their Dashboard page instead
+  if (window.gaicaniAuthUser) {
+    window.location.href = "/dashboard.html";
+    return;
+  }
   // Lock state FIRST so no message can slip through
   partnerConnected     = false;
   partnerName = ""; setPartnerNameDisplay("");
