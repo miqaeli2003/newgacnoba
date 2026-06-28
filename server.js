@@ -2745,9 +2745,19 @@ io.on("connection", (socket) => {
   socket.on("auth:token", (token) => {
     // Normalise: old client sent raw string, new client sends { token }
     const t = (typeof token === "string") ? token : token?.token;
-    if (t) socket.emit("auth:login:internal", { token: t }); // reuse handler logic
-    // Just delegate to the auth:login handler
-    socket.emit.call(socket, "auth:login", { token: t });
+    if (!t) return;
+    // Run auth:login logic directly (socket.emit won't trigger server-side listeners)
+    const entry = authTokens.get(t);
+    if (!entry || Date.now() >= entry.expiry) { socket.emit("auth:invalid"); return; }
+    const user = registeredUsers.get(entry.usernameLower);
+    if (!user) return;
+    socket._regUser = { usernameLower: entry.usernameLower, username: user.username };
+    socket.userName = user.username;
+    if (!onlineRegSockets.has(entry.usernameLower)) onlineRegSockets.set(entry.usernameLower, new Set());
+    onlineRegSockets.get(entry.usernameLower).add(socket.id);
+    socket.join(`user:${entry.usernameLower}`);
+    socket.emit("auth:authenticated", { username: user.username, friends: user.friends || [], pendingRequests: user.pendingRequests || [] });
+    console.log(`[AUTH] ${user.username} logged in via auth:token`);
   });
 
   // ── auth:checkPartner — tell client if current partner is registered ──────
@@ -2936,6 +2946,32 @@ io.on("connection", (socket) => {
     const toLc = String(toUsername).toLowerCase().trim();
     io.to(`user:${toLc}`).emit("friendChat:partnerTyping", {
       fromUsername: socket._regUser.username
+    });
+  });
+
+  // ── friendChat:photo — relay photo (base64) to friend ────────────────────
+  socket.on("friendChat:photo", ({ toUsername, dataUrl }) => {
+    if (!socket._regUser || !toUsername || !dataUrl) return;
+    const toLc   = String(toUsername).toLowerCase().trim();
+    const myUser = registeredUsers.get(socket._regUser.usernameLower);
+    if (!myUser || !(myUser.friends || []).includes(toLc)) return;
+    io.to(`user:${toLc}`).emit("friendChat:photo", {
+      fromUsername: socket._regUser.username,
+      dataUrl:      dataUrl,
+      timestamp:    new Date().toISOString()
+    });
+  });
+
+  // ── friendChat:gif — relay GIF URL to friend ─────────────────────────────
+  socket.on("friendChat:gif", ({ toUsername, url }) => {
+    if (!socket._regUser || !toUsername || !url) return;
+    const toLc   = String(toUsername).toLowerCase().trim();
+    const myUser = registeredUsers.get(socket._regUser.usernameLower);
+    if (!myUser || !(myUser.friends || []).includes(toLc)) return;
+    io.to(`user:${toLc}`).emit("friendChat:gif", {
+      fromUsername: socket._regUser.username,
+      url:          url,
+      timestamp:    new Date().toISOString()
     });
   });
 
