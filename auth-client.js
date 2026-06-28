@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════
    GAICANI — Auth Client  (auth-client.js)
-   Registered users · Friends · Private Chat
-   Loaded after script.js. Uses window.socket (set in script.js line 2).
+   Registered users · Friends · Private Chat · Dashboard · ⋮ Menu
+   Loaded after script.js. Uses window.socket (set in script.js).
    ═══════════════════════════════════════════════════════════════════ */
 (function () {
   "use strict";
@@ -13,9 +13,12 @@
   let expiryInterval  = null;
   let privPanelOpen   = false;
 
+  // Session-only blocked registered users: Set of lowercase usernames
+  let sessionBlockedReg = new Set();
+
   /* ── Shorthand ─────────────────────────────────────────────────── */
   const $  = id => document.getElementById(id);
-  const sk = () => window.socket; // socket from script.js
+  const sk = () => window.socket;
 
   /* ── HTML-escape ───────────────────────────────────────────────── */
   function esc(s) {
@@ -132,7 +135,6 @@
     };
     saveAuth(data.token, data.username);
 
-    // Authenticate the socket immediately
     if (sk()) {
       if (sk().connected) sk().emit("auth:token", data.token);
       else sk().once("connect", () => sk().emit("auth:token", data.token));
@@ -140,6 +142,7 @@
 
     updateAuthBadge();
     renderFriendsList(authUser.friends);
+    renderDashFriends(authUser.friends);
 
     // Pre-fill the existing name field and auto-submit
     const ni = $("nameInput");
@@ -152,8 +155,22 @@
   function updateAuthBadge() {
     const b = $("auth-user-badge");
     if (!b) return;
-    if (authUser) { b.textContent = `🔐 ${esc(authUser.username)}`; b.style.display = "inline-flex"; }
-    else            { b.style.display = "none"; }
+    if (authUser) {
+      b.textContent = `🔐 ${esc(authUser.username)}`;
+      b.style.display = "inline-flex";
+      // Show/hide logout
+      const lb = $("auth-logout-btn");
+      if (lb) lb.style.display = "inline-flex";
+      // Update dashboard user card
+      const du = $("dashUsername");
+      const da = $("dashAvatar");
+      if (du) du.textContent = authUser.username;
+      if (da) da.textContent = authUser.username.charAt(0).toUpperCase();
+    } else {
+      b.style.display = "none";
+      const lb = $("auth-logout-btn");
+      if (lb) lb.style.display = "none";
+    }
   }
 
   /* ── Logout button ──────────────────────────────────────────────── */
@@ -169,7 +186,6 @@
     const { token, username } = loadAuth();
     if (!token || !username) return false;
 
-    // Pre-fill immediately to reduce visible flash
     const ni = $("nameInput");
     if (ni && !ni.value) ni.value = username;
 
@@ -183,6 +199,207 @@
       handleAuthSuccess({ ...d, token });
       return true;
     } catch { clearAuth(); return false; }
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     THREE-DOT MENU
+     ══════════════════════════════════════════════════════════════════ */
+  const dotMenuBtn       = $("dotMenuBtn");
+  const dotMenuDropdown  = $("dotMenuDropdown");
+
+  function closeDotMenu() {
+    if (dotMenuDropdown) dotMenuDropdown.style.display = "none";
+  }
+
+  dotMenuBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const open = dotMenuDropdown?.style.display !== "none";
+    if (dotMenuDropdown) dotMenuDropdown.style.display = open ? "none" : "block";
+  });
+
+  document.addEventListener("click", (e) => {
+    if (dotMenuDropdown && !dotMenuBtn?.contains(e.target)) closeDotMenu();
+  });
+
+  // ⋮ → Games: trigger the existing games button if present
+  $("dm-games")?.addEventListener("click", () => {
+    closeDotMenu();
+    // Try to find the games button injected by games.js
+    const gBtn = document.getElementById("gamesBtn") || document.querySelector(".games-btn");
+    if (gBtn) { gBtn.click(); return; }
+    // Fallback: dispatch a custom event games.js can listen for
+    document.dispatchEvent(new CustomEvent("gaicani:openGames"));
+  });
+
+  // ⋮ → Change name
+  $("dm-name")?.addEventListener("click", () => {
+    closeDotMenu();
+    document.getElementById("changeNameBtn")?.click();
+  });
+
+  // ⋮ → Interests
+  $("dm-interests")?.addEventListener("click", () => {
+    closeDotMenu();
+    document.getElementById("interestsBtn")?.click();
+  });
+
+  // ⋮ → My Page (Dashboard)
+  $("dm-mypage")?.addEventListener("click", () => {
+    closeDotMenu();
+    openDashboard();
+  });
+
+  /* ══════════════════════════════════════════════════════════════════
+     DASHBOARD / MY PAGE
+     ══════════════════════════════════════════════════════════════════ */
+  function openDashboard() {
+    if (!authUser) {
+      showToast("ჯერ შედით სისტემაში 👆");
+      // Show login tab in modal
+      const nameModal = $("nameModal");
+      if (nameModal) {
+        nameModal.style.display = "flex";
+        showAuthTab("login");
+      }
+      return;
+    }
+    renderDashFriends(authUser.friends || []);
+    renderDashBlocked();
+    const du = $("dashUsername");
+    const da = $("dashAvatar");
+    if (du) du.textContent = authUser.username;
+    if (da) da.textContent = authUser.username.charAt(0).toUpperCase();
+    const fc = $("dashFriendCount");
+    if (fc) fc.textContent = (authUser.friends || []).length;
+    $("dashboard-panel").style.display = "flex";
+  }
+
+  function closeDashboard() {
+    const p = $("dashboard-panel");
+    if (p) p.style.display = "none";
+  }
+
+  $("dashClose")?.addEventListener("click", closeDashboard);
+  $("dashOverlay")?.addEventListener("click", closeDashboard);
+
+  // "Random Chat" button in dashboard → close dashboard and start searching
+  $("dashRandomChat")?.addEventListener("click", () => {
+    closeDashboard();
+    // Close the friends panel too if open
+    const fp = $("friends-panel");
+    if (fp) fp.style.display = "none";
+    // Trigger the Next/Search button
+    const nextBtn = document.getElementById("nextBtn");
+    if (nextBtn && !nextBtn.disabled) nextBtn.click();
+  });
+
+  /* ── Dashboard: friends list ────────────────────────────────────── */
+  function renderDashFriends(friends) {
+    const list = $("dash-friends-list");
+    if (!list) return;
+
+    const fc = $("dashFriendCount");
+    if (fc) fc.textContent = (friends || []).length;
+
+    if (!friends || !friends.length) {
+      list.innerHTML = `<div class="dash-empty">ჯერ მეგობრები არ გყავს.<br>
+        <small>ჩატის დროს ➕ ღილაკზე დააჭირე.</small></div>`;
+      return;
+    }
+
+    list.innerHTML = friends.map(f => `
+      <div class="dash-friend-item" data-friend="${esc(f)}">
+        <div class="dash-friend-avatar">${esc(f).charAt(0).toUpperCase()}</div>
+        <span class="dash-friend-name dash-reg-name">${esc(f)}</span>
+        <div class="dash-friend-actions">
+          <button class="dash-action-sm dash-chat-btn" data-f="${esc(f)}" title="Private Chat">💬</button>
+          <button class="dash-action-sm dash-remove-btn" data-f="${esc(f)}" title="მეგობრობის გაუქმება">✕</button>
+          <button class="dash-action-sm dash-block-reg-btn" data-f="${esc(f)}" title="სესიის ბლოკი">🚫</button>
+        </div>
+      </div>`).join("");
+
+    // Chat with friend
+    list.querySelectorAll(".dash-chat-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        if (!authUser) return;
+        const rid = [authUser.username.toLowerCase(),
+                     btn.dataset.f.toLowerCase()].sort().join("::");
+        openPrivateChat(rid, btn.dataset.f);
+        closeDashboard();
+      });
+    });
+
+    // Remove friend
+    list.querySelectorAll(".dash-remove-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const fname = btn.dataset.f;
+        if (!confirm(`წაშალოთ ${fname} მეგობრებიდან?`)) return;
+        sk()?.emit("friend:remove", { friendUsername: fname });
+      });
+    });
+
+    // Session-block friend
+    list.querySelectorAll(".dash-block-reg-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const fname = btn.dataset.f;
+        if (!confirm(`დაბლოკოთ ${fname} ამ სესიაზე? (ბლოკი ავტომატურად გაუქმდება სესიის ბოლოს)`)) return;
+        sessionBlockReg(fname);
+      });
+    });
+  }
+
+  /* ── Dashboard: blocked list (session only) ─────────────────────── */
+  function renderDashBlocked() {
+    const list    = $("dash-blocked-list");
+    const section = $("dashBlockedSection");
+    const cnt     = $("dashBlockedCount");
+    if (!list || !section) return;
+
+    const blocked = [...sessionBlockedReg];
+    if (cnt) cnt.textContent = blocked.length;
+    section.style.display = blocked.length ? "block" : "none";
+
+    if (!blocked.length) { list.innerHTML = ""; return; }
+
+    list.innerHTML = blocked.map(u => `
+      <div class="dash-friend-item">
+        <div class="dash-friend-avatar" style="background:rgba(242,63,66,.2);color:#f23f42">${esc(u).charAt(0).toUpperCase()}</div>
+        <span class="dash-friend-name" style="color:#f23f42">${esc(u)}</span>
+        <button class="dash-action-sm" data-u="${esc(u)}" title="ბლოკის მოხსნა" style="color:#3ba55d">✓</button>
+      </div>`).join("");
+
+    list.querySelectorAll("button[data-u]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        sessionBlockedReg.delete(btn.dataset.u);
+        sk()?.emit("reg:sessionUnblock", { targetUsername: btn.dataset.u });
+        renderDashBlocked();
+        showToast(`✅ ${esc(btn.dataset.u)} — ბლოკი მოხსნილია (სესია)`);
+      });
+    });
+  }
+
+  /* ── Session-block a registered user ───────────────────────────── */
+  function sessionBlockReg(username) {
+    const lc = username.toLowerCase();
+    sessionBlockedReg.add(lc);
+    sk()?.emit("reg:sessionBlock", { targetUsername: lc });
+    renderDashBlocked();
+    renderDashFriends(authUser?.friends || []);
+    showToast(`🚫 ${esc(username)} — დაბლოკილია ამ სესიაზე`);
+    const section = $("dashBlockedSection");
+    if (section) section.style.display = "block";
+  }
+
+  /* ── Purple name helper ─────────────────────────────────────────── */
+  // Marks partner name element purple when they are a registered user
+  function markPartnerNamePurple(isReg) {
+    const el = document.getElementById("partnerNameDisplay");
+    if (!el) return;
+    if (isReg) {
+      el.classList.add("reg-partner-name");
+    } else {
+      el.classList.remove("reg-partner-name");
+    }
   }
 
   /* ══════════════════════════════════════════════════════════════════
@@ -200,6 +417,7 @@
       }
       updateAuthBadge();
       renderFriendsList(friends || []);
+      renderDashFriends(friends || []);
       (pendingRequests || []).forEach(fr => showFriendRequestNotif(fr));
     });
 
@@ -209,37 +427,55 @@
     s.on("auth:partnerRegInfo", ({ partnerRegName, isFriend, roomId }) => {
       partnerRegInfo = { partnerRegName, isFriend, roomId };
       renderPartnerRegBanner(partnerRegName, isFriend, roomId);
+      // Mark partner name purple
+      markPartnerNamePurple(true);
     });
 
     s.on("partnerFound", () => {
       hidePartnerRegBanner();
       partnerRegInfo = null;
-      // Ask server to check if both parties are registered
+      markPartnerNamePurple(false); // reset until we learn otherwise
       if (authUser) setTimeout(() => s.emit("auth:checkPartner"), 700);
     });
 
-    s.on("partnerDisconnected", () => { hidePartnerRegBanner(); partnerRegInfo = null; });
+    s.on("partnerDisconnected", () => {
+      hidePartnerRegBanner();
+      partnerRegInfo = null;
+      markPartnerNamePurple(false);
+    });
 
-    /* ── Friend events ────────────────────────────────────────────── */
+    /* ── Friend events ─────────────────────────────────────────────── */
     s.on("friend:requested",  ({ fromUsername }) => showFriendRequestNotif(fromUsername));
 
     s.on("friend:accepted",   ({ username, friends }) => {
       if (authUser) authUser.friends = friends || [];
       renderFriendsList(friends || []);
+      renderDashFriends(friends || []);
       showToast(`✅ ${esc(username)} ახლა შენი მეგობარია!`);
+      const fc = $("dashFriendCount");
+      if (fc) fc.textContent = (friends || []).length;
     });
 
     s.on("friend:nowFriends", ({ withUsername }) => {
       if (authUser && !authUser.friends.includes(withUsername.toLowerCase()))
         authUser.friends.push(withUsername.toLowerCase());
       renderFriendsList(authUser?.friends || []);
+      renderDashFriends(authUser?.friends || []);
       showToast(`✅ ${esc(withUsername)} ახლა შენი მეგობარია!`);
-      // Update banner if still chatting with that person
       if (partnerRegInfo &&
           partnerRegInfo.partnerRegName.toLowerCase() === withUsername.toLowerCase()) {
         partnerRegInfo.isFriend = true;
         renderPartnerRegBanner(partnerRegInfo.partnerRegName, true, partnerRegInfo.roomId);
       }
+    });
+
+    s.on("friend:removed", ({ friends }) => {
+      if (authUser) authUser.friends = friends || [];
+      renderFriendsList(friends || []);
+      renderDashFriends(friends || []);
+      const fc = $("dashFriendCount");
+      if (fc) fc.textContent = (friends || []).length;
+      showToast("✅ მეგობარი წაიშალა");
     });
 
     s.on("friend:error",      ({ msg }) => showToast(`❌ ${esc(msg)}`));
@@ -313,7 +549,7 @@
   }
 
   /* ══════════════════════════════════════════════════════════════════
-     FRIENDS PANEL
+     FRIENDS PANEL (sidebar)
      ══════════════════════════════════════════════════════════════════ */
   $("auth-friends-btn")?.addEventListener("click", () => {
     if (!authUser) { showToast("ჯერ შედით სისტემაში"); return; }
@@ -336,7 +572,7 @@
     }
     list.innerHTML = friends.map(f => `
       <div class="fl-item">
-        <span class="fl-name">👤 ${esc(f)}</span>
+        <span class="fl-name dash-reg-name">👤 ${esc(f)}</span>
         <button class="fl-btn" data-f="${esc(f)}">💬 Chat</button>
       </div>`).join("");
     list.querySelectorAll(".fl-btn").forEach(btn => {
@@ -433,7 +669,6 @@
   function showFriendRequestNotif(fromUsername) {
     const c = $("notif-container");
     if (!c) return;
-    // Prevent duplicates
     if (c.querySelector(`[data-from="${CSS.escape(fromUsername)}"]`)) return;
 
     const n = document.createElement("div");
@@ -466,7 +701,6 @@
     t.className   = "auth-toast";
     t.textContent = msg;
     c.appendChild(t);
-    // Fade out
     setTimeout(() => {
       t.style.transition = "opacity .35s";
       t.style.opacity    = "0";
@@ -481,11 +715,8 @@
     showAuthTab("guest");
     updateAuthBadge();
     renderFriendsList([]);
-
-    // Bind socket events (socket is already created by script.js at this point)
+    renderDashFriends([]);
     bindSocketEvents();
-
-    // Try to restore session from localStorage
     await tryAutoLogin();
   });
 
