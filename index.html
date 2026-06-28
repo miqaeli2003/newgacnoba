@@ -1,11 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
-
-
- 
-  
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>GAICANI</title>
@@ -43,6 +38,17 @@
       <button class="report-button" id="reportBtn" disabled><span class="btn-icon">🚩</span><span class="btn-label">რეპორტი</span></button>
       <button class="block-button" id="blockBtn" disabled><span class="btn-icon">🚫</span><span class="btn-label">ბლოკი</span></button>
       <button class="next-button" id="nextBtn"><span class="btn-icon">🔎</span><span class="btn-label">ძებნა</span></button>
+
+      <!-- ── Three-dot menu ── -->
+      <div class="dot-menu-wrap" id="dotMenuWrap">
+        <button class="dot-menu-btn" id="dotMenuBtn" title="მეტი">⋮</button>
+        <div class="dot-menu-dropdown" id="dotMenuDropdown" style="display:none">
+          <button class="dot-menu-item" id="dm-games">🎮 Games</button>
+          <button class="dot-menu-item" id="dm-name">✏️ სახელის შეცვლა</button>
+          <button class="dot-menu-item" id="dm-interests">🌟 ინტერესები</button>
+          <button class="dot-menu-item" id="dm-mypage">👤 ჩემი გვერდი</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -249,6 +255,49 @@
                 rows="1" maxlength="2000"
                 autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
       <button id="priv-send">SEND</button>
+    </div>
+  </div>
+
+  <!-- ── Dashboard / My Page Panel ─────────────────────────────────────────── -->
+  <div id="dashboard-panel" style="display:none">
+    <div class="dash-overlay" id="dashOverlay"></div>
+    <div class="dash-sheet">
+      <div class="dash-header">
+        <span class="dash-title">👤 ჩემი გვერდი</span>
+        <button class="dash-close" id="dashClose" title="დახურვა">✕</button>
+      </div>
+
+      <!-- User info card -->
+      <div class="dash-user-card" id="dashUserCard">
+        <div class="dash-avatar" id="dashAvatar">?</div>
+        <div class="dash-user-info">
+          <div class="dash-username" id="dashUsername">—</div>
+          <div class="dash-user-meta">რეგისტრირებული მომხმარებელი</div>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="dash-actions">
+        <button class="dash-action-btn dash-action-primary" id="dashRandomChat">
+          🔎 შემთხვევითი ჩატი
+        </button>
+      </div>
+
+      <!-- Friends section -->
+      <div class="dash-section">
+        <div class="dash-section-label">👥 მეგობრები <span id="dashFriendCount" class="dash-badge">0</span></div>
+        <div id="dash-friends-list" class="dash-friends-list">
+          <div class="dash-empty">ჯერ მეგობრები არ გყავს.<br>
+            <small>ჩატის დროს ➕ ღილაკზე დააჭირე.</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Blocked users (session) section -->
+      <div class="dash-section" id="dashBlockedSection" style="display:none">
+        <div class="dash-section-label">🚫 დაბლოკილი (სესია) <span id="dashBlockedCount" class="dash-badge">0</span></div>
+        <div id="dash-blocked-list" class="dash-friends-list"></div>
+      </div>
     </div>
   </div>
 
