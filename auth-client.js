@@ -12,6 +12,7 @@
   let currentPrivRoom = null;  // string roomId when panel is open
   let expiryInterval  = null;
   let privPanelOpen   = false;
+  let bannerHideTimer = null;  // auto-hide timer for the "registered partner" banner
 
   // Expose registration status globally so script.js can read it
   window.gaicaniAuthUser = null;
@@ -246,6 +247,12 @@
     document.dispatchEvent(new CustomEvent("gaicani:openGames"));
   });
 
+  // ⋮ → Report: trigger the existing report button
+  $("dm-report")?.addEventListener("click", () => {
+    closeDotMenu();
+    document.getElementById("reportBtn")?.click();
+  });
+
   // ⋮ → Change name
   $("dm-name")?.addEventListener("click", () => {
     closeDotMenu();
@@ -467,6 +474,25 @@
       showToast("✅ მეგობარი წაიშალა");
     });
 
+    s.on("friend:removedByOther", ({ byUsername }) => {
+      if (authUser) {
+        authUser.friends = (authUser.friends || []).filter(
+          f => f.toLowerCase() !== byUsername.toLowerCase()
+        );
+        renderFriendsList(authUser.friends);
+        renderDashFriends(authUser.friends);
+        const fc = $("dashFriendCount");
+        if (fc) fc.textContent = authUser.friends.length;
+      }
+      // If currently chatting with that person, drop back to the "registered, not a friend" state
+      if (partnerRegInfo &&
+          partnerRegInfo.partnerRegName.toLowerCase() === byUsername.toLowerCase()) {
+        partnerRegInfo.isFriend = false;
+        renderPartnerRegBanner(partnerRegInfo.partnerRegName, false, partnerRegInfo.roomId);
+      }
+      showToast(`ℹ️ ${esc(byUsername)}-მ შენი მეგობრობა გააუქმა`);
+    });
+
     s.on("friend:error",      ({ msg }) => showToast(`❌ ${esc(msg)}`));
 
     /* ── Private chat events ──────────────────────────────────────── */
@@ -507,34 +533,68 @@
     if (!b) return;
     b.innerHTML = "";
 
+    // Clear any previous auto-hide timer — we're rendering a fresh banner
+    if (bannerHideTimer) { clearTimeout(bannerHideTimer); bannerHideTimer = null; }
+
     const info = document.createElement("span");
     info.className = "prb-info";
 
-    const btn = document.createElement("button");
-
     if (isFriend) {
+      // Already friends — keep the existing Private Chat shortcut, no auto-hide.
       info.textContent = `💬 ${esc(name)} — შენი მეგობარია`;
+      const btn = document.createElement("button");
       btn.className    = "prb-btn prb-private";
       btn.textContent  = "🔒 Private Chat";
       btn.onclick      = () => openPrivateChat(roomId, name);
+      b.append(info, btn);
+      setAddFriendIcon(false, null);
     } else {
-      info.textContent = `🌟 ${esc(name)} — რეგისტრირებულია`;
-      btn.className    = "prb-btn prb-add";
-      btn.textContent  = "➕ მეგობრობა";
-      btn.onclick      = () => {
-        sk()?.emit("friend:request", { toUsername: name });
-        btn.textContent = "✅ გაგზავნილია";
-        btn.disabled    = true;
-      };
+      // Registered, not yet a friend — informational only, no button here.
+      info.textContent = `🌟 ${esc(name)} — რეგისტრირებულია თუ გსურთ შეგიძლიათ დაამატოთ`;
+      b.append(info);
+
+      // The ➕ icon next to the partner's name is the only way to add them.
+      setAddFriendIcon(true, name);
+
+      // Auto-hide this message after 5 seconds (the ➕ icon stays available).
+      bannerHideTimer = setTimeout(() => {
+        b.style.display = "none";
+        bannerHideTimer = null;
+      }, 5000);
     }
 
-    b.append(info, btn);
     b.style.display = "flex";
   }
 
   function hidePartnerRegBanner() {
     const b = $("partner-reg-banner");
     if (b) b.style.display = "none";
+    if (bannerHideTimer) { clearTimeout(bannerHideTimer); bannerHideTimer = null; }
+    setAddFriendIcon(false, null);
+  }
+
+  /* ── Persistent ➕ icon (next to partner name) — the only way to send
+     a friend request. Shown for the duration of the chat with a
+     registered, non-friend partner; not tied to the 5s banner timeout. ── */
+  function setAddFriendIcon(show, name) {
+    const btn = $("addFriendIconBtn");
+    if (!btn) return;
+    if (!show) {
+      btn.style.display = "none";
+      btn.disabled       = false;
+      btn.textContent    = "➕";
+      btn.onclick        = null;
+      return;
+    }
+    btn.style.display = "flex";
+    btn.disabled       = false;
+    btn.textContent    = "➕";
+    btn.title          = `${name}-ისთვის მეგობრობის მოთხოვნის გაგზავნა`;
+    btn.onclick = () => {
+      sk()?.emit("friend:request", { toUsername: name });
+      btn.textContent = "✅";
+      btn.disabled    = true;
+    };
   }
 
   /* ══════════════════════════════════════════════════════════════════
