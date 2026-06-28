@@ -2877,38 +2877,6 @@ io.on("connection", (socket) => {
     socket.emit("privateMsg:sent", { success: true });
   });
 
-  // ── Anonymous chat pairing ──────────────────────────────────────────────
-  socket.on("next", () => {
-    if (socket.partner) {
-      socket.partner.emit("partnerDisconnected", { name: socket.userName || "" });
-      socket.partner.partner = null;
-      socket.partner = null;
-    }
-
-    cleanupGameForSocket(socket.id);
-
-    let match = null;
-
-    for (const [, s] of io.sockets.sockets) {
-      if (s.id === socket.id || s.partner || !s.connected) continue;
-      if (socket.blockedNames && socket.blockedNames.includes(s.userName?.toLowerCase())) continue;
-      if (s.blockedNames && s.blockedNames.includes(socket.userName?.toLowerCase())) continue;
-
-      match = s;
-      break;
-    }
-
-    if (match) {
-      socket.partner = match;
-      match.partner = socket;
-      socket.emit("partnerFound", { name: match.userName });
-      match.emit("partnerFound", { name: socket.userName });
-      console.log(`[PAIR] ${socket.id} ↔ ${match.id}`);
-    } else {
-      socket.emit("waitingForPartner");
-    }
-  });
-
   // ── Message handling ─────────────────────────────────────────────────────
   socket.on("message", (data) => {
     if (!socket.partner || !socket.partner.connected) {
