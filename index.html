@@ -24,6 +24,7 @@
 
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="games.css" />
+  <link rel="stylesheet" href="auth.css" />
 </head>
 <body>
   <div class="top-bar">
@@ -34,6 +35,9 @@
       <div id="userNameDisplay" class="user-name-display" style="display:none"></div>
     </div>
     <div class="right-side">
+      <span id="auth-user-badge" style="display:none"></span>
+      <button id="auth-friends-btn">👥 <span class="btn-label">მეგობრები</span></button>
+      <button id="auth-logout-btn" style="display:none">🚪 <span class="btn-label">გამოხვედრა</span></button>
       <button class="interests-btn" id="interestsBtn" style="display:none"><span class="btn-icon btn-icon--int">ინტ.</span><span class="btn-label">ინტ</span></button>
       <button class="change-name-btn" id="changeNameBtn"><span class="btn-icon">✏️</span><span class="btn-label">სახელის შეცვლა</span></button>
       <button class="report-button" id="reportBtn" disabled><span class="btn-icon">🚩</span><span class="btn-label">რეპორტი</span></button>
@@ -41,6 +45,9 @@
       <button class="next-button" id="nextBtn"><span class="btn-icon">🔎</span><span class="btn-label">ძებნა</span></button>
     </div>
   </div>
+
+  <!-- Partner registered banner — shows when both users in chat are registered -->
+  <div id="partner-reg-banner" style="display:none"></div>
 
   <div class="chat-container" id="chat"></div>
 
@@ -95,50 +102,111 @@
       <button id="nameModalClose" class="modal-close-btn" style="display:none" title="დახურვა">✕</button>
       <img src="/Logo2.png" alt="GAICANI" class="modal-logo" />
 
-      <!-- ── Welcome info block ── -->
-      <div class="modal-welcome">
-        <p class="modal-welcome-title">👋 მოგესალმებით!</p>
-        <p class="modal-welcome-desc">ამ საიტზე შეძლებთ შემთხვევით შერჩეულ უცნობ ადამიანს ესაუბროთ <strong>ანონიმურად</strong>.</p>
-        <div class="modal-features">
-          <div class="modal-feature-item">
-            <span class="modal-feature-icon modal-feature-icon--qbtn">?</span>
-            <span><strong></strong> — საიტი გისმევთ კითხვებს</span>
-          </div>
-          <div class="modal-feature-item">
-            <span class="modal-feature-icon modal-feature-icon--int">ინტ</span>
-            <span>საკუთარი თავის გაცნობა პარტნიორისთვის</span>
-          </div>
-          <div class="modal-feature-item">
-            <span class="modal-feature-icon">✏️</span>
-            <span>სახელის შეცვლა</span>
-          </div>
-          <div class="modal-feature-item">
-            <span class="modal-feature-icon">🚫</span>
-            <span>იუზერის დაბლოკვა</span>
-          </div>
-          <div class="modal-feature-item">
-            <span class="modal-feature-icon">🚩</span>
-            <span>რეპორტი</span>
-          </div>
-          <div class="modal-feature-item">
-            <span class="modal-feature-icon modal-feature-icon--game">🎮</span>
-            <span>მინი თამაშები</span>
-          </div>
-        </div>
+      <!-- ── Auth mode tabs ── -->
+      <div class="auth-tabs">
+        <button id="auth-tab-guest"  class="auth-tab active">🎭 სტუმარი</button>
+        <button id="auth-tab-login"  class="auth-tab">🔑 შესვლა</button>
+        <button id="auth-tab-signup" class="auth-tab">✨ რეგისტრაცია</button>
       </div>
 
-      <textarea id="nameInput" placeholder="შეიყვანეთ სახელი..."
-               autocomplete="off" autocorrect="off" autocapitalize="sentences"
-               spellcheck="false" inputmode="text" enterkeyhint="go"
-               rows="1" maxlength="20"></textarea>
-      <div id="nameError" class="name-error"></div>
-      <p class="safety-age-confirm">
-        საუბრის დაწყებით ადასტურებთ რომ ხართ <strong>18+</strong> და ეთანხმებით
-        <a href="/terms.html" target="_blank" class="safety-link">Terms of Service</a>-ს
-        და
-        <a href="/privacy.html" target="_blank" class="safety-link">Privacy Policy</a>-ს.
-      </p>
-      <button id="saveNameBtn">საუბრის დაწყება</button>
+      <!-- ════════ GUEST SECTION (original content) ════════ -->
+      <div id="auth-section-guest">
+        <!-- ── Welcome info block ── -->
+        <div class="modal-welcome">
+          <p class="modal-welcome-title">👋 მოგესალმებით!</p>
+          <p class="modal-welcome-desc">ამ საიტზე შეძლებთ შემთხვევით შერჩეულ უცნობ ადამიანს ესაუბროთ <strong>ანონიმურად</strong>.</p>
+          <div class="modal-features">
+            <div class="modal-feature-item">
+              <span class="modal-feature-icon modal-feature-icon--qbtn">?</span>
+              <span><strong></strong> — საიტი გისმევთ კითხვებს</span>
+            </div>
+            <div class="modal-feature-item">
+              <span class="modal-feature-icon modal-feature-icon--int">ინტ</span>
+              <span>საკუთარი თავის გაცნობა პარტნიორისთვის</span>
+            </div>
+            <div class="modal-feature-item">
+              <span class="modal-feature-icon">✏️</span>
+              <span>სახელის შეცვლა</span>
+            </div>
+            <div class="modal-feature-item">
+              <span class="modal-feature-icon">🚫</span>
+              <span>იუზერის დაბლოკვა</span>
+            </div>
+            <div class="modal-feature-item">
+              <span class="modal-feature-icon">🚩</span>
+              <span>რეპორტი</span>
+            </div>
+            <div class="modal-feature-item">
+              <span class="modal-feature-icon modal-feature-icon--game">🎮</span>
+              <span>მინი თამაშები</span>
+            </div>
+          </div>
+        </div>
+
+        <textarea id="nameInput" placeholder="შეიყვანეთ სახელი..."
+                 autocomplete="off" autocorrect="off" autocapitalize="sentences"
+                 spellcheck="false" inputmode="text" enterkeyhint="go"
+                 rows="1" maxlength="20"></textarea>
+        <div id="nameError" class="name-error"></div>
+        <p class="safety-age-confirm">
+          საუბრის დაწყებით ადასტურებთ რომ ხართ <strong>18+</strong> და ეთანხმებით
+          <a href="/terms.html" target="_blank" class="safety-link">Terms of Service</a>-ს
+          და
+          <a href="/privacy.html" target="_blank" class="safety-link">Privacy Policy</a>-ს.
+        </p>
+        <button id="saveNameBtn">საუბრის დაწყება</button>
+      </div><!-- /auth-section-guest -->
+
+      <!-- ════════ SIGN-IN SECTION ════════ -->
+      <div id="auth-section-login" style="display:none">
+        <p style="text-align:center;color:#b5bac1;font-size:.85em;margin:0 0 16px;">
+          შედი შენი ანგარიშით — სახელი დაცულია,<br>მეგობრებს მოუგზავნე Private Chat.
+        </p>
+        <div class="auth-form-group">
+          <input id="login-username" class="auth-input" type="text"
+                 placeholder="სახელი" autocomplete="username"
+                 autocorrect="off" autocapitalize="none" spellcheck="false" maxlength="20" />
+          <input id="login-password" class="auth-input" type="password"
+                 placeholder="პაროლი" autocomplete="current-password" maxlength="100" />
+        </div>
+        <div id="login-error" class="auth-form-error"></div>
+        <button id="login-btn" class="auth-submit-btn">შესვლა</button>
+        <p class="auth-form-note">
+          ანგარიში არ გაქვს?
+          <a href="#" onclick="document.getElementById('auth-tab-signup').click();return false;">
+            დარეგისტრირდი
+          </a>
+        </p>
+      </div><!-- /auth-section-login -->
+
+      <!-- ════════ SIGN-UP SECTION ════════ -->
+      <div id="auth-section-signup" style="display:none">
+        <p style="text-align:center;color:#b5bac1;font-size:.85em;margin:0 0 16px;">
+          დაარეგისტრირე სახელი — მხოლოდ შენ შეძლებ მის გამოყენებას.<br>
+          მეგობრებს ჩატის დროს Private Message გაუგზავნე.
+        </p>
+        <div class="auth-form-group">
+          <input id="signup-username" class="auth-input" type="text"
+                 placeholder="სახელი (2–20 სიმბოლო)" autocomplete="username"
+                 autocorrect="off" autocapitalize="none" spellcheck="false" maxlength="20" />
+          <input id="signup-password" class="auth-input" type="password"
+                 placeholder="პაროლი (მინ. 6 სიმბოლო)" autocomplete="new-password" maxlength="100" />
+          <input id="signup-confirm" class="auth-input" type="password"
+                 placeholder="გაიმეორე პაროლი" autocomplete="new-password" maxlength="100" />
+        </div>
+        <div id="signup-error" class="auth-form-error"></div>
+        <button id="signup-btn" class="auth-submit-btn">რეგისტრაცია</button>
+        <p class="auth-form-note">
+          უკვე გაქვს ანგარიში?
+          <a href="#" onclick="document.getElementById('auth-tab-login').click();return false;">
+            შედი
+          </a><br>
+          რეგისტრაციით ეთანხმები
+          <a href="/terms.html" target="_blank">Terms</a> &
+          <a href="/privacy.html" target="_blank">Privacy</a>.
+        </p>
+      </div><!-- /auth-section-signup -->
+
     </div>
   </div>
 
@@ -159,8 +227,37 @@
     </div>
   </div>
 
+  <!-- ── Friends Panel ──────────────────────────────────────────────────────── -->
+  <div id="friends-panel" style="display:none">
+    <div class="fp-header">
+      <span class="fp-title">👥 მეგობრები</span>
+      <button id="friends-panel-close" class="fp-close" title="დახურვა">✕</button>
+    </div>
+    <div id="friends-list"></div>
+  </div>
+
+  <!-- ── Private Chat Panel ─────────────────────────────────────────────────── -->
+  <div id="priv-panel" style="display:none">
+    <div class="pc-header">
+      <button id="priv-close" title="დახურვა">✕</button>
+      <span id="priv-title">🔒 Private Chat</span>
+      <span id="priv-expiry"></span>
+    </div>
+    <div id="priv-messages"></div>
+    <div class="pc-input-row">
+      <textarea id="priv-input" placeholder="შეტყობინება..."
+                rows="1" maxlength="2000"
+                autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
+      <button id="priv-send">SEND</button>
+    </div>
+  </div>
+
+  <!-- ── Notification container (toasts + friend requests) ─────────────────── -->
+  <div id="notif-container"></div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
   <script src="games.js"></script>
+  <script src="auth-client.js"></script>
 </body>
 </html>
