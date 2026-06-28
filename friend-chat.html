@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>GAICANI – პირადი ჩატი</title>
+  <meta name="theme-color" content="#1e1f22" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <link rel="icon" type="image/png" href="/logo.png" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #1e1f22;
+      --surface:   #2b2d31;
+      --border:    rgba(255,255,255,0.07);
+      --accent:    #5865f2;
+      --accent-lt: #7c84f8;
+      --text:      #dcddde;
+      --muted:     #72767d;
+      --bubble-me: #5865f2;
+      --bubble-me-text: #fff;
+      --bubble-them: #2b2d31;
+      --bubble-them-text: #dcddde;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    html, body {
+      height: 100%; height: 100dvh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    /* ── LAYOUT ── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%; height: 100dvh;
+    }
+
+    /* ── HEADER ── */
+    .fc-header {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+      height: 56px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      z-index: 10;
+    }
+
+    .fc-back {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.06);
+      border: none;
+      color: var(--text);
+      font-size: 1.1em;
+      cursor: pointer;
+      transition: background 0.15s;
+      flex-shrink: 0;
+      text-decoration: none;
+    }
+    .fc-back:hover { background: rgba(255,255,255,0.12); }
+
+    .fc-avatar {
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent-lt));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1em; font-weight: 700; color: #fff;
+      flex-shrink: 0;
+    }
+
+    .fc-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .fc-name {
+      font-size: 0.97em;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .fc-sub {
+      font-size: 0.72em;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+
+    .fc-expiry-badge {
+      font-size: 0.68em;
+      color: var(--muted);
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 3px 9px;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
+    /* ── MESSAGES AREA ── */
+    #fc-messages {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 16px 12px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Date separator */
+    .fc-date-sep {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.72em;
+      margin: 10px 0 6px;
+      position: relative;
+    }
+    .fc-date-sep::before, .fc-date-sep::after {
+      content: "";
+      display: inline-block;
+      width: 28%;
+      height: 1px;
+      background: var(--border);
+      vertical-align: middle;
+      margin: 0 8px;
+    }
+
+    /* Message row */
+    .fc-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+      max-width: 100%;
+    }
+    .fc-row.me {
+      flex-direction: row-reverse;
+    }
+
+    .fc-row-avatar {
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent-lt));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.7em; font-weight: 700; color: #fff;
+      flex-shrink: 0;
+      margin-bottom: 2px;
+    }
+    .fc-row.me .fc-row-avatar {
+      background: rgba(88,101,242,0.35);
+    }
+
+    .fc-bubble-wrap {
+      display: flex;
+      flex-direction: column;
+      max-width: min(72%, 480px);
+      gap: 2px;
+    }
+    .fc-row.me .fc-bubble-wrap {
+      align-items: flex-end;
+    }
+
+    .fc-bubble {
+      padding: 9px 13px;
+      border-radius: 18px;
+      font-size: 0.9em;
+      line-height: 1.45;
+      word-break: break-word;
+      white-space: pre-wrap;
+      position: relative;
+    }
+    /* Them bubble */
+    .fc-row:not(.me) .fc-bubble {
+      background: var(--bubble-them);
+      color: var(--bubble-them-text);
+      border-bottom-left-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    /* Me bubble */
+    .fc-row.me .fc-bubble {
+      background: var(--bubble-me);
+      color: var(--bubble-me-text);
+      border-bottom-right-radius: 4px;
+    }
+
+    /* Consecutive bubble rounding */
+    .fc-row.consec:not(.me) .fc-bubble { border-top-left-radius: 4px; }
+    .fc-row.consec.me .fc-bubble { border-top-right-radius: 4px; }
+
+    .fc-meta {
+      font-size: 0.66em;
+      color: var(--muted);
+      padding: 0 4px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .fc-row.me .fc-meta { justify-content: flex-end; }
+
+    .fc-expiry-hint {
+      font-size: 0.6em;
+      color: #faa61a;
+      opacity: 0.7;
+    }
+
+    /* ── TYPING INDICATOR ── */
+    #fc-typing {
+      min-height: 24px;
+      padding: 0 12px 4px;
+      font-size: 0.76em;
+      color: var(--muted);
+      display: none;
+      align-items: center;
+      gap: 6px;
+    }
+    #fc-typing.visible { display: flex; }
+
+    .typing-dots {
+      display: flex;
+      gap: 3px;
+    }
+    .typing-dots span {
+      width: 5px; height: 5px;
+      background: var(--muted);
+      border-radius: 50%;
+      animation: tdot 1.2s infinite;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes tdot {
+      0%, 80%, 100% { transform: scale(0.7); opacity: 0.4; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+
+    /* ── INPUT BAR ── */
+    #fc-input-bar {
+      flex-shrink: 0;
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      padding: 10px 12px;
+      padding-bottom: calc(10px + var(--safe-bottom));
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+    }
+
+    #fc-input {
+      flex: 1;
+      min-height: 40px;
+      max-height: 120px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 22px;
+      padding: 10px 16px;
+      font-size: 0.9em;
+      color: var(--text);
+      resize: none;
+      outline: none;
+      font-family: inherit;
+      line-height: 1.4;
+      transition: border-color 0.15s;
+      overflow-y: hidden;
+    }
+    #fc-input::placeholder { color: var(--muted); }
+    #fc-input:focus { border-color: rgba(88,101,242,0.5); }
+
+    #fc-send {
+      flex-shrink: 0;
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 1.1em;
+      transition: background 0.15s, transform 0.1s;
+      align-self: flex-end;
+    }
+    #fc-send:hover { background: #4752c4; }
+    #fc-send:active { transform: scale(0.93); }
+    #fc-send:disabled { opacity: 0.4; cursor: default; }
+
+    /* ── EMPTY STATE ── */
+    #fc-empty {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 0.9em;
+      text-align: center;
+      padding: 24px;
+    }
+    #fc-empty .fc-empty-icon { font-size: 2.8em; margin-bottom: 4px; }
+    #fc-empty.visible { display: flex; }
+
+    /* ── LOADING ── */
+    #fc-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      gap: 14px;
+      color: var(--muted);
+      font-size: 0.88em;
+    }
+    .fc-spinner {
+      width: 32px; height: 32px;
+      border: 3px solid rgba(88,101,242,0.2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #fc-loading.hidden { display: none; }
+
+    /* ── AUTH REQUIRED ── */
+    #fc-auth-screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      gap: 14px;
+      color: var(--muted);
+      text-align: center;
+      padding: 24px;
+    }
+    #fc-auth-screen.visible { display: flex; }
+    #fc-auth-screen a {
+      color: var(--accent-lt);
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    /* ── TOAST ── */
+    #fc-toast {
+      position: fixed;
+      bottom: calc(80px + var(--safe-bottom));
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface);
+      border: 1px solid rgba(88,101,242,0.4);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 9px 18px;
+      font-size: 0.85em;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+      z-index: 999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+      max-width: min(90vw, 340px);
+      text-align: center;
+    }
+    #fc-toast.show { opacity: 1; }
+
+    /* ── Scrollbar ── */
+    #fc-messages::-webkit-scrollbar { width: 4px; }
+    #fc-messages::-webkit-scrollbar-track { background: transparent; }
+    #fc-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+    /* ── Notification badge in title ── */
+    @media (max-width: 480px) {
+      .fc-expiry-badge { display: none; }
+      .fc-bubble-wrap { max-width: 82%; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <header class="fc-header">
+    <a href="/dashboard.html" class="fc-back" id="fcBack" title="დაბრუნება">←</a>
+    <div class="fc-avatar" id="fcAvatar">?</div>
+    <div class="fc-info">
+      <div class="fc-name" id="fcName">...</div>
+      <div class="fc-sub" id="fcSub">პირადი ჩატი</div>
+    </div>
+    <div class="fc-expiry-badge">🕐 12 სთ ჩაშლა</div>
+  </header>
+
+  <!-- AUTH REQUIRED -->
+  <div id="fc-auth-screen">
+    <div style="font-size:2em">🔒</div>
+    <div>გთხოვთ შეხვიდეთ სისტემაში</div>
+    <a href="/">მთავარ გვერდზე</a>
+  </div>
+
+  <!-- LOADING -->
+  <div id="fc-loading">
+    <div class="fc-spinner"></div>
+    <span>იტვირთება...</span>
+  </div>
+
+  <!-- MESSAGES -->
+  <div id="fc-messages" style="display:none"></div>
+
+  <!-- EMPTY STATE (shown when no messages) -->
+  <div id="fc-empty">
+    <div class="fc-empty-icon">💬</div>
+    <div>დაიწყეთ საუბარი</div>
+    <small style="color:var(--muted);font-size:0.8em">შეტყობინებები ავტომატურად წაიშლება 12 საათში</small>
+  </div>
+
+  <!-- TYPING -->
+  <div id="fc-typing">
+    <div class="typing-dots">
+      <span></span><span></span><span></span>
+    </div>
+    <span id="fc-typing-name"></span>
+    <span>წერს...</span>
+  </div>
+
+  <!-- INPUT BAR -->
+  <div id="fc-input-bar" style="display:none">
+    <textarea id="fc-input" placeholder="შეტყობინება..." rows="1" maxlength="2000"></textarea>
+    <button id="fc-send" title="გაგზავნა">➤</button>
+  </div>
+
+</div>
+
+<!-- TOAST -->
+<div id="fc-toast"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  /* ── Helpers ─────────────────────────────────────────────────── */
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g,
+      c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
+  }
+  function $(id) { return document.getElementById(id); }
+
+  function showToast(msg, ms = 3000) {
+    const t = $("fc-toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove("show"), ms);
+  }
+
+  /* ── Auth from localStorage ──────────────────────────────────── */
+  function loadAuth() {
+    try {
+      return {
+        token:    localStorage.getItem("gaicani_auth_token"),
+        username: localStorage.getItem("gaicani_auth_user")
+      };
+    } catch (_) { return {}; }
+  }
+
+  /* ── Parse ?friend= from URL ─────────────────────────────────── */
+  function getFriendParam() {
+    const u = new URLSearchParams(window.location.search);
+    return (u.get("friend") || "").trim();
+  }
+
+  /* ── Format timestamp ────────────────────────────────────────── */
+  function fmtTime(ts) {
+    const d = ts ? new Date(ts) : new Date();
+    const h = d.getHours(), m = d.getMinutes();
+    const ap = h >= 12 ? "PM" : "AM";
+    return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ap}`;
+  }
+  function fmtDate(ts) {
+    const d = new Date(ts);
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) return "დღეს";
+    const y = d.toLocaleDateString("ka-GE", { month: "long", day: "numeric" });
+    return y;
+  }
+
+  /* ── Expiry hint ─────────────────────────────────────────────── */
+  function expiryHint(ts) {
+    const hoursLeft = Math.ceil((new Date(ts) - Date.now()) / 3600000);
+    if (hoursLeft <= 1) return "• <1 სთ";
+    if (hoursLeft <= 3) return `• ${hoursLeft} სთ`;
+    return "";
+  }
+
+  /* ── Main ────────────────────────────────────────────────────── */
+  const { token, username } = loadAuth();
+  const friendName = getFriendParam();
+
+  const elLoading   = $("fc-loading");
+  const elMessages  = $("fc-messages");
+  const elEmpty     = $("fc-empty");
+  const elInputBar  = $("fc-input-bar");
+  const elTyping    = $("fc-typing");
+  const elInput     = $("fc-input");
+  const elSend      = $("fc-send");
+  const elAuth      = $("fc-auth-screen");
+
+  /* If not logged in or no friend param → auth screen */
+  if (!token || !username) {
+    elLoading.classList.add("hidden");
+    elAuth.classList.add("visible");
+    // Update title
+    document.title = "GAICANI – შესვლა საჭიროა";
+    return;
+  }
+
+  if (!friendName) {
+    window.location.href = "/dashboard.html";
+    return;
+  }
+
+  /* Setup header */
+  $("fcAvatar").textContent = friendName.charAt(0).toUpperCase();
+  $("fcName").textContent   = friendName;
+  document.title = `${friendName} – GAICANI`;
+
+  /* ── Message state ───────────────────────────────────────────── */
+  let messages   = [];   // { from, text, ts }
+  let myUsername = username;
+  let typingTimer = null;
+  let isTyping    = false;
+  let socket      = null;
+  let unreadCount = 0;
+  const originalTitle = document.title;
+
+  /* ── Unread tab badge ────────────────────────────────────────── */
+  function incUnread() {
+    if (document.hidden) {
+      unreadCount++;
+      document.title = `(${unreadCount}) ${originalTitle}`;
+    }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      unreadCount = 0;
+      document.title = originalTitle;
+    }
+  });
+
+  /* ── Render all messages ─────────────────────────────────────── */
+  function renderMessages() {
+    elMessages.innerHTML = "";
+    if (!messages.length) {
+      elEmpty.classList.add("visible");
+      return;
+    }
+    elEmpty.classList.remove("visible");
+
+    let lastDate = null;
+    let lastFrom = null;
+
+    messages.forEach((msg, i) => {
+      const isMe = msg.from.toLowerCase() === myUsername.toLowerCase();
+      const msgDate = fmtDate(msg.ts);
+
+      /* Date separator */
+      if (msgDate !== lastDate) {
+        lastDate = msgDate;
+        lastFrom = null; // reset consecutive
+        const sep = document.createElement("div");
+        sep.className = "fc-date-sep";
+        sep.textContent = msgDate;
+        elMessages.appendChild(sep);
+      }
+
+      const consec = lastFrom === msg.from;
+      lastFrom = msg.from;
+
+      const row = document.createElement("div");
+      row.className = "fc-row" + (isMe ? " me" : "") + (consec ? " consec" : "");
+      row.dataset.idx = i;
+
+      /* Avatar (only show for first in group) */
+      if (!consec) {
+        const av = document.createElement("div");
+        av.className = "fc-row-avatar";
+        av.textContent = msg.from.charAt(0).toUpperCase();
+        row.appendChild(av);
+      } else {
+        /* spacer to keep alignment */
+        const sp = document.createElement("div");
+        sp.style.width = "26px";
+        sp.style.flexShrink = "0";
+        row.appendChild(sp);
+      }
+
+      const wrap = document.createElement("div");
+      wrap.className = "fc-bubble-wrap";
+
+      const bubble = document.createElement("div");
+      bubble.className = "fc-bubble";
+      bubble.textContent = msg.text; // textContent auto-escapes
+
+      wrap.appendChild(bubble);
+
+      /* Meta row */
+      const meta = document.createElement("div");
+      meta.className = "fc-meta";
+      meta.textContent = fmtTime(msg.ts);
+
+      /* Expiry hint for soon-expiring messages */
+      if (msg.expiresAt) {
+        const hint = expiryHint(msg.expiresAt);
+        if (hint) {
+          const sp = document.createElement("span");
+          sp.className = "fc-expiry-hint";
+          sp.textContent = hint;
+          meta.appendChild(sp);
+        }
+      }
+
+      wrap.appendChild(meta);
+      row.appendChild(wrap);
+      elMessages.appendChild(row);
+    });
+
+    scrollToBottom();
+  }
+
+  function scrollToBottom(smooth) {
+    requestAnimationFrame(() => {
+      elMessages.scrollTop = elMessages.scrollHeight;
+    });
+  }
+
+  /* ── Append a single message (real-time) ─────────────────────── */
+  function appendMessage(msg) {
+    messages.push(msg);
+    elEmpty.classList.remove("visible");
+
+    const isMe = msg.from.toLowerCase() === myUsername.toLowerCase();
+    const lastRow = elMessages.lastElementChild;
+    const lastFrom = lastRow?.dataset?.from;
+    const consec = lastFrom === msg.from;
+
+    /* Date separator if needed */
+    const msgDate = fmtDate(msg.ts);
+    const lastSep = elMessages.querySelector(".fc-date-sep:last-of-type");
+    if (!lastSep || lastSep.textContent !== msgDate) {
+      const sep = document.createElement("div");
+      sep.className = "fc-date-sep";
+      sep.textContent = msgDate;
+      elMessages.appendChild(sep);
+    }
+
+    const row = document.createElement("div");
+    row.className = "fc-row" + (isMe ? " me" : "") + (consec ? " consec" : "");
+    row.dataset.from = msg.from;
+
+    if (!consec) {
+      const av = document.createElement("div");
+      av.className = "fc-row-avatar";
+      av.textContent = msg.from.charAt(0).toUpperCase();
+      row.appendChild(av);
+    } else {
+      const sp = document.createElement("div");
+      sp.style.width = "26px"; sp.style.flexShrink = "0";
+      row.appendChild(sp);
+    }
+
+    const wrap = document.createElement("div");
+    wrap.className = "fc-bubble-wrap";
+
+    const bubble = document.createElement("div");
+    bubble.className = "fc-bubble";
+    bubble.textContent = msg.text;
+    wrap.appendChild(bubble);
+
+    const meta = document.createElement("div");
+    meta.className = "fc-meta";
+    meta.textContent = fmtTime(msg.ts);
+    wrap.appendChild(meta);
+
+    row.appendChild(wrap);
+    elMessages.appendChild(row);
+    scrollToBottom();
+  }
+
+  /* ── Typing indicator ────────────────────────────────────────── */
+  function showTyping() {
+    $("fc-typing-name").textContent = friendName;
+    elTyping.classList.add("visible");
+    scrollToBottom();
+  }
+  function hideTyping() {
+    elTyping.classList.remove("visible");
+  }
+
+  /* ── Send message ────────────────────────────────────────────── */
+  function sendMessage() {
+    const text = elInput.value.trim();
+    if (!text || !socket?.connected) return;
+    elInput.value = "";
+    elInput.style.height = "auto";
+    isTyping = false;
+
+    socket.emit("privateMsg:send", {
+      toUsername: friendName,
+      message: text
+    });
+
+    /* Optimistic local append */
+    appendMessage({ from: myUsername, text, ts: new Date().toISOString() });
+  }
+
+  /* ── Load history ────────────────────────────────────────────── */
+  async function loadHistory() {
+    try {
+      const r = await fetch(
+        `/api/priv/history?username=${encodeURIComponent(myUsername)}&friend=${encodeURIComponent(friendName)}`,
+        { headers: { "Authorization": `Bearer ${token}` } }
+      );
+      if (!r.ok) throw new Error("not ok");
+      const d = await r.json();
+      messages = d.messages || [];
+    } catch (_) {
+      messages = [];
+    }
+  }
+
+  /* ── Verify auth & friendship, then connect ──────────────────── */
+  async function init() {
+    /* 1. Verify token */
+    let verifiedUser = null;
+    try {
+      const r = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token })
+      });
+      const d = await r.json();
+      if (!d.success && !d.ok) throw new Error("auth fail");
+      verifiedUser = d;
+
+      /* 2. Check friendship */
+      const friends = (d.friends || []).map(f => f.toLowerCase());
+      if (!friends.includes(friendName.toLowerCase())) {
+        /* Not friends — redirect home */
+        showToast("⚠️ ეს მომხმარებელი შენი მეგობარი არ არის");
+        setTimeout(() => { window.location.href = "/dashboard.html"; }, 1500);
+        return;
+      }
+    } catch (_) {
+      elLoading.classList.add("hidden");
+      elAuth.classList.add("visible");
+      return;
+    }
+
+    /* 3. Load chat history */
+    await loadHistory();
+
+    /* 4. Show UI */
+    elLoading.classList.add("hidden");
+    elMessages.style.display = "flex";
+    elMessages.style.flexDirection = "column";
+    elInputBar.style.display = "flex";
+    renderMessages();
+
+    /* 5. Connect socket */
+    socket = io({
+      transports: ["websocket", "polling"],
+    });
+
+    socket.on("connect", () => {
+      socket.emit("auth:login", { token });
+    });
+
+    /* Authenticated → join friend-chat room */
+    socket.on("auth:authenticated", () => {
+      socket.emit("friendChat:join", { friendUsername: friendName });
+    });
+
+    /* Incoming message for THIS friend conversation */
+    socket.on("privateMsg:received", ({ fromUsername, message, timestamp }) => {
+      /* Only process messages from our specific friend */
+      if (fromUsername.toLowerCase() !== friendName.toLowerCase()) return;
+      hideTyping();
+      appendMessage({ from: fromUsername, text: message, ts: timestamp });
+      incUnread();
+    });
+
+    /* Message sent confirmation (no-op, we already optimistically appended) */
+    socket.on("privateMsg:sent", () => {});
+
+    /* Typing indicator from friend */
+    socket.on("friendChat:partnerTyping", ({ fromUsername }) => {
+      if (fromUsername.toLowerCase() !== friendName.toLowerCase()) return;
+      showTyping();
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(hideTyping, 3000);
+    });
+
+    socket.on("auth:error", () => {
+      elMessages.style.display = "none";
+      elInputBar.style.display = "none";
+      elLoading.classList.add("hidden");
+      elAuth.classList.add("visible");
+    });
+  }
+
+  /* ── Input handlers ──────────────────────────────────────────── */
+  elInput.addEventListener("input", () => {
+    /* Auto-resize */
+    elInput.style.height = "auto";
+    elInput.style.height = Math.min(elInput.scrollHeight, 120) + "px";
+    elInput.style.overflowY = elInput.scrollHeight > 120 ? "auto" : "hidden";
+
+    /* Typing event */
+    if (!socket?.connected) return;
+    if (!isTyping) {
+      isTyping = true;
+      socket.emit("friendChat:typing", { toUsername: friendName });
+    }
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => { isTyping = false; }, 1500);
+  });
+
+  elInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  elSend.addEventListener("click", sendMessage);
+
+  /* ── Start ───────────────────────────────────────────────────── */
+  init();
+
+})();
+</script>
+</body>
+</html>

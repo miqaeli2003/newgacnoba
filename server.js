@@ -2587,6 +2587,44 @@ app.post("/api/friends/decline", express.json({ limit: "2kb" }), (req, res) => {
   res.json({ success: true });
 });
 
+// GET /api/priv/history — Friend chat message history
+// Auth: Bearer token in Authorization header.
+// Returns messages for the private room between the caller and friend.
+app.get("/api/priv/history", (req, res) => {
+  const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
+  if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+  const entry = authTokens.get(token);
+  if (!entry || Date.now() >= entry.expiry) {
+    return res.status(401).json({ error: "Token expired" });
+  }
+
+  const myLc     = entry.usernameLower;
+  const friendLc = String(req.query.friend || "").toLowerCase().trim();
+
+  if (!friendLc) return res.status(400).json({ error: "friend param required" });
+
+  // Security: requester must be friends with target
+  const myUser = registeredUsers.get(myLc);
+  if (!myUser || !(myUser.friends || []).includes(friendLc)) {
+    return res.status(403).json({ error: "Not friends" });
+  }
+
+  const roomId = privRoomId(myLc, friendLc);
+  const room   = privateRooms.get(roomId);
+
+  if (!room) return res.json({ messages: [] });
+
+  const msgs = (room.messages || []).map(m => ({
+    from:      m.from,
+    text:      m.text,
+    ts:        m.ts,
+    expiresAt: room.expiresAt ? new Date(room.expiresAt).toISOString() : null
+  }));
+
+  res.json({ messages: msgs });
+});
+
 // ════════════════════════════════════════════════════════════════════════════
 // SOCKET.IO CONNECTION HANDLER
 // ════════════════════════════════════════════════════════════════════════════
@@ -2874,6 +2912,31 @@ io.on("connection", (socket) => {
     });
 
     socket.emit("privateMsg:sent", { success: true });
+  });
+
+  // ── friendChat:join — subscribe socket to its friend-chat pair room ───────
+  // Called by friend-chat.html when it opens, so typing events can be routed.
+  socket.on("friendChat:join", ({ friendUsername }) => {
+    if (!socket._regUser || !friendUsername) return;
+    const friendLc = String(friendUsername).toLowerCase().trim();
+    // Security: must be confirmed friends
+    const myUser = registeredUsers.get(socket._regUser.usernameLower);
+    if (!myUser || !(myUser.friends || []).includes(friendLc)) return;
+
+    const roomId = privRoomId(socket._regUser.usernameLower, friendLc);
+    socket.join(`friendchat:${roomId}`);
+    socket._friendChatRoom = roomId;
+  });
+
+  // ── friendChat:typing — relay typing indicator to the friend ─────────────
+  // Pushes only to the friend's personal user room so it shows only in their
+  // friend-chat.html page, never in the random stranger chat popup.
+  socket.on("friendChat:typing", ({ toUsername }) => {
+    if (!socket._regUser || !toUsername) return;
+    const toLc = String(toUsername).toLowerCase().trim();
+    io.to(`user:${toLc}`).emit("friendChat:partnerTyping", {
+      fromUsername: socket._regUser.username
+    });
   });
 
   // ── Message handling ─────────────────────────────────────────────────────

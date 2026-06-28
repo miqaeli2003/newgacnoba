@@ -412,12 +412,8 @@
 
       list.querySelectorAll(".act-chat").forEach(btn => {
         btn.addEventListener("click", () => {
-          // Private chat is only meaningful inside the main chat page (socket context)
-          // Redirect home, then the main page will open the private chat
-          sessionStorage.setItem("gaicani_open_priv", JSON.stringify({
-            friend: btn.dataset.f
-          }));
-          window.location.href = "/";
+          // Navigate to the dedicated full-screen friend chat page
+          window.location.href = `/friend-chat.html?friend=${encodeURIComponent(btn.dataset.f)}`;
         });
       });
 
