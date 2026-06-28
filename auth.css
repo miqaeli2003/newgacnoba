@@ -1,679 +1,143 @@
-/* ════════════════════════════════════════════════════════════════
-   GAICANI — Auth, Friends & Private Chat  (auth.css)
-   ════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════════════
+   REG MENU DROPDOWN — Three-dots (⋮) menu for registered users
+   Append this to auth.css
+   ════════════════════════════════════════════════════════════════════════════ */
 
-/* ── Auth Tabs (inside the entry modal) ─────────────────────────── */
-.auth-tabs {
-  display: flex;
-  gap: 4px;
-  background: #1a1b1e;
-  border-radius: 10px;
-  padding: 4px;
-  margin-bottom: 18px;
-}
-.auth-tab {
-  flex: 1;
-  padding: 8px 6px;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
-  color: #72767d;
-  font-size: .82em;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background .15s, color .15s;
-  letter-spacing: .3px;
-}
-.auth-tab:hover  { background: rgba(255,255,255,.06); color: #b5bac1; }
-.auth-tab.active { background: #5865f2; color: #fff; }
-
-/* ── Auth forms ─────────────────────────────────────────────────── */
-#auth-section-signup,
-#auth-section-login {
-  width: 100%;
-}
-.auth-form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 4px;
-}
-.auth-input {
-  width: 100%;
-  background: #1a1b1e;
-  border: 1.5px solid #3a3c40;
-  border-radius: 8px;
-  color: #dcddde;
-  font-size: .92em;
-  padding: 11px 14px;
-  outline: none;
-  transition: border-color .18s;
-  box-sizing: border-box;
-}
-.auth-input:focus { border-color: #5865f2; }
-.auth-input::placeholder { color: #4f545c; }
-.auth-submit-btn {
-  width: 100%;
-  padding: 11px;
-  background: #5865f2;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: .95em;
-  font-weight: 700;
-  cursor: pointer;
-  margin-top: 6px;
-  transition: background .18s, transform .1s;
-}
-.auth-submit-btn:hover   { background: #4752c4; }
-.auth-submit-btn:active  { transform: scale(.98); }
-.auth-submit-btn:disabled { opacity: .6; cursor: not-allowed; }
-.auth-form-error {
-  display: none;
-  color: #f23f42;
-  font-size: .8em;
-  background: rgba(242,63,66,.1);
-  border: 1px solid rgba(242,63,66,.3);
-  border-radius: 6px;
-  padding: 7px 11px;
-  margin-top: 2px;
-}
-.auth-form-note {
-  font-size: .78em;
-  color: #72767d;
-  text-align: center;
-  margin-top: 10px;
-  line-height: 1.5;
-}
-.auth-form-note a { color: #5865f2; text-decoration: none; }
-.auth-form-note a:hover { text-decoration: underline; }
-
-/* ── Registered user badge (top bar) ────────────────────────────── */
-#auth-user-badge {
-  display: none;
-  align-items: center;
-  gap: 5px;
-  font-size: .78em;
-  font-weight: 700;
-  color: #3ba55d;
-  background: rgba(59,165,93,.12);
-  border: 1px solid rgba(59,165,93,.35);
-  border-radius: 20px;
-  padding: 5px 11px;
-  white-space: nowrap;
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex-shrink: 0;
-}
-
-/* ── Friends button (top bar) ───────────────────────────────────── */
-#auth-friends-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(88,101,242,.15);
-  border: 1px solid rgba(88,101,242,.35);
-  color: #5865f2;
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: .78em;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background .15s;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-#auth-friends-btn:hover { background: rgba(88,101,242,.28); }
-
-/* ── Logout button (top bar) ────────────────────────────────────── */
-#auth-logout-btn {
-  display: none;
-  align-items: center;
-  gap: 4px;
-  background: rgba(242,63,66,.12);
-  border: 1px solid rgba(242,63,66,.28);
-  color: #f23f42;
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: .78em;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background .15s;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-#auth-logout-btn:hover { background: rgba(242,63,66,.22); }
-
-/* ── Three-dot (⋮) Menu ─────────────────────────────────────────── */
-.dot-menu-wrap {
+.reg-menu-container {
   position: relative;
-  flex-shrink: 0;
-}
-.dot-menu-btn {
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.1);
-  color: #b5bac1;
-  border-radius: 8px;
-  padding: 5px 10px;
-  font-size: 1.15em;
-  font-weight: 700;
-  cursor: pointer;
-  line-height: 1;
-  transition: background .15s, color .15s;
-}
-.dot-menu-btn:hover { background: rgba(255,255,255,.12); color: #fff; }
-
-.dot-menu-dropdown {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  background: #2b2d31;
-  border: 1px solid #3a3c40;
-  border-radius: 10px;
-  box-shadow: 0 8px 32px rgba(0,0,0,.55);
-  min-width: 180px;
-  z-index: 9999;
-  overflow: hidden;
-  animation: dmFadeIn .14s ease;
-}
-@keyframes dmFadeIn {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.dot-menu-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 11px 16px;
+}
+
+/* ── Menu button (⋮) ─────────────────────────────────────────────────────── */
+.reg-menu-btn {
   background: none;
   border: none;
-  color: #dcddde;
-  font-size: .88em;
-  font-weight: 500;
-  cursor: pointer;
-  text-align: left;
-  transition: background .12s, color .12s;
-  white-space: nowrap;
-}
-.dot-menu-item:hover { background: rgba(88,101,242,.14); color: #fff; }
-.dot-menu-item + .dot-menu-item { border-top: 1px solid rgba(255,255,255,.05); }
-
-/* ── Partner Registered Banner ──────────────────────────────────── */
-#partner-reg-banner {
-  display: none;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 7px 16px;
-  background: linear-gradient(90deg, rgba(88,101,242,.12) 0%, rgba(59,165,93,.08) 100%);
-  border-bottom: 1px solid rgba(88,101,242,.25);
-  font-size: .8em;
-  flex-shrink: 0;
-  min-height: 36px;
-}
-.prb-info {
   color: #b5bac1;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-.prb-btn {
-  flex-shrink: 0;
-  padding: 5px 12px;
-  border: none;
-  border-radius: 7px;
-  font-size: .82em;
-  font-weight: 700;
+  font-size: 1.4em;
+  font-weight: 600;
   cursor: pointer;
-  transition: background .15s, transform .1s;
-}
-.prb-btn:active { transform: scale(.96); }
-.prb-btn:disabled { opacity: .55; cursor: not-allowed; }
-.prb-add     { background: #5865f2; color: #fff; }
-.prb-add:hover { background: #4752c4; }
-.prb-private { background: #3ba55d; color: #fff; }
-.prb-private:hover { background: #2d8a4e; }
-
-/* ── Add-Friend icon button (next to partner name in the top bar) ──
-   The only way to send a friend request to the current chat partner.
-   Stays visible for the whole chat with a registered, non-friend
-   partner — independent of the 5s auto-hide on #partner-reg-banner. */
-.add-friend-icon-btn {
-  order: 2;
-  flex-shrink: 0;
-  width: 30px;
-  height: 30px;
-  border: none;
-  border-radius: 50%;
-  background: #5865f2;
-  color: #fff;
-  font-size: .9em;
-  font-weight: 700;
-  line-height: 1;
-  padding: 0;
-  cursor: pointer;
-  display: flex;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  display: flex !important;
   align-items: center;
   justify-content: center;
-  transition: background .15s, transform .1s;
-  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+  min-width: 36px;
+  min-height: 36px;
 }
-.add-friend-icon-btn:hover    { background: #4752c4; }
-.add-friend-icon-btn:active   { transform: scale(.92); }
-.add-friend-icon-btn:disabled { background: #3ba55d; cursor: not-allowed; opacity: .9; }
 
-@media (max-width: 600px) {
-  .add-friend-icon-btn {
-    order: 1;
-    width: 24px;
-    height: 24px;
-    font-size: .72em;
+.reg-menu-btn:hover {
+  background: rgba(88, 101, 242, 0.15);
+  color: #5865f2;
+}
+
+.reg-menu-btn:active {
+  transform: scale(0.95);
+}
+
+/* ── Dropdown menu ───────────────────────────────────────────────────────── */
+.reg-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: #2b2d31;
+  border: 1px solid #1a1b1e;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  min-width: 180px;
+  z-index: 1000;
+  animation: menuSlideDown 0.2s ease-out;
+}
+
+@keyframes menuSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-/* ── Purple name for registered users ───────────────────────────── */
-/* Applied to the partner name display when they are registered */
-.reg-partner-name,
-.dash-reg-name,
-#partnerNameDisplay.reg-partner-name {
-  color: #a78bfa !important;
-  font-weight: 700 !important;
-}
-/* Slight glow on purple name for emphasis */
-#partnerNameDisplay.reg-partner-name {
-  text-shadow: 0 0 10px rgba(167,139,250,.35);
-}
-
-/* ── Notification container ─────────────────────────────────────── */
-#notif-container {
-  position: fixed;
-  bottom: 90px;
-  right: 14px;
-  z-index: 9000;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-end;
-  pointer-events: none;
-  max-width: 300px;
-}
-#notif-container > * { pointer-events: all; }
-
-/* ── Friend request notification card ──────────────────────────── */
-.fn-notif {
-  background: #2b2d31;
-  border: 1px solid #3a3c40;
-  border-left: 3px solid #5865f2;
-  border-radius: 10px;
-  padding: 12px 14px;
+/* ── Menu items ──────────────────────────────────────────────────────────── */
+.reg-menu-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  box-shadow: 0 4px 20px rgba(0,0,0,.5);
-  animation: slideIn .2s ease;
-  max-width: 280px;
-}
-@keyframes slideIn {
-  from { opacity: 0; transform: translateX(30px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-.fn-text  { color: #dcddde; font-size: .82em; line-height: 1.45; min-width: 0; }
-.fn-btns  { display: flex; gap: 6px; flex-shrink: 0; }
-.fn-accept, .fn-decline {
-  border: none; border-radius: 6px;
-  padding: 5px 10px; font-size: .8em; font-weight: 700; cursor: pointer;
-  transition: background .15s;
-}
-.fn-accept  { background: #3ba55d; color: #fff; }
-.fn-accept:hover  { background: #2d8a4e; }
-.fn-decline { background: rgba(242,63,66,.18); color: #f23f42; }
-.fn-decline:hover { background: rgba(242,63,66,.32); }
-
-/* ── Toast ──────────────────────────────────────────────────────── */
-.auth-toast {
-  background: #2b2d31;
-  border: 1px solid #3a3c40;
-  border-radius: 8px;
-  color: #dcddde;
-  font-size: .82em;
-  padding: 9px 14px;
-  box-shadow: 0 3px 16px rgba(0,0,0,.45);
-  animation: slideIn .18s ease;
-  max-width: 260px;
-  text-align: right;
-  line-height: 1.4;
-}
-
-/* ── Friends Panel (sidebar) ────────────────────────────────────── */
-#friends-panel {
-  display: none;
-  position: fixed;
-  top: 60px; right: 0;
-  width: 260px;
-  height: calc(100% - 60px);
-  background: #2b2d31;
-  border-left: 1px solid #1a1b1e;
-  flex-direction: column;
-  z-index: 8000;
-  box-shadow: -4px 0 24px rgba(0,0,0,.4);
-}
-.fp-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  border-bottom: 1px solid #1a1b1e;
-  flex-shrink: 0;
-}
-.fp-title { font-weight: 700; font-size: .92em; color: #fff; }
-.fp-close {
-  background: none; border: none; color: #72767d;
-  font-size: 1.1em; cursor: pointer; padding: 2px 6px;
-  border-radius: 5px; transition: color .15s, background .15s;
-}
-.fp-close:hover { color: #dcddde; background: rgba(255,255,255,.08); }
-
-#friends-list {
-  flex: 1; overflow-y: auto; padding: 10px;
-  display: flex; flex-direction: column; gap: 6px;
-}
-.fl-empty {
-  color: #72767d; font-size: .82em; text-align: center;
-  padding: 24px 12px; line-height: 1.6;
-}
-.fl-item {
-  display: flex; align-items: center; justify-content: space-between;
-  background: #1e1f22; border-radius: 8px; padding: 9px 12px; gap: 8px;
-}
-.fl-name {
-  font-size: .85em; color: #dcddde; font-weight: 500;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
-}
-.fl-btn {
-  flex-shrink: 0; background: #5865f2; color: #fff;
-  border: none; border-radius: 6px; padding: 5px 10px;
-  font-size: .78em; font-weight: 700; cursor: pointer; transition: background .15s;
-}
-.fl-btn:hover { background: #4752c4; }
-
-/* ── Private Chat Panel ─────────────────────────────────────────── */
-#priv-panel {
-  display: none; position: fixed; inset: 0; z-index: 9500;
-  background: #1e1f22; flex-direction: column;
-}
-.pc-header {
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 16px; background: #2b2d31;
-  border-bottom: 1px solid #1a1b1e; flex-shrink: 0;
-}
-#priv-title {
-  flex: 1; font-weight: 700; font-size: .95em; color: #fff;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-#priv-expiry { font-size: .72em; color: #72767d; white-space: nowrap; flex-shrink: 0; }
-#priv-close {
-  background: none; border: none; color: #72767d;
-  font-size: 1.2em; cursor: pointer; padding: 4px 8px;
-  border-radius: 6px; flex-shrink: 0; transition: color .15s, background .15s;
-}
-#priv-close:hover { color: #dcddde; background: rgba(255,255,255,.08); }
-#priv-messages {
-  flex: 1; overflow-y: auto; padding: 12px 14px;
-  display: flex; flex-direction: column; gap: 6px; scroll-behavior: smooth;
-}
-.pcm-empty, .pcm-loading {
-  text-align: center; color: #72767d; font-size: .85em;
-  padding: 32px 0; line-height: 1.7;
-}
-.pc-msg { display: flex; flex-direction: column; max-width: 72%; gap: 2px; }
-.pc-me   { align-self: flex-end; align-items: flex-end; }
-.pc-them { align-self: flex-start; align-items: flex-start; }
-.pc-text {
-  background: #2b2d31; border-radius: 12px; padding: 8px 12px;
-  font-size: .9em; color: #dcddde; line-height: 1.45;
-  word-break: break-word; white-space: pre-wrap;
-}
-.pc-me .pc-text   { background: #5865f2; color: #fff; border-bottom-right-radius: 4px; }
-.pc-them .pc-text { border-bottom-left-radius: 4px; }
-.pc-ts { font-size: .68em; color: #72767d; padding: 0 4px; }
-.pc-input-row {
-  display: flex; align-items: flex-end; gap: 8px;
-  padding: 10px 14px;
-  padding-bottom: max(10px, env(safe-area-inset-bottom, 10px));
-  background: #2b2d31; border-top: 1px solid #1a1b1e; flex-shrink: 0;
-}
-#priv-input {
-  flex: 1; background: #1e1f22; border: 1.5px solid #3a3c40;
-  border-radius: 20px; color: #dcddde; font-size: .9em;
-  padding: 9px 14px; outline: none; resize: none;
-  min-height: 38px; max-height: 120px; overflow-y: auto;
-  line-height: 1.4; transition: border-color .18s; box-sizing: border-box;
-}
-#priv-input:focus { border-color: #5865f2; }
-#priv-input::placeholder { color: #4f545c; }
-#priv-send {
-  flex-shrink: 0; background: #5865f2; color: #fff; border: none;
-  border-radius: 20px; padding: 9px 16px; font-size: .88em;
-  font-weight: 700; cursor: pointer; transition: background .15s;
-}
-#priv-send:hover { background: #4752c4; }
-
-/* ══════════════════════════════════════════════════════════════════
-   DASHBOARD / MY PAGE
-   ══════════════════════════════════════════════════════════════════ */
-#dashboard-panel {
-  display: none;
-  position: fixed;
-  inset: 0;
-  z-index: 8500;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-.dash-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0,0,0,.55);
-  backdrop-filter: blur(2px);
-}
-
-.dash-sheet {
-  position: relative;
-  z-index: 1;
   width: 100%;
-  max-width: 480px;
-  max-height: 88vh;
-  background: #2b2d31;
-  border-radius: 18px 18px 0 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: 0 -8px 40px rgba(0,0,0,.6);
-  animation: sheetUp .22s cubic-bezier(.22,.68,0,1.2);
-}
-@keyframes sheetUp {
-  from { transform: translateY(100%); opacity: .7; }
-  to   { transform: translateY(0);    opacity: 1; }
-}
-
-.dash-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 18px 14px;
-  border-bottom: 1px solid rgba(255,255,255,.06);
-  flex-shrink: 0;
-}
-.dash-title { font-size: .95em; font-weight: 700; color: #fff; }
-.dash-close {
-  background: rgba(255,255,255,.07);
-  border: none; border-radius: 50%;
-  width: 28px; height: 28px;
-  display: flex; align-items: center; justify-content: center;
-  color: #b5bac1; cursor: pointer; font-size: .95em;
-  transition: background .15s, color .15s;
-}
-.dash-close:hover { background: rgba(255,255,255,.14); color: #fff; }
-
-/* User card */
-.dash-user-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 18px 18px 14px;
-  flex-shrink: 0;
-}
-.dash-avatar {
-  width: 52px; height: 52px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #5865f2, #7c84f8);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.45em; font-weight: 700; color: #fff;
-  flex-shrink: 0;
-  box-shadow: 0 4px 14px rgba(88,101,242,.4);
-}
-.dash-user-info { min-width: 0; }
-.dash-username {
-  font-size: 1.05em; font-weight: 700;
-  color: #a78bfa;    /* purple for registered users */
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.dash-user-meta { font-size: .72em; color: #72767d; margin-top: 2px; }
-
-/* Action buttons row */
-.dash-actions {
-  display: flex;
-  gap: 8px;
-  padding: 0 18px 14px;
-  flex-shrink: 0;
-}
-.dash-action-btn {
-  flex: 1;
-  padding: 10px 12px;
+  padding: 12px 16px;
   border: none;
-  border-radius: 10px;
-  font-size: .84em;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background .15s, transform .1s;
-}
-.dash-action-btn:active { transform: scale(.97); }
-.dash-action-primary { background: #5865f2; color: #fff; }
-.dash-action-primary:hover { background: #4752c4; }
-
-/* Sections */
-.dash-section {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 0 env(safe-area-inset-bottom, 16px);
-}
-.dash-section-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 18px 8px;
-  font-size: .72em;
-  font-weight: 700;
-  color: #72767d;
-  text-transform: uppercase;
-  letter-spacing: .5px;
-  border-top: 1px solid rgba(255,255,255,.05);
-  flex-shrink: 0;
-}
-.dash-badge {
-  background: rgba(88,101,242,.22);
-  color: #a78bfa;
-  border-radius: 10px;
-  padding: 1px 6px;
-  font-size: .85em;
-  font-weight: 700;
-}
-
-/* Friends list inside dash */
-.dash-friends-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 0 12px 12px;
-}
-.dash-empty {
-  color: #72767d;
-  font-size: .82em;
-  text-align: center;
-  padding: 20px 12px;
-  line-height: 1.6;
-}
-.dash-friend-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: #1e1f22;
-  border-radius: 10px;
-  padding: 10px 12px;
-}
-.dash-friend-avatar {
-  width: 34px; height: 34px;
-  border-radius: 50%;
-  background: rgba(88,101,242,.22);
-  display: flex; align-items: center; justify-content: center;
-  font-size: .92em; font-weight: 700; color: #a78bfa;
-  flex-shrink: 0;
-}
-.dash-friend-name {
-  flex: 1;
-  font-size: .88em;
+  background: none;
   color: #dcddde;
+  font-size: 0.9em;
   font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-.dash-friend-actions {
-  display: flex;
-  gap: 5px;
-  flex-shrink: 0;
-}
-.dash-action-sm {
-  background: rgba(255,255,255,.07);
-  border: none;
-  border-radius: 7px;
-  padding: 5px 8px;
-  font-size: .8em;
   cursor: pointer;
-  color: #b5bac1;
-  transition: background .14s, color .14s;
+  transition: all 0.15s;
+  text-align: left;
 }
-.dash-action-sm:hover { background: rgba(255,255,255,.14); color: #fff; }
-.dash-chat-btn:hover { background: rgba(88,101,242,.28); color: #a78bfa; }
-.dash-remove-btn:hover { background: rgba(242,63,66,.2); color: #f23f42; }
-.dash-block-reg-btn:hover { background: rgba(250,166,26,.15); color: #faa61a; }
 
-/* ── Responsive tweaks ──────────────────────────────────────────── */
+.reg-menu-item:first-child {
+  border-radius: 7px 7px 0 0;
+}
+
+.reg-menu-item:hover {
+  background: rgba(88, 101, 242, 0.15);
+  color: #5865f2;
+}
+
+.reg-menu-item:active {
+  transform: scale(0.98);
+}
+
+/* ── Logout item (danger style) ──────────────────────────────────────────── */
+.reg-menu-logout {
+  color: #f23f42;
+}
+
+.reg-menu-logout:hover {
+  background: rgba(242, 63, 66, 0.15);
+  color: #ff6c6f;
+}
+
+/* ── Menu icon ───────────────────────────────────────────────────────────── */
+.reg-menu-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  font-weight: 600;
+  font-size: 0.95em;
+}
+
+/* ── Menu label ──────────────────────────────────────────────────────────── */
+.reg-menu-label {
+  flex: 1;
+  letter-spacing: 0.3px;
+}
+
+/* ── Divider ─────────────────────────────────────────────────────────────── */
+.reg-menu-divider {
+  height: 1px;
+  background: #1a1b1e;
+  margin: 4px 0;
+}
+
+/* ── Responsive: Hide on mobile if too crowded ───────────────────────────── */
 @media (max-width: 480px) {
-  #friends-panel { width: 100%; }
-  #auth-user-badge { max-width: 90px; font-size: .72em; }
-  #auth-friends-btn { font-size: .72em; padding: 5px 8px; }
-  .fn-notif { max-width: 92vw; }
-  .auth-toast { max-width: 88vw; }
-  .dot-menu-dropdown { min-width: 160px; font-size: .9em; }
-  .dash-sheet { border-radius: 14px 14px 0 0; }
-}
-
-/* Desktop: center the dashboard as a modal card instead of bottom sheet */
-@media (min-width: 600px) {
-  #dashboard-panel { align-items: center; }
-  .dash-sheet {
-    border-radius: 16px;
-    max-height: 80vh;
-    animation: dashFadeIn .18s ease;
+  .reg-menu-btn {
+    font-size: 1.2em;
+    padding: 4px 8px;
   }
-  @keyframes dashFadeIn {
-    from { opacity: 0; transform: scale(.96) translateY(8px); }
-    to   { opacity: 1; transform: scale(1)   translateY(0); }
+
+  .reg-menu-dropdown {
+    min-width: 160px;
+  }
+
+  .reg-menu-item {
+    padding: 10px 12px;
+    gap: 8px;
+    font-size: 0.85em;
   }
 }
