@@ -2593,6 +2593,29 @@ app.post("/api/friends/decline", express.json({ limit: "2kb" }), (req, res) => {
   res.json({ success: true });
 });
 
+// GET /api/priv/history — fetch private message history between two friends
+app.get("/api/priv/history", (req, res) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "").trim();
+  const { username, friend } = req.query;
+
+  if (!token || !username || !friend)
+    return res.status(400).json({ error: "Missing params" });
+
+  const entry = authTokens.get(token);
+  if (!entry || Date.now() >= entry.expiry)
+    return res.status(401).json({ error: "Unauthorized" });
+
+  if (entry.usernameLower !== username.toLowerCase())
+    return res.status(403).json({ error: "Forbidden" });
+
+  const roomId = privRoomId(username.toLowerCase(), friend.toLowerCase());
+  const room = privateRooms.get(roomId);
+  const msgs = room ? room.messages.filter(m => Date.now() < room.expiresAt) : [];
+
+  res.json({ messages: msgs });
+});
+
 // ════════════════════════════════════════════════════════════════════════════
 // SOCKET.IO CONNECTION HANDLER
 // ════════════════════════════════════════════════════════════════════════════
