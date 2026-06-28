@@ -615,21 +615,10 @@ function showToast(text, duration = 3000) {
 }
 
 // ── Search retry ──────────────────────────────────────────────────────────────
-function startSearchRetry() {
-  stopSearchRetry();
-  searchRetryInterval = setInterval(() => {
-    // Stop immediately if we are already connected to a partner
-    if (partnerConnected) {
-      stopSearchRetry();
-      return;
-    }
-    // Don't emit while reconnecting — server is handling that separately
-    if (isReconnecting) return;
-    // Only emit if we have a name and the socket is actually live
-    if (!userName || !socket.connected) return;
-    socket.emit("findPartner");
-  }, 3000); // 3s — gives server enough time to respond before we retry
-}
+// No client-side polling needed. The server's tryFindPartner() already queues
+// the socket and pairs it automatically when a match arrives. All call sites
+// that used startSearchRetry() are now no-ops so they compile safely.
+function startSearchRetry() { /* no-op — server handles pairing */ }
 
 function stopSearchRetry() {
   if (searchRetryInterval !== null) {
@@ -1433,12 +1422,7 @@ socket.on("nameAccepted", (acceptedName) => {
     isFirstLogin = false;
     clearChat();
     addSearchingMessage();
-    stopSearchRetry(); // clear any stale interval before starting fresh
-    socket.emit("findPartner");
-    // Small delay before retry loop so the initial findPartner has time to land
-    setTimeout(() => {
-      if (!partnerConnected && !isReconnecting && userName) startSearchRetry();
-    }, 500);
+    socket.emit("findPartner"); // one emit — server queues us until a match exists
   } else if (isReconnecting) {
     isReconnecting = false;
     _reconnectNameRetries = 0; // reset retry counter on success
@@ -1945,17 +1929,13 @@ nextBtn.addEventListener("click", () => {
   nextBtn.disabled = true;
   setTimeout(() => { nextBtn.disabled = false; }, 1200);
 
-  // ── Tear down current state synchronously FIRST ───────────────────────
-  // Stop any running search/retry before changing partnerConnected so that
-  // the interval callback can't slip a findPartner emit through while we
-  // are mid-teardown.
+  // Stop any stale state synchronously first
   stopSearchRetry();
-
   partnerConnected     = false;
   partnerName = ""; setPartnerNameDisplay("");
   lastPartnerName      = "";
   canBlockDisconnected = false;
-  setInputsEnabled(false);   // disables + clears textarea immediately
+  setInputsEnabled(false);
   updateBlockBtn();
   hideTypingIndicator();
   closeGifPickerPanel();
@@ -1963,17 +1943,9 @@ nextBtn.addEventListener("click", () => {
   clearChat();
   addSearchingMessage();
 
-  // ── Tell server, then start retry loop ───────────────────────────────
-  // We emit "next" first so the server tears down the old pairing before
-  // we start hammering it with findPartner retries.
+  // One emit — server tears down old pair AND calls tryFindPartner() itself.
+  // No client-side retry needed; server queues us until a match is available.
   socket.emit("next");
-
-  // Small delay before starting retry so server has processed "next"
-  setTimeout(() => {
-    if (!partnerConnected && !isReconnecting && userName) {
-      startSearchRetry();
-    }
-  }, 400);
 });
 
 blockBtn.addEventListener("click", () => {
