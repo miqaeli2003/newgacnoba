@@ -139,20 +139,35 @@
     };
     saveAuth(data.token, data.username);
 
+    // Authenticate the socket with the server
     if (sk()) {
-      if (sk().connected) sk().emit("auth:token", data.token);
-      else sk().once("connect", () => sk().emit("auth:token", data.token));
+      if (sk().connected) sk().emit("auth:login", { token: data.token });
+      else sk().once("connect", () => sk().emit("auth:login", { token: data.token }));
     }
 
     updateAuthBadge();
     renderFriendsList(authUser.friends);
     renderDashFriends(authUser.friends);
 
-    // Pre-fill the existing name field and auto-submit
+    // Submit the registered username into the chat name flow.
+    // If the name modal is visible, fill it and click the button.
+    // If the user already has a socket name (reconnect), just close the modal.
     const ni = $("nameInput");
-    if (ni) ni.value = data.username;
     const sb = $("saveNameBtn");
-    if (sb) setTimeout(() => sb.click(), 50);
+    const nm = $("nameModal");
+
+    if (ni) ni.value = data.username;
+
+    // Give the socket a moment to process auth:login, then start chat
+    setTimeout(() => {
+      if (nm && nm.style.display !== "none") {
+        // Modal is open — submit the name to start chatting
+        if (sb) sb.click();
+      } else if (!window._gaicaniChatStarted) {
+        // Modal already closed (e.g. auto-login on reload) — nothing to do,
+        // script.js already handled the name flow
+      }
+    }, 150);
   }
 
   /* ── Auth badge (top bar) ───────────────────────────────────────── */
@@ -172,20 +187,16 @@
       const da = $("dashAvatar");
       if (du) du.textContent = authUser.username;
       if (da) da.textContent = authUser.username.charAt(0).toUpperCase();
-      // Registered users: hide Change Name button and dropdown item (name is permanent)
+      // Registered users: hide Change Name button (name is permanent)
       const cnb = document.getElementById("changeNameBtn");
       if (cnb) cnb.style.display = "none";
-      const dmName = document.getElementById("dm-name");
-      if (dmName) dmName.style.display = "none";
     } else {
       b.style.display = "none";
       const lb = $("auth-logout-btn");
       if (lb) lb.style.display = "none";
-      // Guest: restore Change Name button and dropdown item
+      // Guest: restore Change Name button
       const cnb = document.getElementById("changeNameBtn");
       if (cnb) cnb.style.display = "";
-      const dmName = document.getElementById("dm-name");
-      if (dmName) dmName.style.display = "";
     }
   }
 
@@ -217,59 +228,6 @@
     } catch { clearAuth(); return false; }
   }
 
-  /* ══════════════════════════════════════════════════════════════════
-     THREE-DOT MENU
-     ══════════════════════════════════════════════════════════════════ */
-  const dotMenuBtn       = $("dotMenuBtn");
-  const dotMenuDropdown  = $("dotMenuDropdown");
-
-  function closeDotMenu() {
-    if (dotMenuDropdown) dotMenuDropdown.style.display = "none";
-  }
-
-  dotMenuBtn?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const open = dotMenuDropdown?.style.display !== "none";
-    if (dotMenuDropdown) dotMenuDropdown.style.display = open ? "none" : "block";
-  });
-
-  document.addEventListener("click", (e) => {
-    if (dotMenuDropdown && !dotMenuBtn?.contains(e.target)) closeDotMenu();
-  });
-
-  // ⋮ → Games: trigger the existing games button if present
-  $("dm-games")?.addEventListener("click", () => {
-    closeDotMenu();
-    // Try to find the games button injected by games.js
-    const gBtn = document.getElementById("gamesBtn") || document.querySelector(".games-btn");
-    if (gBtn) { gBtn.click(); return; }
-    // Fallback: dispatch a custom event games.js can listen for
-    document.dispatchEvent(new CustomEvent("gaicani:openGames"));
-  });
-
-  // ⋮ → Report: trigger the existing report button
-  $("dm-report")?.addEventListener("click", () => {
-    closeDotMenu();
-    document.getElementById("reportBtn")?.click();
-  });
-
-  // ⋮ → Change name
-  $("dm-name")?.addEventListener("click", () => {
-    closeDotMenu();
-    document.getElementById("changeNameBtn")?.click();
-  });
-
-  // ⋮ → Interests
-  $("dm-interests")?.addEventListener("click", () => {
-    closeDotMenu();
-    document.getElementById("interestsBtn")?.click();
-  });
-
-  // ⋮ → My Page (Dashboard)
-  $("dm-mypage")?.addEventListener("click", () => {
-    closeDotMenu();
-    openDashboard();
-  });
 
   /* ══════════════════════════════════════════════════════════════════
      DASHBOARD / MY PAGE
@@ -287,6 +245,13 @@
     }
     // Redirect to the dedicated dashboard page
     window.location.href = "/dashboard.html";
+  }
+
+  function closeDashboard() {
+    const panel = $("dashboard-panel");
+    if (panel) panel.style.display = "none";
+    const overlay = $("dashOverlay");
+    if (overlay) overlay.style.display = "none";
   }
 
   /* ── Dashboard: friends list ────────────────────────────────────── */
