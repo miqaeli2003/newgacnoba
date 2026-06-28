@@ -161,45 +161,26 @@
     authUser = { username, token, friends: friends || [], pendingRequests: pendingRequests || [] };
     window.gaicaniAuthUser = authUser;
 
-    // Close the name modal
-    const nameModal = $("nameModal");
-    if (nameModal) nameModal.style.display = "none";
-
-    // Update auth badge in top bar
-    updateAuthBadge();
-    updateRegMenuVisibility();
-
-    // Connect socket with auth
-    bindSocketEvents();
-
-    // If the user hasn't set a chat name yet, set it to their registered username
-    const nameInput = $("nameInput");
-    const savedName = (() => { try { return sessionStorage.getItem("gaicani_username"); } catch (_) { return null; } })();
-    if (!savedName && nameInput) {
-      nameInput.value = username;
-    }
-
-    // Auto-set name if socket is ready
-    autoSetNameAfterAuth(username);
-
+    // Show success toast, then redirect straight to the dashboard
     showToast(`✅ ${esc(username)} — წარმატებით შეხვედით!`);
+    setTimeout(() => {
+      window.location.href = '/dashboard.html';
+    }, 700);
   }
 
   function autoSetNameAfterAuth(username) {
-    // The main script.js handles name setting — we just need to trigger it
-    // if the socket is connected and name is not yet set
+    // Used by tryAutoLogin so returning registered users skip the name modal
     setTimeout(() => {
       if (typeof window.socket !== "undefined" && window.socket.connected) {
         const currentName = window.userName || "";
         if (!currentName) {
-          // Pre-fill and trigger the name modal's save
           const nameInput = $("nameInput");
           if (nameInput) nameInput.value = username;
           const saveBtn = $("saveNameBtn");
           if (saveBtn) saveBtn.click();
         }
       }
-    }, 300);
+    }, 400);
   }
 
   /* ── Update top bar badge ──────────────────────────────────────────── */
@@ -661,6 +642,12 @@
     if (!menuBtn) return;
     menuBtn.style.display = authUser ? "flex" : "none";
     if (!authUser) closeRegMenu();
+
+    // Registered users have a permanent name — hide the change-name button
+    const changeNameBtn = $("changeNameBtn");
+    if (changeNameBtn) {
+      changeNameBtn.style.display = authUser ? "none" : "";
+    }
   }
 
   function toggleRegMenu(e) {
@@ -687,12 +674,20 @@
   // 🎮 Games
   $("regMenuGames")?.addEventListener("click", () => {
     closeRegMenu();
-    const gamesBtn = $("interestsBtn");
-    if (gamesBtn && gamesBtn.style.display !== "none") {
+    // gameBtn is injected by games.js into the top bar
+    const gamesBtn = $("gameBtn");
+    if (gamesBtn && !gamesBtn.disabled) {
       gamesBtn.click();
     } else {
       showToast("🎮 თამაშები მხოლოდ ჩატის დროს ხელმისაწვდომია");
     }
+  });
+
+  // 🎮 Games Interests — opens the bio/interests popup for sharing gaming preferences
+  $("regMenuGameInt")?.addEventListener("click", () => {
+    closeRegMenu();
+    const bioPopup = $("bioPopup");
+    if (bioPopup) bioPopup.style.display = "flex";
   });
 
   // 🚩 Report — same logic as main report button
@@ -713,10 +708,10 @@
     if (bioPopup) bioPopup.style.display = "flex";
   });
 
-  // ჩემი გვერდი (My Page)
+  // ჩემი გვერდი (My Page) — navigate to the full dashboard page
   $("regMenuDash")?.addEventListener("click", () => {
     closeRegMenu();
-    openDashboard();
+    window.location.href = '/dashboard.html';
   });
 
   // Logout
@@ -761,6 +756,8 @@
       updateAuthBadge();
       updateRegMenuVisibility();
       bindSocketEvents();
+      // Auto-fill and submit name so returning users skip the name modal
+      autoSetNameAfterAuth(authUser.username);
     } catch (_) {
       // Network error — restore from local storage best-effort
       authUser = { username, token, friends: [], pendingRequests: [] };
@@ -768,6 +765,7 @@
       updateAuthBadge();
       updateRegMenuVisibility();
       bindSocketEvents();
+      autoSetNameAfterAuth(username);
     }
   }
 
