@@ -1053,6 +1053,9 @@ const activeUsernames    = new Set();
 const pendingDisconnects = new Map();
 const reportLog          = [];
 
+// [AUTH] Reserved registered usernames — populated by the auth section below
+const authReservedNames  = new Set();
+
 // ── Game state ────────────────────────────────────────────────────────────────
 const gameBySocket = new Map(); // socketId → gameId
 const gameById     = new Map(); // gameId   → game object
@@ -1256,6 +1259,30 @@ io.on("connection", (socket) => {
     }
 
     const lowerTrimmed = trimmed.toLowerCase();
+
+    // [AUTH] If name belongs to a registered user, only allow its owner to use it.
+    // Anonymous users attempting a registered name get nameTaken.
+    if (authReservedNames.has(lowerTrimmed)) {
+      const isOwner = socket._regUser && socket._regUser.usernameLower === lowerTrimmed;
+      if (!isOwner) {
+        socket.emit("nameTaken");
+        return;
+      }
+      // Owner is reclaiming — evict any anonymous socket currently holding it
+      if (activeUsernames.has(lowerTrimmed) && !pendingDisconnects.has(lowerTrimmed)) {
+        for (const [, s] of io.sockets.sockets) {
+          if (s.id !== socket.id && s.userName &&
+              s.userName.toLowerCase() === lowerTrimmed && !s._regUser) {
+            activeUsernames.delete(lowerTrimmed);
+            s.userName = "";
+            if (s.partner) { s.partner.partner = null; s.partner.emit("partnerDisconnected", { name: lowerTrimmed }); }
+            waitingQueue = waitingQueue.filter(q => q.id !== s.id);
+            s.emit("nameTaken");
+            break;
+          }
+        }
+      }
+    }
 
     // Allow reclaiming a name that is pending reconnect (user's own name during grace period)
     if (activeUsernames.has(lowerTrimmed)) {
@@ -2316,6 +2343,335 @@ ${queue.length ? `<h2>Pending queue (${queue.length})</h2>
 </table>
 </body>
 </html>`);
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// AUTH · FRIENDS · PRIVATE CHAT  (GAICANI Registered Users)
+// ════════════════════════════════════════════════════════════════════════════
+
+const USERS_FILE        = path.join(__dirname, "registered_users.json");
+const PRIV_MSGS_FILE    = path.join(__dirname, "private_messages.json");
+const PRIVATE_MSG_TTL   = 12 * 60 * 60 * 1000; // 12 h — auto-delete
+const AUTH_TOKEN_TTL    = 7  * 24 * 60 * 60 * 1000; // 7 days
+
+// ── In-memory stores ─────────────────────────────────────────────────────────
+const registeredUsers   = new Map(); // lowerUsername → userObj
+const authTokens        = new Map(); // token → { usernameLower, expiry }
+const privateRooms      = new Map(); // roomId → { messages, createdAt, expiresAt }
+const onlineRegSockets  = new Map(); // lowerUsername → Set<socketId>
+
+// ── Crypto helpers ────────────────────────────────────────────────────────────
+function authHashPassword(pwd) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.pbkdf2Sync(pwd, salt, 100000, 64, "sha512").toString("hex");
+  return `${salt}:${hash}`;
+}
+function authVerifyPassword(pwd, stored) {
+  try {
+    const [salt, hash] = stored.split(":");
+    if (!salt || !hash) return false;
+    return crypto.pbkdf2Sync(pwd, salt, 100000, 64, "sha512").toString("hex") === hash;
+  } catch { return false; }
+}
+function authToken() { return crypto.randomBytes(32).toString("hex"); }
+function privRoomId(a, b) { return [a.toLowerCase(), b.toLowerCase()].sort().join("::"); }
+
+// ── Persist helpers ───────────────────────────────────────────────────────────
+function loadAuthUsers() {
+  try {
+    const obj = JSON.parse(fs.readFileSync(USERS_FILE, "utf8"));
+    for (const u of Object.values(obj)) {
+      registeredUsers.set(u.username.toLowerCase(), u);
+      authReservedNames.add(u.username.toLowerCase());
+    }
+    console.log(`[AUTH] Loaded ${registeredUsers.size} registered user(s)`);
+  } catch { /* first run */ }
+}
+function saveAuthUsers() {
+  const obj = {};
+  for (const [k, u] of registeredUsers) {
+    obj[k] = { username: u.username, passwordHash: u.passwordHash,
+               createdAt: u.createdAt, friends: u.friends || [],
+               pendingRequests: u.pendingRequests || [] };
+  }
+  try { fs.writeFileSync(USERS_FILE, JSON.stringify(obj, null, 2), "utf8"); }
+  catch (e) { console.error("[AUTH] save failed:", e.message); }
+}
+function loadPrivateMsgs() {
+  try {
+    const obj = JSON.parse(fs.readFileSync(PRIV_MSGS_FILE, "utf8"));
+    const now = Date.now();
+    for (const [id, room] of Object.entries(obj)) {
+      if (room.expiresAt && now < room.expiresAt) privateRooms.set(id, room);
+    }
+    console.log(`[PRIV] Loaded ${privateRooms.size} active private room(s)`);
+  } catch { /* first run */ }
+}
+function savePrivateMsgs() {
+  const obj = {};
+  for (const [id, r] of privateRooms) obj[id] = r;
+  try { fs.writeFileSync(PRIV_MSGS_FILE, JSON.stringify(obj, null, 2), "utf8"); }
+  catch (e) { console.error("[PRIV] save failed:", e.message); }
+}
+
+loadAuthUsers();
+loadPrivateMsgs();
+
+// ── Scheduled cleanup ─────────────────────────────────────────────────────────
+setInterval(() => {
+  const now = Date.now();
+  let n = 0;
+  for (const [id, r] of privateRooms) if (now >= r.expiresAt) { privateRooms.delete(id); n++; }
+  if (n) { savePrivateMsgs(); console.log(`[PRIV] Cleaned ${n} expired room(s)`); }
+}, 60 * 60 * 1000);
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [t, e] of authTokens) if (now >= e.expiry) authTokens.delete(t);
+}, 60 * 60 * 1000);
+
+// ── REST endpoints ────────────────────────────────────────────────────────────
+const authLimiter = rateLimit({ windowMs: 15 * 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
+
+// POST /api/auth/register
+app.post("/api/auth/register", authLimiter, express.json({ limit: "5kb" }), (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password || typeof username !== "string" || typeof password !== "string")
+    return res.status(400).json({ error: "სახელი და პაროლი სავალდებულოა" });
+
+  const clean = username.trim();
+  if (clean.length < 2 || clean.length > 20)
+    return res.status(400).json({ error: "სახელი: 2–20 სიმბოლო" });
+  if (!/^[\w\u10D0-\u10FF\s\-.]+$/.test(clean))
+    return res.status(400).json({ error: "სახელი შეიცავს დაუშვებელ სიმბოლოებს" });
+  if (password.length < 6 || password.length > 100)
+    return res.status(400).json({ error: "პაროლი: 6–100 სიმბოლო" });
+
+  const lc = clean.toLowerCase();
+  if (registeredUsers.has(lc))
+    return res.status(409).json({ error: "ეს სახელი უკვე დაკავებულია" });
+
+  const user = {
+    username: clean, passwordHash: authHashPassword(password),
+    createdAt: new Date().toISOString(), friends: [], pendingRequests: [],
+  };
+  registeredUsers.set(lc, user);
+  authReservedNames.add(lc);
+  saveAuthUsers();
+
+  const token = authToken();
+  authTokens.set(token, { usernameLower: lc, expiry: Date.now() + AUTH_TOKEN_TTL });
+
+  console.log(`[AUTH] Registered: ${clean}`);
+  res.json({ ok: true, username: clean, token, friends: [], pendingRequests: [] });
+});
+
+// POST /api/auth/login
+app.post("/api/auth/login", authLimiter, express.json({ limit: "5kb" }), (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password)
+    return res.status(400).json({ error: "სახელი და პაროლი სავალდებულოა" });
+
+  const lc   = String(username).trim().toLowerCase();
+  const user = registeredUsers.get(lc);
+  if (!user || !authVerifyPassword(String(password), user.passwordHash))
+    return res.status(401).json({ error: "სახელი ან პაროლი არასწორია" });
+
+  const token = authToken();
+  authTokens.set(token, { usernameLower: lc, expiry: Date.now() + AUTH_TOKEN_TTL });
+
+  console.log(`[AUTH] Login: ${user.username}`);
+  res.json({ ok: true, username: user.username, token,
+             friends: user.friends || [], pendingRequests: user.pendingRequests || [] });
+});
+
+// POST /api/auth/verify
+app.post("/api/auth/verify", express.json({ limit: "2kb" }), (req, res) => {
+  const { token } = req.body || {};
+  if (!token) return res.json({ ok: false });
+  const entry = authTokens.get(String(token));
+  if (!entry || Date.now() >= entry.expiry) return res.json({ ok: false });
+  const user = registeredUsers.get(entry.usernameLower);
+  if (!user) return res.json({ ok: false });
+  res.json({ ok: true, username: user.username,
+             friends: user.friends || [], pendingRequests: user.pendingRequests || [] });
+});
+
+// ── Second Socket.IO handler: auth, friends, private chat ─────────────────────
+io.on("connection", (socket) => {
+  socket._regUser = null; // { username, usernameLower } when authenticated
+
+  // ── Authenticate via token ──────────────────────────────────────────────────
+  socket.on("auth:token", (token) => {
+    if (!token || typeof token !== "string") return;
+    const entry = authTokens.get(token);
+    if (!entry || Date.now() >= entry.expiry) { socket.emit("auth:invalid"); return; }
+    const user = registeredUsers.get(entry.usernameLower);
+    if (!user) { socket.emit("auth:invalid"); return; }
+
+    socket._regUser = { username: user.username, usernameLower: entry.usernameLower };
+
+    if (!onlineRegSockets.has(entry.usernameLower))
+      onlineRegSockets.set(entry.usernameLower, new Set());
+    onlineRegSockets.get(entry.usernameLower).add(socket.id);
+
+    socket.join(`user:${entry.usernameLower}`);
+
+    socket.emit("auth:authenticated", {
+      username: user.username,
+      friends: user.friends || [],
+      pendingRequests: user.pendingRequests || [],
+    });
+    console.log(`[AUTH] Socket ${socket.id} authenticated as ${user.username}`);
+  });
+
+  // ── Check if the current chat partner is also registered ────────────────────
+  // Client sends this after receiving partnerFound, if it is authenticated.
+  socket.on("auth:checkPartner", () => {
+    if (!socket._regUser || !socket.partner || !socket.partner._regUser) return;
+
+    const myLc  = socket._regUser.usernameLower;
+    const pLc   = socket.partner._regUser.usernameLower;
+    const myU   = registeredUsers.get(myLc);
+    const pU    = registeredUsers.get(pLc);
+    if (!myU || !pU) return;
+
+    const roomId = privRoomId(myLc, pLc);
+
+    socket.emit("auth:partnerRegInfo", {
+      partnerRegName: pU.username,
+      isFriend: (myU.friends || []).includes(pLc),
+      roomId,
+    });
+    socket.partner.emit("auth:partnerRegInfo", {
+      partnerRegName: myU.username,
+      isFriend: (pU.friends || []).includes(myLc),
+      roomId,
+    });
+  });
+
+  // ── Send friend request ─────────────────────────────────────────────────────
+  socket.on("friend:request", ({ toUsername }) => {
+    if (!socket._regUser || !toUsername) return;
+    const toLc = String(toUsername).toLowerCase();
+    if (toLc === socket._regUser.usernameLower) return;
+
+    const targetUser = registeredUsers.get(toLc);
+    if (!targetUser) { socket.emit("friend:error", { msg: "მომხმარებელი ვერ მოიძებნა" }); return; }
+
+    const myUser = registeredUsers.get(socket._regUser.usernameLower);
+    if (!myUser) return;
+
+    if ((myUser.friends || []).includes(toLc)) {
+      socket.emit("friend:error", { msg: "უკვე მეგობრები ხართ" }); return;
+    }
+    if (!(targetUser.pendingRequests || []).includes(socket._regUser.usernameLower)) {
+      if (!targetUser.pendingRequests) targetUser.pendingRequests = [];
+      targetUser.pendingRequests.push(socket._regUser.usernameLower);
+      saveAuthUsers();
+    }
+    io.to(`user:${toLc}`).emit("friend:requested", { fromUsername: myUser.username });
+    socket.emit("friend:requestSent", { toUsername: targetUser.username });
+  });
+
+  // ── Accept friend request ───────────────────────────────────────────────────
+  socket.on("friend:accept", ({ fromUsername }) => {
+    if (!socket._regUser || !fromUsername) return;
+    const fromLc  = String(fromUsername).toLowerCase();
+    const myUser   = registeredUsers.get(socket._regUser.usernameLower);
+    const fromUser = registeredUsers.get(fromLc);
+    if (!myUser || !fromUser) return;
+
+    myUser.pendingRequests   = (myUser.pendingRequests   || []).filter(u => u !== fromLc);
+    if (!myUser.friends)   myUser.friends   = [];
+    if (!fromUser.friends) fromUser.friends = [];
+    if (!myUser.friends.includes(fromLc))                      myUser.friends.push(fromLc);
+    if (!fromUser.friends.includes(socket._regUser.usernameLower)) fromUser.friends.push(socket._regUser.usernameLower);
+    saveAuthUsers();
+
+    socket.emit("friend:accepted", { username: fromUser.username, friends: myUser.friends });
+    io.to(`user:${fromLc}`).emit("friend:nowFriends", { withUsername: myUser.username });
+  });
+
+  // ── Decline friend request ──────────────────────────────────────────────────
+  socket.on("friend:decline", ({ fromUsername }) => {
+    if (!socket._regUser || !fromUsername) return;
+    const fromLc = String(fromUsername).toLowerCase();
+    const myUser = registeredUsers.get(socket._regUser.usernameLower);
+    if (!myUser) return;
+    myUser.pendingRequests = (myUser.pendingRequests || []).filter(u => u !== fromLc);
+    saveAuthUsers();
+    socket.emit("friend:declinedAck");
+  });
+
+  // ── Private chat: join room ─────────────────────────────────────────────────
+  socket.on("private:join", ({ roomId }) => {
+    if (!socket._regUser || !roomId || typeof roomId !== "string") return;
+    const parts = roomId.split("::");
+    if (parts.length !== 2 || !parts.includes(socket._regUser.usernameLower)) return;
+
+    // Verify they are actually friends
+    const myUser      = registeredUsers.get(socket._regUser.usernameLower);
+    const partnerLc   = parts.find(p => p !== socket._regUser.usernameLower);
+    if (!myUser || !(myUser.friends || []).includes(partnerLc)) return;
+
+    socket.join(`priv:${roomId}`);
+
+    let room = privateRooms.get(roomId);
+    if (!room || Date.now() >= room.expiresAt) {
+      room = { messages: [], createdAt: Date.now(), expiresAt: Date.now() + PRIVATE_MSG_TTL };
+      privateRooms.set(roomId, room);
+    }
+    socket.emit("private:history", { roomId, messages: room.messages, expiresAt: room.expiresAt });
+  });
+
+  // ── Private chat: send message ──────────────────────────────────────────────
+  socket.on("private:message", ({ roomId, text }) => {
+    if (!socket._regUser || !roomId || !text) return;
+    const parts = roomId.split("::");
+    if (parts.length !== 2 || !parts.includes(socket._regUser.usernameLower)) return;
+
+    let room = privateRooms.get(roomId);
+    if (!room || Date.now() >= room.expiresAt) {
+      room = { messages: [], createdAt: Date.now(), expiresAt: Date.now() + PRIVATE_MSG_TTL };
+      privateRooms.set(roomId, room);
+    }
+
+    const clean = String(text).slice(0, 2000).replace(/<[^>]*>/g, "").trim();
+    if (!clean) return;
+
+    const msg = {
+      id: crypto.randomBytes(8).toString("hex"),
+      sender: socket._regUser.username,
+      senderLower: socket._regUser.usernameLower,
+      text: clean,
+      ts: Date.now(),
+    };
+    room.messages.push(msg);
+    if (room.messages.length > 500) room.messages = room.messages.slice(-500);
+
+    io.to(`priv:${roomId}`).emit("private:newMessage", { roomId, message: msg });
+
+    // Push notification to the partner's personal room (in case panel is closed)
+    const partnerLc = parts.find(p => p !== socket._regUser.usernameLower);
+    io.to(`user:${partnerLc}`).emit("private:notification",
+      { from: socket._regUser.username, roomId });
+
+    if (room.messages.length % 5 === 0) savePrivateMsgs();
+  });
+
+  // ── Private chat: leave room ────────────────────────────────────────────────
+  socket.on("private:leave", ({ roomId }) => {
+    if (roomId && typeof roomId === "string") socket.leave(`priv:${roomId}`);
+  });
+
+  // ── Cleanup on disconnect ───────────────────────────────────────────────────
+  socket.on("disconnect", () => {
+    if (!socket._regUser) return;
+    const set = onlineRegSockets.get(socket._regUser.usernameLower);
+    if (set) { set.delete(socket.id); if (set.size === 0) onlineRegSockets.delete(socket._regUser.usernameLower); }
+    savePrivateMsgs();
+  });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
