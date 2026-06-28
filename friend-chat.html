@@ -123,23 +123,8 @@
       -webkit-overflow-scrolling: touch;
     }
 
-    /* Date separator */
-    .fc-date-sep {
-      text-align: center;
-      color: var(--muted);
-      font-size: 0.72em;
-      margin: 10px 0 6px;
-      position: relative;
-    }
-    .fc-date-sep::before, .fc-date-sep::after {
-      content: "";
-      display: inline-block;
-      width: 28%;
-      height: 1px;
-      background: var(--border);
-      vertical-align: middle;
-      margin: 0 8px;
-    }
+    /* Date separator — hidden */
+    .fc-date-sep { display: none; }
 
     /* Message row */
     .fc-row {
@@ -381,6 +366,200 @@
     #fc-messages::-webkit-scrollbar-track { background: transparent; }
     #fc-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
 
+    /* ── Extra input bar buttons (photo/gif/game) ── */
+    .fc-extra-btn {
+      flex-shrink: 0;
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.1);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.05em;
+      color: var(--text);
+      transition: background 0.15s;
+      align-self: flex-end;
+    }
+    .fc-extra-btn:hover { background: rgba(255,255,255,0.14); }
+    .fc-extra-btn:active { transform: scale(0.9); }
+    #fc-photo-input { display: none; }
+
+    /* ── Photo messages ── */
+    .fc-photo-img {
+      max-width: 220px;
+      max-height: 220px;
+      border-radius: 12px;
+      display: block;
+      cursor: pointer;
+      object-fit: cover;
+    }
+
+    /* ── GIF messages ── */
+    .fc-gif-img {
+      max-width: 220px;
+      border-radius: 12px;
+      display: block;
+    }
+
+    /* ── GIF Picker ── */
+    #fc-gif-picker {
+      position: fixed;
+      bottom: -100%;
+      left: 0; right: 0;
+      background: #1a1b1e;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      border-radius: 18px 18px 0 0;
+      padding: 12px;
+      z-index: 200;
+      transition: bottom 0.25s cubic-bezier(.4,0,.2,1);
+      max-height: 55vh;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #fc-gif-picker.open { bottom: 0; }
+    #fc-gif-search {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
+      padding: 8px 14px;
+      color: var(--text);
+      font-size: 0.88em;
+      outline: none;
+      width: 100%;
+    }
+    #fc-gif-search::placeholder { color: var(--muted); }
+    #fc-gif-results {
+      overflow-y: auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .fc-gif-item {
+      width: 100%;
+      border-radius: 8px;
+      cursor: pointer;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+    }
+    .fc-gif-item:hover { opacity: 0.8; }
+
+    /* ── Game overlay (reuse from games.js style, simplified) ── */
+    #fc-game-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 300;
+      align-items: center;
+      justify-content: center;
+    }
+    #fc-game-overlay.open { display: flex; }
+    .fc-game-window {
+      background: #2b2d31;
+      border-radius: 16px;
+      padding: 20px;
+      width: min(95vw, 380px);
+      max-height: 90vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .fc-game-header {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .fc-game-title { font-weight: 700; font-size: 1em; color: #fff; }
+    .fc-game-close-btn {
+      background: none; border: none; color: var(--muted);
+      font-size: 1.1em; cursor: pointer; padding: 4px;
+    }
+    .fc-game-menu-list {
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .fc-game-menu-item {
+      display: flex; align-items: center; gap: 12px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 12px 14px;
+      cursor: pointer;
+      color: var(--text);
+      text-align: left;
+      transition: background 0.15s;
+    }
+    .fc-game-menu-item:hover { background: rgba(88,101,242,0.15); border-color: rgba(88,101,242,0.3); }
+    .fc-game-menu-icon { font-size: 1.6em; }
+    .fc-game-menu-info strong { display: block; font-size: 0.9em; color: #fff; }
+    .fc-game-menu-info small  { font-size: 0.76em; color: var(--muted); }
+    /* game content area */
+    #fc-game-content { min-height: 120px; }
+    .fc-game-status { text-align: center; color: var(--muted); font-size: 0.85em; padding: 12px 0; }
+    /* TTT */
+    .fc-ttt-board {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 6px; margin: 8px 0;
+    }
+    .fc-ttt-cell {
+      aspect-ratio: 1; background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+      font-size: 1.8em; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.1s;
+    }
+    .fc-ttt-cell:hover:not(:disabled) { background: rgba(88,101,242,0.2); }
+    .fc-ttt-cell.win { background: rgba(88,101,242,0.3); border-color: var(--accent); }
+    /* RPS */
+    .fc-rps-choices { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+    .fc-rps-btn {
+      font-size: 1.7em; padding: 10px 14px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .fc-rps-btn:hover { background: rgba(88,101,242,0.2); }
+    /* Math */
+    .fc-math-q { text-align: center; font-size: 1.5em; font-weight: 700; color: #fff; padding: 10px 0; }
+    .fc-math-input-row { display: flex; gap: 8px; }
+    .fc-math-input {
+      flex: 1; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px; padding: 8px 14px; color: var(--text);
+      font-size: 1em; outline: none;
+    }
+    .fc-math-submit {
+      background: var(--accent); border: none; border-radius: 10px;
+      padding: 8px 18px; color: #fff; font-size: 0.9em; cursor: pointer;
+    }
+    /* Game result */
+    #fc-game-result { text-align: center; display: none; }
+    .fc-game-result-emoji { font-size: 2.5em; }
+    .fc-game-result-text { font-size: 1em; color: var(--text); margin: 6px 0 12px; }
+    .fc-game-result-btns { display: flex; gap: 8px; justify-content: center; }
+    .fc-game-result-btn {
+      padding: 8px 18px; border-radius: 10px; border: none; cursor: pointer;
+      font-size: 0.88em;
+    }
+    .fc-game-result-btn.primary { background: var(--accent); color: #fff; }
+    .fc-game-result-btn.secondary { background: rgba(255,255,255,0.08); color: var(--text); }
+
+    /* ── Game invite bar ── */
+    #fc-game-invite-bar {
+      display: none;
+      padding: 10px 14px;
+      background: rgba(88,101,242,0.12);
+      border-top: 1px solid rgba(88,101,242,0.3);
+      align-items: center; justify-content: space-between; gap: 10px;
+      font-size: 0.85em; color: var(--text);
+    }
+    #fc-game-invite-bar.visible { display: flex; }
+    .fc-invite-btns { display: flex; gap: 6px; }
+    .fc-invite-btn {
+      padding: 5px 14px; border-radius: 8px; border: none;
+      cursor: pointer; font-size: 0.85em;
+    }
+    .fc-invite-btn.accept { background: #3ba55d; color: #fff; }
+    .fc-invite-btn.decline { background: rgba(255,255,255,0.1); color: var(--text); }
+
     /* ── Notification badge in title ── */
     @media (max-width: 480px) {
       .fc-expiry-badge { display: none; }
@@ -434,10 +613,65 @@
     <span>წერს...</span>
   </div>
 
+  <!-- GAME INVITE BAR -->
+  <div id="fc-game-invite-bar">
+    <span id="fc-game-invite-text">🎮 თამაშის მოთხოვნა</span>
+    <div class="fc-invite-btns">
+      <button class="fc-invite-btn accept" id="fc-game-accept">✓ დიახ</button>
+      <button class="fc-invite-btn decline" id="fc-game-decline">✕ არა</button>
+    </div>
+  </div>
+
   <!-- INPUT BAR -->
   <div id="fc-input-bar" style="display:none">
+    <button class="fc-extra-btn" id="fc-photo-btn" title="ფოტო">📷</button>
+    <input type="file" id="fc-photo-input" accept="image/*">
+    <button class="fc-extra-btn" id="fc-gif-btn" title="GIF">GIF</button>
+    <button class="fc-extra-btn" id="fc-game-btn" title="თამაში">🎮</button>
     <textarea id="fc-input" placeholder="შეტყობინება..." rows="1" maxlength="2000"></textarea>
     <button id="fc-send" title="გაგზავნა">➤</button>
+  </div>
+
+  <!-- GIF PICKER -->
+  <div id="fc-gif-picker">
+    <input id="fc-gif-search" placeholder="GIF-ის ძებნა..." type="text" autocomplete="off">
+    <div id="fc-gif-results"></div>
+  </div>
+
+  <!-- GAME OVERLAY -->
+  <div id="fc-game-overlay">
+    <div class="fc-game-window">
+      <div class="fc-game-header">
+        <span class="fc-game-title" id="fc-game-title">🎮 მინი თამაშები</span>
+        <button class="fc-game-close-btn" id="fc-game-close">✕</button>
+      </div>
+      <div id="fc-game-content">
+        <!-- menu shown initially -->
+        <div class="fc-game-menu-list" id="fc-game-menu">
+          <button class="fc-game-menu-item" data-game="ttt">
+            <span class="fc-game-menu-icon">❌⭕</span>
+            <div class="fc-game-menu-info"><strong>Tic Tac Toe</strong><small>3×3 ბადე · 3 ზედიზედ</small></div>
+          </button>
+          <button class="fc-game-menu-item" data-game="rps">
+            <span class="fc-game-menu-icon">✊✌️</span>
+            <div class="fc-game-menu-info"><strong>Rock Paper Scissors</strong><small>ერთდროული არჩევანი</small></div>
+          </button>
+          <button class="fc-game-menu-item" data-game="math">
+            <span class="fc-game-menu-icon">🔢</span>
+            <div class="fc-game-menu-info"><strong>Math Duel</strong><small>პირველი სწორი პასუხი იგებს</small></div>
+          </button>
+        </div>
+        <div id="fc-game-board" style="display:none"></div>
+      </div>
+      <div id="fc-game-result">
+        <div class="fc-game-result-emoji" id="fc-game-result-emoji"></div>
+        <div class="fc-game-result-text" id="fc-game-result-text"></div>
+        <div class="fc-game-result-btns">
+          <button class="fc-game-result-btn primary" id="fc-game-rematch">🔄 ხელახლა</button>
+          <button class="fc-game-result-btn secondary" id="fc-game-exit">დახურვა</button>
+        </div>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -490,10 +724,7 @@
   }
   function fmtDate(ts) {
     const d = new Date(ts);
-    const now = new Date();
-    if (d.toDateString() === now.toDateString()) return "დღეს";
-    const y = d.toLocaleDateString("ka-GE", { month: "long", day: "numeric" });
-    return y;
+    return d.toLocaleDateString("ka-GE", { month: "long", day: "numeric" });
   }
 
   /* ── Expiry hint ─────────────────────────────────────────────── */
@@ -611,7 +842,22 @@
 
       const bubble = document.createElement("div");
       bubble.className = "fc-bubble";
-      bubble.textContent = msg.text; // textContent auto-escapes
+
+      if (msg.type === "photo") {
+        const img = document.createElement("img");
+        img.src = msg.dataUrl;
+        img.className = "fc-photo-img";
+        const _url = msg.dataUrl;
+        img.onclick = () => showFCFullscreen(_url);
+        bubble.appendChild(img);
+      } else if (msg.type === "gif") {
+        const img = document.createElement("img");
+        img.src = msg.url;
+        img.className = "fc-gif-img";
+        bubble.appendChild(img);
+      } else {
+        bubble.textContent = msg.text; // textContent auto-escapes
+      }
 
       wrap.appendChild(bubble);
 
@@ -655,16 +901,6 @@
     const lastFrom = lastRow?.dataset?.from;
     const consec = lastFrom === msg.from;
 
-    /* Date separator if needed */
-    const msgDate = fmtDate(msg.ts);
-    const lastSep = elMessages.querySelector(".fc-date-sep:last-of-type");
-    if (!lastSep || lastSep.textContent !== msgDate) {
-      const sep = document.createElement("div");
-      sep.className = "fc-date-sep";
-      sep.textContent = msgDate;
-      elMessages.appendChild(sep);
-    }
-
     const row = document.createElement("div");
     row.className = "fc-row" + (isMe ? " me" : "") + (consec ? " consec" : "");
     row.dataset.from = msg.from;
@@ -685,7 +921,22 @@
 
     const bubble = document.createElement("div");
     bubble.className = "fc-bubble";
-    bubble.textContent = msg.text;
+
+    if (msg.type === "photo") {
+      const img = document.createElement("img");
+      img.src = msg.dataUrl;
+      img.className = "fc-photo-img";
+      img.onclick = () => showFCFullscreen(msg.dataUrl);
+      bubble.appendChild(img);
+    } else if (msg.type === "gif") {
+      const img = document.createElement("img");
+      img.src = msg.url;
+      img.className = "fc-gif-img";
+      bubble.appendChild(img);
+    } else {
+      bubble.textContent = msg.text;
+    }
+
     wrap.appendChild(bubble);
 
     const meta = document.createElement("div");
@@ -793,11 +1044,17 @@
     });
 
     /* Incoming message for THIS friend conversation */
-    socket.on("privateMsg:received", ({ fromUsername, message, timestamp }) => {
+    socket.on("privateMsg:received", ({ fromUsername, message, timestamp, type, dataUrl, url }) => {
       /* Only process messages from our specific friend */
       if (fromUsername.toLowerCase() !== friendName.toLowerCase()) return;
       hideTyping();
-      appendMessage({ from: fromUsername, text: message, ts: timestamp });
+      if (type === "photo") {
+        appendMessage({ from: fromUsername, type: "photo", dataUrl, ts: timestamp });
+      } else if (type === "gif") {
+        appendMessage({ from: fromUsername, type: "gif", url, ts: timestamp });
+      } else {
+        appendMessage({ from: fromUsername, text: message, ts: timestamp });
+      }
       incUnread();
     });
 
@@ -845,6 +1102,352 @@
   });
 
   elSend.addEventListener("click", sendMessage);
+
+  /* ── Fullscreen photo viewer ─────────────────────────────────── */
+  function showFCFullscreen(src) {
+    const fs = document.createElement("div");
+    fs.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;";
+    const img = document.createElement("img");
+    img.src = src;
+    img.style.cssText = "max-width:95vw;max-height:95vh;border-radius:10px;object-fit:contain;";
+    fs.appendChild(img);
+    fs.onclick = () => fs.remove();
+    document.body.appendChild(fs);
+  }
+
+  /* ── Photo send ──────────────────────────────────────────────── */
+  const elPhotoBtn   = $("fc-photo-btn");
+  const elPhotoInput = $("fc-photo-input");
+
+  if (elPhotoBtn) {
+    elPhotoBtn.addEventListener("click", () => {
+      if (elPhotoInput) elPhotoInput.click();
+    });
+  }
+
+  function compressFCImage(file, cb) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1200;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else       { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        cb(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  if (elPhotoInput) {
+    elPhotoInput.addEventListener("change", () => {
+      const file = elPhotoInput.files[0];
+      elPhotoInput.value = "";
+      if (!file || !socket?.connected) return;
+      if (!file.type.startsWith("image/")) { showToast("⚠️ მხოლოდ სურათები"); return; }
+      compressFCImage(file, (dataUrl) => {
+        socket.emit("friendChat:photo", { toUsername: friendName, dataUrl });
+        appendMessage({ from: myUsername, type: "photo", dataUrl, ts: new Date().toISOString() });
+      });
+    });
+  }
+
+  socket.on("friendChat:photo", ({ fromUsername, dataUrl, timestamp }) => {
+    if (fromUsername.toLowerCase() !== friendName.toLowerCase()) return;
+    hideTyping();
+    appendMessage({ from: fromUsername, type: "photo", dataUrl, ts: timestamp || new Date().toISOString() });
+    incUnread();
+  });
+
+  /* ── GIF Picker ──────────────────────────────────────────────── */
+  const elGifBtn     = $("fc-gif-btn");
+  const elGifPicker  = $("fc-gif-picker");
+  const elGifSearch  = $("fc-gif-search");
+  const elGifResults = $("fc-gif-results");
+  const TENOR_PROXY  = "/api/gifs";
+  let gifPickerOpen  = false;
+  let gifTimer       = null;
+  let gifCtrl        = null;
+
+  function openGifPicker() {
+    elGifPicker.classList.add("open");
+    gifPickerOpen = true;
+    elGifSearch.value = "";
+    elGifSearch.focus();
+    fetchGifs("");
+  }
+  function closeGifPicker() {
+    elGifPicker.classList.remove("open");
+    gifPickerOpen = false;
+  }
+
+  async function fetchGifs(q) {
+    if (gifCtrl) gifCtrl.abort();
+    gifCtrl = new AbortController();
+    elGifResults.innerHTML = '<div style="color:var(--muted);font-size:0.85em;padding:8px;">Loading...</div>';
+    try {
+      const url = q ? `${TENOR_PROXY}?q=${encodeURIComponent(q)}&limit=20` : `${TENOR_PROXY}?limit=20`;
+      const res = await fetch(url, { signal: gifCtrl.signal });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      const items = data.results || [];
+      if (!items.length) { elGifResults.innerHTML = '<div style="color:var(--muted);font-size:0.85em;padding:8px;">No GIFs found</div>'; return; }
+      elGifResults.innerHTML = "";
+      items.forEach(item => {
+        const preview = item.media_formats?.tinygif?.url || item.media?.[0]?.tinygif?.url || item.media?.[0]?.gif?.url;
+        const full    = item.media_formats?.gif?.url    || item.media?.[0]?.gif?.url || preview;
+        if (!preview) return;
+        const img = document.createElement("img");
+        img.src = preview;
+        img.className = "fc-gif-item";
+        img.loading = "lazy";
+        img.addEventListener("click", () => sendFCGif(full || preview, preview));
+        elGifResults.appendChild(img);
+      });
+    } catch (e) {
+      if (e.name !== "AbortError")
+        elGifResults.innerHTML = '<div style="color:var(--muted);font-size:0.85em;padding:8px;">Failed to load GIFs</div>';
+    }
+  }
+
+  function sendFCGif(fullUrl, previewUrl) {
+    if (!socket?.connected) return;
+    socket.emit("friendChat:gif", { toUsername: friendName, url: fullUrl });
+    appendMessage({ from: myUsername, type: "gif", url: fullUrl, ts: new Date().toISOString() });
+    closeGifPicker();
+  }
+
+  if (elGifBtn) {
+    elGifBtn.addEventListener("click", () => {
+      gifPickerOpen ? closeGifPicker() : openGifPicker();
+    });
+  }
+
+  elGifSearch.addEventListener("input", () => {
+    clearTimeout(gifTimer);
+    gifTimer = setTimeout(() => fetchGifs(elGifSearch.value.trim()), 450);
+  });
+
+  document.addEventListener("click", (e) => {
+    if (gifPickerOpen && !elGifPicker.contains(e.target) && e.target !== elGifBtn) {
+      closeGifPicker();
+    }
+  });
+
+  socket.on("friendChat:gif", ({ fromUsername, url, timestamp }) => {
+    if (fromUsername.toLowerCase() !== friendName.toLowerCase()) return;
+    hideTyping();
+    appendMessage({ from: fromUsername, type: "gif", url, ts: timestamp || new Date().toISOString() });
+    incUnread();
+  });
+
+  /* ── Mini Games ──────────────────────────────────────────────── */
+  const elGameBtn      = $("fc-game-btn");
+  const elGameOverlay  = $("fc-game-overlay");
+  const elGameClose    = $("fc-game-close");
+  const elGameTitle    = $("fc-game-title");
+  const elGameMenu     = $("fc-game-menu");
+  const elGameBoard    = $("fc-game-board");
+  const elGameResult   = $("fc-game-result");
+  const elGameInvBar   = $("fc-game-invite-bar");
+  const elGameInvText  = $("fc-game-invite-text");
+  const elGameAccept   = $("fc-game-accept");
+  const elGameDecline  = $("fc-game-decline");
+
+  const GAME_NAMES = { ttt: "❌⭕ Tic Tac Toe", rps: "✊✌️ Rock Paper Scissors", math: "🔢 Math Duel" };
+  const RPS_EMOJI  = { rock: "✊", paper: "✋", scissors: "✌️" };
+  const RPS_LABELS = { rock: "ჭა", paper: "ქაღალდი", scissors: "მაკრატელი" };
+
+  let fcGame = null; // current game state
+  let pendingGameInvite = null; // { gameType, fromId }
+
+  function openGameMenu() {
+    elGameMenu.style.display = "";
+    elGameBoard.style.display = "none";
+    elGameResult.style.display = "none";
+    elGameTitle.textContent = "🎮 მინი თამაშები";
+    elGameOverlay.classList.add("open");
+  }
+  function closeGameOverlay() {
+    elGameOverlay.classList.remove("open");
+    fcGame = null;
+    elGameMenu.style.display = "";
+    elGameBoard.style.display = "none";
+    elGameResult.style.display = "none";
+  }
+
+  if (elGameBtn)   elGameBtn.addEventListener("click", openGameMenu);
+  if (elGameClose) elGameClose.addEventListener("click", closeGameOverlay);
+
+  $("fc-game-exit").addEventListener("click", closeGameOverlay);
+  $("fc-game-rematch").addEventListener("click", () => {
+    if (!fcGame) return;
+    const gt = fcGame.type;
+    closeGameOverlay();
+    socket.emit("game:request", { gameType: gt });
+    showToast(`⏳ ${GAME_NAMES[gt]} მოთხოვნა გაიგზავნა...`);
+  });
+
+  // Game menu item clicks
+  elGameMenu.querySelectorAll(".fc-game-menu-item").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const gt = btn.dataset.game;
+      closeGameOverlay();
+      socket.emit("game:request", { gameType: gt });
+      showToast(`⏳ ${GAME_NAMES[gt]} მოთხოვნა გაიგზავნა...`);
+    });
+  });
+
+  // Incoming game invite
+  socket.on("game:invite", ({ gameType, fromId, isRematch }) => {
+    pendingGameInvite = { gameType, fromId };
+    elGameInvText.textContent = `${isRematch ? "🔄" : "🎮"} ${GAME_NAMES[gameType] || gameType} — დათანხმება?`;
+    elGameInvBar.classList.add("visible");
+  });
+
+  elGameAccept.addEventListener("click", () => {
+    if (!pendingGameInvite) return;
+    socket.emit("game:response", { accepted: true, gameType: pendingGameInvite.gameType, toId: pendingGameInvite.fromId });
+    elGameInvBar.classList.remove("visible");
+    pendingGameInvite = null;
+  });
+  elGameDecline.addEventListener("click", () => {
+    if (!pendingGameInvite) return;
+    socket.emit("game:response", { accepted: false, gameType: pendingGameInvite.gameType, toId: pendingGameInvite.fromId });
+    elGameInvBar.classList.remove("visible");
+    pendingGameInvite = null;
+  });
+
+  socket.on("game:declined", () => {
+    showToast("❌ მოწინააღმდეგემ უარი თქვა");
+    pendingGameInvite = null;
+    elGameInvBar.classList.remove("visible");
+  });
+
+  socket.on("game:start", ({ gameId, gameType, role, opponentId, state }) => {
+    elGameInvBar.classList.remove("visible");
+    pendingGameInvite = null;
+    fcGame = { gameId, type: gameType, role, opponentId, state };
+    elGameTitle.textContent = GAME_NAMES[gameType] || gameType;
+    elGameMenu.style.display = "none";
+    elGameBoard.style.display = "";
+    elGameResult.style.display = "none";
+    elGameOverlay.classList.add("open");
+    renderFCGame(gameType, state, role);
+  });
+
+  socket.on("game:update", (data) => {
+    if (!fcGame) return;
+    if (data.result) {
+      showFCGameResult(data.result, fcGame.role, data.winnerSymbol, data.winLine);
+      return;
+    }
+    fcGame.state = data.state || fcGame.state;
+    renderFCGame(fcGame.type, fcGame.state, fcGame.role, data);
+  });
+
+  socket.on("game:partnerLeft", () => {
+    showToast("😢 მოწინააღმდეგე გავიდა");
+    closeGameOverlay();
+  });
+
+  function renderFCGame(type, state, role, update) {
+    elGameBoard.innerHTML = "";
+    if (type === "ttt") renderTTT(state, role, update);
+    else if (type === "rps") renderRPS(state, role, update);
+    else if (type === "math") renderMath(state, update);
+  }
+
+  function renderTTT(state, role, update) {
+    const board = state?.board || Array(9).fill(null);
+    const myTurn = state?.currentTurn === role;
+    const status = document.createElement("div");
+    status.className = "fc-game-status";
+    status.textContent = myTurn ? "🟢 შენი ჯერია" : "⏳ ელოდება...";
+    elGameBoard.appendChild(status);
+
+    const grid = document.createElement("div");
+    grid.className = "fc-ttt-board";
+    board.forEach((val, i) => {
+      const cell = document.createElement("button");
+      cell.className = "fc-ttt-cell" + (update?.winLine?.includes(i) ? " win" : "");
+      cell.textContent = val || "";
+      cell.disabled = !!val || !myTurn;
+      cell.addEventListener("click", () => {
+        socket.emit("game:move", { index: i });
+        cell.disabled = true;
+      });
+      grid.appendChild(cell);
+    });
+    elGameBoard.appendChild(grid);
+  }
+
+  function renderRPS(state, role, update) {
+    const status = document.createElement("div");
+    status.className = "fc-game-status";
+    const myChoice = state?.choices?.[role];
+    status.textContent = myChoice ? "✅ გაგზავნილია, ელოდება..." : "აირჩიეთ:";
+    elGameBoard.appendChild(status);
+
+    const row = document.createElement("div");
+    row.className = "fc-rps-choices";
+    ["rock", "paper", "scissors"].forEach(c => {
+      const btn = document.createElement("button");
+      btn.className = "fc-rps-btn";
+      btn.innerHTML = `${RPS_EMOJI[c]}<br><small style="font-size:0.5em">${RPS_LABELS[c]}</small>`;
+      btn.disabled = !!myChoice;
+      btn.addEventListener("click", () => {
+        socket.emit("game:move", { choice: c });
+        renderRPS({ ...state, choices: { ...(state?.choices || {}), [role]: c } }, role);
+      });
+      row.appendChild(btn);
+    });
+    elGameBoard.appendChild(row);
+  }
+
+  function renderMath(state, update) {
+    if (!state?.question) { elGameBoard.innerHTML = '<div class="fc-game-status">⏳ Loading...</div>'; return; }
+    const q = document.createElement("div");
+    q.className = "fc-math-q";
+    q.textContent = `${state.question} = ?`;
+    elGameBoard.appendChild(q);
+
+    const row = document.createElement("div");
+    row.className = "fc-math-input-row";
+    const inp = document.createElement("input");
+    inp.type = "number"; inp.className = "fc-math-input"; inp.placeholder = "პასუხი...";
+    const btn = document.createElement("button");
+    btn.className = "fc-math-submit"; btn.textContent = "✓";
+    const submit = () => {
+      const val = parseInt(inp.value, 10);
+      if (isNaN(val)) return;
+      socket.emit("game:move", { answer: val });
+      btn.disabled = true; inp.disabled = true;
+    };
+    btn.addEventListener("click", submit);
+    inp.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+    row.appendChild(inp); row.appendChild(btn);
+    elGameBoard.appendChild(row);
+  }
+
+  function showFCGameResult(result, role, winnerSymbol, winLine) {
+    const EMOJIS = { win: "🏆", lose: "😢", draw: "🤝" };
+    const TEXTS  = { win: "გაიმარჯვე!", lose: "წააგე", draw: "ფრე!" };
+    $("fc-game-result-emoji").textContent = EMOJIS[result] || "🎮";
+    $("fc-game-result-text").textContent  = TEXTS[result]  || result;
+    elGameResult.style.display = "";
+    elGameBoard.style.display  = "none";
+    elGameMenu.style.display   = "none";
+    elGameOverlay.classList.add("open");
+    if (fcGame) fcGame.state = null;
+  }
 
   /* ── Start ───────────────────────────────────────────────────── */
   init();
