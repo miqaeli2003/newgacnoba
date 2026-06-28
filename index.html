@@ -20,6 +20,15 @@
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="games.css" />
   <link rel="stylesheet" href="auth.css" />
+  <style>
+    /* ── Registered-user top-bar cleanup ───────────────────────────────
+       Hide ინტ., 🎮, 🚩, ✏️ from the bar — they live in the ⋮ menu.
+       !important overrides any inline display set by script.js/games.js. */
+    body.reg-user #interestsBtn,
+    body.reg-user #reportBtn,
+    body.reg-user #gameBtn,
+    body.reg-user #changeNameBtn { display: none !important; }
+  </style>
 </head>
 <body>
   <div class="top-bar">
@@ -45,10 +54,6 @@
           <button class="reg-menu-item" id="regMenuGames" data-action="games">
             <span class="reg-menu-icon">🎮</span>
             <span class="reg-menu-label">Games</span>
-          </button>
-          <button class="reg-menu-item" id="regMenuGameInt" data-action="gameinterests">
-            <span class="reg-menu-icon">🎮</span>
-            <span class="reg-menu-label">Games Interests</span>
           </button>
           <button class="reg-menu-item" id="regMenuReport" data-action="report">
             <span class="reg-menu-icon">🚩</span>

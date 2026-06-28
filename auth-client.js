@@ -643,11 +643,8 @@
     menuBtn.style.display = authUser ? "flex" : "none";
     if (!authUser) closeRegMenu();
 
-    // Registered users have a permanent name — hide the change-name button
-    const changeNameBtn = $("changeNameBtn");
-    if (changeNameBtn) {
-      changeNameBtn.style.display = authUser ? "none" : "";
-    }
+    // body.reg-user CSS hides ინტ., gameBtn, reportBtn, changeNameBtn via !important
+    document.body.classList.toggle("reg-user", !!authUser);
   }
 
   function toggleRegMenu(e) {
