@@ -1421,8 +1421,8 @@ socket.on("nameAccepted", (acceptedName) => {
   if (isFirstLogin) {
     isFirstLogin = false;
     clearChat();
-    addSearchingMessage();
-    socket.emit("findPartner"); // one emit — server queues us until a match exists
+    // Do NOT auto-search — user must press the Search button manually
+    addSystemMessage("🔎 ძებნის დასაწყებად დააჭირეთ ღილაკს");
   } else if (isReconnecting) {
     isReconnecting = false;
     _reconnectNameRetries = 0; // reset retry counter on success
