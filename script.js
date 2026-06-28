@@ -1358,8 +1358,9 @@ function _doSetName(name) {
 
 socket.on("connect", () => {
   _reconnectNameRetries = 0; // reset on every fresh connect
-  if (userName && !isFirstLogin) {
-    isReconnecting = true;
+  // Only silently re-auth if the user was already in an active chat (partnerConnected or was searching)
+  // Never auto-setName on a fresh page load — user must press the button.
+  if (userName && !isFirstLogin && isReconnecting) {
     // Hide the name modal — silently reconnecting, not asking for a new name
     if (nameModal) nameModal.style.display = "none";
     // Fetch a fresh token — the previous one was one-time-use and already consumed
@@ -1371,7 +1372,6 @@ socket.on("connect", () => {
         socket.emit("setName", { name: userName, token: _challengeToken, powAnswer: _challengePow });
       })
       .catch(() => {
-        // Token fetch failed — send empty so server replies tokenInvalid → retry loop
         socket.emit("setName", { name: userName, token: "", powAnswer: 0 });
       });
   }
@@ -1405,8 +1405,8 @@ socket.on("nameAccepted", (acceptedName) => {
   nameModal.style.display = "none";
   clearNameError();
 
-  // Persist username so a page reload (iOS background kill) auto-reconnects
-  try { sessionStorage.setItem("gaicani_username", acceptedName); } catch (_) {}
+  // Do NOT persist username — we never want auto-reconnect on page reload.
+  // User must always press the button themselves.
 
   // Show the username in the top bar
   const displayEl = document.getElementById("userNameDisplay");
@@ -1982,49 +1982,9 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // ── Auto-reconnect after iOS page kill ───────────────────────────────────
-  // iOS Safari can fully unload the page when the app is backgrounded.
-  // If we have a saved username, skip the modal and reconnect silently.
-  // If site data was cleared, sessionStorage returns null → show welcome modal.
-  const savedName = (() => { try { return sessionStorage.getItem("gaicani_username"); } catch(_) { return null; } })();
-
-  if (savedName) {
-    // Pre-fill the modal but don't show it — submit automatically once socket connects
-    nameInput.value = savedName;
-    nameModal.style.display = "none";
-
-    const autoReconnect = () => {
-      if (socket.connected) {
-        // Fetch a fresh challenge token then set name
-        fetch("/api/challenge")
-          .then(r => r.json())
-          .then(d => {
-            _challengeToken = d.token;
-            _challengePow   = (d.nonce * 31 + d.nonce % 97);
-            isReconnecting  = true;
-            socket.emit("setName", {
-              name:      savedName,
-              token:     _challengeToken,
-              powAnswer: _challengePow,
-              webdriver: !!navigator.webdriver,
-            });
-          })
-          .catch(() => {
-            // Token fetch failed — fall back to showing the welcome modal
-            nameInput.value = "";
-            nameModal.style.display = "flex";
-            setTimeout(() => nameInput.focus(), 100);
-          });
-      } else {
-        // Socket not yet connected — wait for the connect event
-        socket.once("connect", autoReconnect);
-      }
-    };
-    autoReconnect();
-    return; // don't show the modal
-  }
-
-  // No saved name (fresh visit OR site data cleared) — always show welcome modal
+  // Always show the welcome modal — user must press the button themselves.
+  // We never auto-submit the name or auto-search on page load.
+  try { sessionStorage.removeItem("gaicani_username"); } catch (_) {}
   nameModal.style.display = "flex";
   setTimeout(() => nameInput.focus(), 100);
 });
