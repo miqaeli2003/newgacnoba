@@ -1,143 +1,111 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   REG MENU DROPDOWN — Three-dots (⋮) menu for registered users
-   Append this to auth.css
+   REG MENU ADDON — Three-dots (⋮) menu functionality for registered users
+   
+   HOW TO INTEGRATE:
+   1. Add this code INSIDE the auth-client.js IIFE, after the updateAuthBadge() 
+      function (around line 180).
+   2. Make sure to add the CSS file: <link rel="stylesheet" href="auth-menu.css" />
+   3. The menu will automatically show/hide based on login status
    ════════════════════════════════════════════════════════════════════════════ */
 
-.reg-menu-container {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
+  /* ══════════════════════════════════════════════════════════════════
+     REGISTERED USER MENU (⋮)
+     ══════════════════════════════════════════════════════════════════ */
 
-/* ── Menu button (⋮) ─────────────────────────────────────────────────────── */
-.reg-menu-btn {
-  background: none;
-  border: none;
-  color: #b5bac1;
-  font-size: 1.4em;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 6px 10px;
-  border-radius: 6px;
-  transition: all 0.2s;
-  display: flex !important;
-  align-items: center;
-  justify-content: center;
-  min-width: 36px;
-  min-height: 36px;
-}
-
-.reg-menu-btn:hover {
-  background: rgba(88, 101, 242, 0.15);
-  color: #5865f2;
-}
-
-.reg-menu-btn:active {
-  transform: scale(0.95);
-}
-
-/* ── Dropdown menu ───────────────────────────────────────────────────────── */
-.reg-menu-dropdown {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  background: #2b2d31;
-  border: 1px solid #1a1b1e;
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  min-width: 180px;
-  z-index: 1000;
-  animation: menuSlideDown 0.2s ease-out;
-}
-
-@keyframes menuSlideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* ── Menu items ──────────────────────────────────────────────────────────── */
-.reg-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 12px 16px;
-  border: none;
-  background: none;
-  color: #dcddde;
-  font-size: 0.9em;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s;
-  text-align: left;
-}
-
-.reg-menu-item:first-child {
-  border-radius: 7px 7px 0 0;
-}
-
-.reg-menu-item:hover {
-  background: rgba(88, 101, 242, 0.15);
-  color: #5865f2;
-}
-
-.reg-menu-item:active {
-  transform: scale(0.98);
-}
-
-/* ── Logout item (danger style) ──────────────────────────────────────────── */
-.reg-menu-logout {
-  color: #f23f42;
-}
-
-.reg-menu-logout:hover {
-  background: rgba(242, 63, 66, 0.15);
-  color: #ff6c6f;
-}
-
-/* ── Menu icon ───────────────────────────────────────────────────────────── */
-.reg-menu-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  font-weight: 600;
-  font-size: 0.95em;
-}
-
-/* ── Menu label ──────────────────────────────────────────────────────────── */
-.reg-menu-label {
-  flex: 1;
-  letter-spacing: 0.3px;
-}
-
-/* ── Divider ─────────────────────────────────────────────────────────────── */
-.reg-menu-divider {
-  height: 1px;
-  background: #1a1b1e;
-  margin: 4px 0;
-}
-
-/* ── Responsive: Hide on mobile if too crowded ───────────────────────────── */
-@media (max-width: 480px) {
-  .reg-menu-btn {
-    font-size: 1.2em;
-    padding: 4px 8px;
+  // Update menu visibility based on auth status
+  function updateRegMenuVisibility() {
+    const menuBtn = $("regMenuBtn");
+    if (!menuBtn) return;
+    menuBtn.style.display = authUser ? "flex" : "none";
+    closeRegMenu(); // Close menu if user logs out
   }
 
-  .reg-menu-dropdown {
-    min-width: 160px;
+  // Open/toggle the menu
+  function toggleRegMenu(e) {
+    const dropdown = $("regMenuDropdown");
+    if (!dropdown) return;
+    if (dropdown.style.display === "none" || !dropdown.style.display) {
+      openRegMenu();
+    } else {
+      closeRegMenu();
+    }
+    e.stopPropagation();
   }
 
-  .reg-menu-item {
-    padding: 10px 12px;
-    gap: 8px;
-    font-size: 0.85em;
+  function openRegMenu() {
+    const dropdown = $("regMenuDropdown");
+    if (dropdown) dropdown.style.display = "block";
   }
-}
+
+  function closeRegMenu() {
+    const dropdown = $("regMenuDropdown");
+    if (dropdown) dropdown.style.display = "none";
+  }
+
+  // Close menu when clicking outside
+  document.addEventListener("click", () => {
+    closeRegMenu();
+  });
+
+  // Menu button click
+  $("regMenuBtn")?.addEventListener("click", toggleRegMenu);
+
+  /* ── Menu item actions ─────────────────────────────────────────── */
+
+  // Interests (Bio)
+  $("regMenuInt")?.addEventListener("click", () => {
+    closeRegMenu();
+    const bioPopup = $("bioPopup");
+    if (bioPopup) bioPopup.style.display = "flex";
+  });
+
+  // Games
+  $("regMenuGames")?.addEventListener("click", () => {
+    closeRegMenu();
+    // Trigger the games button if it exists on chat screen
+    const interestsBtn = $("interestsBtn");
+    if (interestsBtn && interestsBtn.style.display !== "none") {
+      interestsBtn.click();
+    } else {
+      showToast("🎮 თამაშები მხოლოდ ჩატის დროს ხელმისაწვდომია");
+    }
+  });
+
+  // Dashboard (My Page)
+  $("regMenuDash")?.addEventListener("click", () => {
+    closeRegMenu();
+    openDashboard();
+  });
+
+  // Logout
+  $("regMenuLogout")?.addEventListener("click", () => {
+    closeRegMenu();
+    if (!confirm("გამოხვიდეთ სისტემიდან?")) return;
+    clearAuth();
+    window.location.reload();
+  });
+
+  // Update menu when auth changes
+  const originalHandleAuthSuccess = window.handleAuthSuccess || null;
+  if (originalHandleAuthSuccess) {
+    window.handleAuthSuccess = function(...args) {
+      originalHandleAuthSuccess(...args);
+      updateRegMenuVisibility();
+    };
+  }
+
+  // Also update when listening for auth events
+  const originalBindSocketEvents = window.bindSocketEvents || null;
+
+  /* ════════════════════════════════════════════════════════════════════
+     INTEGRATION NOTE:
+     This code hooks into:
+     - updateAuthBadge() → also calls updateRegMenuVisibility()
+     - Socket auth events to trigger updateRegMenuVisibility()
+     
+     The menu automatically:
+     ✓ Shows when user logs in
+     ✓ Hides when user logs out
+     ✓ Closes when clicking outside
+     ✓ Provides access to interests, games, dashboard, and logout
+     ════════════════════════════════════════════════════════════════════ */
