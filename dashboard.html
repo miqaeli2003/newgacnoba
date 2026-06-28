@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>ჩემი გვერდი – GAICANI</title>
+  <meta name="theme-color" content="#2b2d31" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <link rel="icon" type="image/png" href="/logo.png" />
+  <link rel="manifest" href="/manifest.json" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html, body {
+      margin: 0; padding: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #1e1f22;
+      color: #dcddde;
+      min-height: 100%;
+    }
+
+    /* ── TOP BAR ── */
+    .top-bar {
+      position: sticky; top: 0; z-index: 100;
+      background: #2b2d31;
+      border-bottom: 1px solid #1a1b1e;
+      padding: 0 20px;
+      height: 52px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .site-name {
+      font-weight: 700; font-size: 1.1em;
+      color: #fff; text-decoration: none; letter-spacing: 0.5px;
+      cursor: pointer;
+    }
+    .top-bar-right {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .top-bar-username {
+      font-size: 0.82em; font-weight: 700; color: #a78bfa;
+      background: rgba(88,101,242,0.12);
+      padding: 4px 10px; border-radius: 6px;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .btn-logout {
+      padding: 5px 12px;
+      background: rgba(242,63,66,0.1);
+      color: #f23f42;
+      border: 1px solid rgba(242,63,66,0.25);
+      border-radius: 7px;
+      font-size: 0.8em; font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-logout:hover { background: rgba(242,63,66,0.2); }
+
+    /* ── PAGE ── */
+    .page {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 28px 16px 60px;
+    }
+
+    /* ── User Card ── */
+    .user-card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: #2b2d31;
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .user-avatar {
+      width: 58px; height: 58px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #5865f2, #7c84f8);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.6em; font-weight: 700; color: #fff;
+      flex-shrink: 0;
+      box-shadow: 0 4px 16px rgba(88,101,242,0.4);
+    }
+    .user-info { min-width: 0; }
+    .user-name {
+      font-size: 1.15em; font-weight: 700;
+      color: #a78bfa;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .user-meta { font-size: 0.75em; color: #72767d; margin-top: 3px; }
+
+    /* ── Start Chat Button ── */
+    .btn-start-chat {
+      display: block;
+      width: 100%;
+      padding: 13px;
+      background: #5865f2;
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 0.95em; font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.15s, transform 0.1s;
+      text-decoration: none;
+      margin-bottom: 20px;
+    }
+    .btn-start-chat:hover { background: #4752c4; }
+    .btn-start-chat:active { transform: scale(0.98); }
+
+    /* ── Section ── */
+    .section {
+      background: #2b2d31;
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .section-label {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 16px 10px;
+      font-size: 0.72em; font-weight: 700; color: #72767d;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .section-badge {
+      background: rgba(88,101,242,0.22);
+      color: #a78bfa;
+      border-radius: 10px; padding: 1px 7px;
+      font-size: 0.88em; font-weight: 700;
+    }
+
+    /* ── Friend List ── */
+    .friends-list {
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 8px 10px 10px;
+    }
+    .empty-state {
+      color: #72767d; font-size: 0.83em;
+      text-align: center; padding: 22px 12px; line-height: 1.7;
+    }
+    .friend-item {
+      display: flex; align-items: center; gap: 10px;
+      background: #1e1f22;
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .friend-avatar {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      background: rgba(88,101,242,0.22);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.92em; font-weight: 700; color: #a78bfa;
+      flex-shrink: 0;
+    }
+    .friend-name {
+      flex: 1; font-size: 0.88em; color: #dcddde;
+      font-weight: 500; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+    }
+    .friend-actions { display: flex; gap: 5px; flex-shrink: 0; }
+    .act-btn {
+      background: rgba(255,255,255,0.07);
+      border: none; border-radius: 7px;
+      padding: 5px 9px; font-size: 0.8em;
+      cursor: pointer; color: #b5bac1;
+      transition: background 0.14s, color 0.14s;
+    }
+    .act-btn:hover { background: rgba(255,255,255,0.14); color: #fff; }
+    .act-chat:hover { background: rgba(88,101,242,0.28); color: #a78bfa; }
+    .act-remove:hover { background: rgba(242,63,66,0.2); color: #f23f42; }
+    .act-block:hover { background: rgba(250,166,26,0.15); color: #faa61a; }
+
+    /* ── Blocked section ── */
+    .blocked-avatar {
+      background: rgba(242,63,66,0.15) !important;
+      color: #f23f42 !important;
+    }
+    .blocked-name { color: #f23f42 !important; }
+    .act-unblock:hover { background: rgba(59,165,93,0.2); color: #3ba55d; }
+
+    /* ── Toast ── */
+    #toast-container {
+      position: fixed; bottom: 24px; left: 50%;
+      transform: translateX(-50%);
+      display: flex; flex-direction: column; gap: 8px;
+      align-items: center; z-index: 9999;
+      pointer-events: none;
+    }
+    .toast {
+      background: #2b2d31; border: 1px solid rgba(88,101,242,0.4);
+      color: #dcddde; border-radius: 10px;
+      padding: 10px 18px; font-size: 0.88em;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+      animation: toastIn 0.25s ease;
+      max-width: 300px; text-align: center;
+    }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Loading state ── */
+    #loading-screen {
+      display: flex; align-items: center; justify-content: center;
+      min-height: calc(100vh - 52px);
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid rgba(88,101,242,0.2);
+      border-top-color: #5865f2;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Not-logged-in screen ── */
+    #auth-screen {
+      display: none;
+      align-items: center; justify-content: center;
+      min-height: calc(100vh - 52px);
+      flex-direction: column; gap: 14px; padding: 24px;
+    }
+    .auth-message {
+      color: #72767d; font-size: 0.9em; text-align: center;
+    }
+    .btn-go-home {
+      display: inline-block;
+      padding: 10px 22px;
+      background: #5865f2; color: #fff;
+      border-radius: 10px; text-decoration: none;
+      font-weight: 700; font-size: 0.9em;
+      transition: background 0.15s;
+    }
+    .btn-go-home:hover { background: #4752c4; }
+
+    @media (max-width: 480px) {
+      .page { padding: 20px 12px 60px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="top-bar">
+    <a href="/" class="site-name">GAICANI</a>
+    <div class="top-bar-right">
+      <span class="top-bar-username" id="topUsername"></span>
+      <button class="btn-logout" id="logoutBtn">გამოხვედრა 🚪</button>
+    </div>
+  </div>
+
+  <div id="loading-screen"><div class="spinner"></div></div>
+
+  <div id="auth-screen">
+    <p class="auth-message">ამ გვერდის სანახავად გჭირდება შესვლა.</p>
+    <a href="/" class="btn-go-home">← ჩატზე დაბრუნება</a>
+  </div>
+
+  <div class="page" id="main-page" style="display:none">
+
+    <!-- User Card -->
+    <div class="user-card">
+      <div class="user-avatar" id="userAvatar">?</div>
+      <div class="user-info">
+        <div class="user-name" id="userName">—</div>
+        <div class="user-meta">რეგისტრირებული მომხმარებელი</div>
+      </div>
+    </div>
+
+    <!-- Start Chat -->
+    <a href="/" class="btn-start-chat">🔎 შემთხვევითი ჩატის დაწყება</a>
+
+    <!-- Friends -->
+    <div class="section" id="friendsSection">
+      <div class="section-label">
+        👥 მეგობრები
+        <span class="section-badge" id="friendCount">0</span>
+      </div>
+      <div class="friends-list" id="friendsList">
+        <div class="empty-state">ჯერ მეგობრები არ გყავს.<br>
+          <small>ჩატის დროს ➕ ღილაკს დააჭირე.</small></div>
+      </div>
+    </div>
+
+    <!-- Blocked (session) — hidden until there are entries -->
+    <div class="section" id="blockedSection" style="display:none">
+      <div class="section-label">
+        🚫 დაბლოკილი (სესია)
+        <span class="section-badge" id="blockedCount">0</span>
+      </div>
+      <div class="friends-list" id="blockedList"></div>
+    </div>
+
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+  (function () {
+    "use strict";
+
+    /* ── Storage helpers ─────────────────────────────────────────── */
+    const LS_TOKEN = "gaicani_auth_token";
+    const LS_USER  = "gaicani_auth_user";
+
+    function loadAuth() {
+      try { return { token: localStorage.getItem(LS_TOKEN), username: localStorage.getItem(LS_USER) }; }
+      catch (_) { return {}; }
+    }
+    function clearAuth() {
+      try { localStorage.removeItem(LS_TOKEN); localStorage.removeItem(LS_USER); } catch (_) {}
+    }
+
+    /* ── Escape ──────────────────────────────────────────────────── */
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g,
+        c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
+    }
+
+    /* ── Toast ───────────────────────────────────────────────────── */
+    function showToast(msg, ms = 3500) {
+      const c = document.getElementById("toast-container");
+      const t = document.createElement("div");
+      t.className = "toast"; t.textContent = msg;
+      c.appendChild(t);
+      setTimeout(() => {
+        t.style.transition = "opacity .3s"; t.style.opacity = "0";
+        setTimeout(() => t.remove(), 320);
+      }, ms);
+    }
+
+    /* ── State ───────────────────────────────────────────────────── */
+    let authUser = null;
+    let sessionBlocked = new Set(); // lowercase usernames blocked this session
+    let socket = null;
+
+    /* ── Socket setup ────────────────────────────────────────────── */
+    function setupSocket(token) {
+      socket = io();
+      socket.on("connect", () => {
+        socket.emit("auth:token", token);
+      });
+
+      socket.on("auth:authenticated", ({ username, friends, pendingRequests }) => {
+        if (authUser) {
+          authUser.friends = friends || [];
+          authUser.pendingRequests = pendingRequests || [];
+        }
+        renderFriends(friends || []);
+      });
+
+      socket.on("auth:invalid", () => {
+        clearAuth();
+        window.location.href = "/";
+      });
+
+      socket.on("friend:accepted", ({ username, friends }) => {
+        if (authUser) authUser.friends = friends || [];
+        renderFriends(friends || []);
+        showToast(`✅ ${esc(username)} ახლა შენი მეგობარია!`);
+      });
+
+      socket.on("friend:nowFriends", ({ withUsername }) => {
+        if (authUser && !authUser.friends.includes(withUsername.toLowerCase()))
+          authUser.friends.push(withUsername.toLowerCase());
+        renderFriends(authUser?.friends || []);
+        showToast(`✅ ${esc(withUsername)} ახლა შენი მეგობარია!`);
+      });
+
+      socket.on("friend:removed", ({ friends }) => {
+        if (authUser) authUser.friends = friends || [];
+        renderFriends(friends || []);
+        showToast("✅ მეგობარი წაიშალა");
+      });
+
+      socket.on("friend:removedByOther", ({ byUsername }) => {
+        if (authUser) {
+          authUser.friends = authUser.friends.filter(
+            f => f.toLowerCase() !== byUsername.toLowerCase()
+          );
+          renderFriends(authUser.friends);
+        }
+        showToast(`ℹ️ ${esc(byUsername)}-მ შენი მეგობრობა გაიუქმა`);
+      });
+
+      socket.on("friend:error", ({ msg }) => showToast(`❌ ${esc(msg)}`));
+    }
+
+    /* ── Render friends list ─────────────────────────────────────── */
+    function renderFriends(friends) {
+      const list = document.getElementById("friendsList");
+      const cnt  = document.getElementById("friendCount");
+      if (!list) return;
+      if (cnt) cnt.textContent = (friends || []).length;
+
+      if (!friends || !friends.length) {
+        list.innerHTML = `<div class="empty-state">ჯერ მეგობრები არ გყავს.<br>
+          <small>ჩატის დროს ➕ ღილაკს დააჭირე.</small></div>`;
+        return;
+      }
+
+      list.innerHTML = friends.map(f => `
+        <div class="friend-item" data-friend="${esc(f)}">
+          <div class="friend-avatar">${esc(f).charAt(0).toUpperCase()}</div>
+          <span class="friend-name">${esc(f)}</span>
+          <div class="friend-actions">
+            <button class="act-btn act-chat" data-f="${esc(f)}" title="Private Chat">💬</button>
+            <button class="act-btn act-remove" data-f="${esc(f)}" title="მეგობრობის გაუქმება">✕</button>
+            <button class="act-btn act-block" data-f="${esc(f)}" title="სესიის ბლოკი">🚫</button>
+          </div>
+        </div>`).join("");
+
+      list.querySelectorAll(".act-chat").forEach(btn => {
+        btn.addEventListener("click", () => {
+          // Private chat is only meaningful inside the main chat page (socket context)
+          // Redirect home, then the main page will open the private chat
+          sessionStorage.setItem("gaicani_open_priv", JSON.stringify({
+            friend: btn.dataset.f
+          }));
+          window.location.href = "/";
+        });
+      });
+
+      list.querySelectorAll(".act-remove").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const fname = btn.dataset.f;
+          if (!confirm(`წაშალოთ ${esc(fname)} მეგობრებიდან?`)) return;
+          socket?.emit("friend:remove", { friendUsername: fname });
+        });
+      });
+
+      list.querySelectorAll(".act-block").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const fname = btn.dataset.f;
+          if (!confirm(`დაბლოკოთ ${esc(fname)} ამ სესიაზე?`)) return;
+          const lc = fname.toLowerCase();
+          sessionBlocked.add(lc);
+          socket?.emit("reg:sessionBlock", { targetUsername: lc });
+          renderFriends(authUser?.friends || []);
+          renderBlocked();
+          showToast(`🚫 ${esc(fname)} — დაბლოკილია ამ სესიაზე`);
+        });
+      });
+    }
+
+    /* ── Render blocked list ─────────────────────────────────────── */
+    function renderBlocked() {
+      const list    = document.getElementById("blockedList");
+      const section = document.getElementById("blockedSection");
+      const cnt     = document.getElementById("blockedCount");
+      if (!list || !section) return;
+
+      const blocked = [...sessionBlocked];
+      if (cnt) cnt.textContent = blocked.length;
+      section.style.display = blocked.length ? "" : "none";
+
+      if (!blocked.length) { list.innerHTML = ""; return; }
+
+      list.innerHTML = blocked.map(u => `
+        <div class="friend-item">
+          <div class="friend-avatar blocked-avatar">${esc(u).charAt(0).toUpperCase()}</div>
+          <span class="friend-name blocked-name">${esc(u)}</span>
+          <button class="act-btn act-unblock" data-u="${esc(u)}" title="ბლოკის მოხსნა">✓</button>
+        </div>`).join("");
+
+      list.querySelectorAll(".act-unblock").forEach(btn => {
+        btn.addEventListener("click", () => {
+          sessionBlocked.delete(btn.dataset.u);
+          socket?.emit("reg:sessionUnblock", { targetUsername: btn.dataset.u });
+          renderBlocked();
+          renderFriends(authUser?.friends || []);
+          showToast(`✅ ${esc(btn.dataset.u)} — ბლოკი მოხსნილია`);
+        });
+      });
+    }
+
+    /* ── Logout ──────────────────────────────────────────────────── */
+    document.getElementById("logoutBtn")?.addEventListener("click", () => {
+      if (!confirm("გამოხვიდეთ სისტემიდან?")) return;
+      clearAuth();
+      window.location.href = "/";
+    });
+
+    /* ── Init ────────────────────────────────────────────────────── */
+    async function init() {
+      const { token, username } = loadAuth();
+
+      const loading = document.getElementById("loading-screen");
+      const authScr = document.getElementById("auth-screen");
+      const mainPg  = document.getElementById("main-page");
+
+      if (!token || !username) {
+        if (loading) loading.style.display = "none";
+        if (authScr) authScr.style.display = "flex";
+        return;
+      }
+
+      // Verify token with the server
+      try {
+        const r = await fetch("/api/auth/verify", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+        const d = await r.json();
+        if (!d.ok) {
+          clearAuth();
+          if (loading) loading.style.display = "none";
+          if (authScr) authScr.style.display = "flex";
+          return;
+        }
+
+        authUser = {
+          username: d.username || username,
+          token,
+          friends: d.friends || [],
+          pendingRequests: d.pendingRequests || [],
+        };
+      } catch (_) {
+        // Network error — best-effort: show page with stored username, no friend data yet
+        authUser = { username, token, friends: [], pendingRequests: [] };
+      }
+
+      // Populate UI
+      const avatarEl   = document.getElementById("userAvatar");
+      const nameEl     = document.getElementById("userName");
+      const topUserEl  = document.getElementById("topUsername");
+      if (avatarEl)  avatarEl.textContent = authUser.username.charAt(0).toUpperCase();
+      if (nameEl)    nameEl.textContent   = authUser.username;
+      if (topUserEl) topUserEl.textContent = `🔐 ${authUser.username}`;
+
+      renderFriends(authUser.friends);
+      renderBlocked();
+
+      if (loading) loading.style.display = "none";
+      if (mainPg)  mainPg.style.display  = "";
+
+      // Connect socket for live friend updates
+      setupSocket(token);
+    }
+
+    document.addEventListener("DOMContentLoaded", init);
+  })();
+  </script>
+</body>
+</html>
