@@ -1662,9 +1662,8 @@ io.on("connection", (socket) => {
       cleanupGameForSocket(oldPartnerId);
     }
 
-    // Remove from queue — do NOT call tryFindPartner()
-    // User must press the Search button to start searching
-    waitingQueue = waitingQueue.filter(s => s.id !== socket.id);
+    // User pressed Search — start looking for a partner via the queue system
+    tryFindPartner();
   });
 
   socket.on("blockUser", (data) => {
