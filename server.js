@@ -2619,6 +2619,9 @@ app.get("/api/priv/history", (req, res) => {
     from:      m.from,
     text:      m.text,
     ts:        m.ts,
+    messageId: m.id || null,
+    replyTo:   m.replyTo || null,
+    reactions: m.reactions || null,
     expiresAt: room.expiresAt ? new Date(room.expiresAt).toISOString() : null
   }));
 
@@ -2892,7 +2895,7 @@ io.on("connection", (socket) => {
   });
 
   // ── Private message request ──────────────────────────────────────────────
-  socket.on("privateMsg:send", ({ toUsername, message }) => {
+  socket.on("privateMsg:send", ({ toUsername, message, messageId, replyTo }) => {
     if (!socket._regUser || !toUsername || !message) return;
     const toLc = String(toUsername).toLowerCase().trim();
     const roomId = privRoomId(socket._regUser.usernameLower, toLc);
@@ -2903,10 +2906,21 @@ io.on("connection", (socket) => {
       privateRooms.set(roomId, room);
     }
 
+    let safeReplyTo = null;
+    if (replyTo && typeof replyTo.text === "string") {
+      safeReplyTo = {
+        text:       replyTo.text.slice(0, 100).replace(/<[^>]*>/g, "").trim(),
+        senderName: String(replyTo.senderName || "").slice(0, 30).replace(/<[^>]*>/g, "").trim(),
+        messageId:  String(replyTo.messageId || "").slice(0, 100),
+      };
+    }
+
     const msg = {
+      id: String(messageId || "").slice(0, 100) || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       from: socket._regUser.usernameLower,
       text: String(message).slice(0, MSG_MAX),
-      ts: new Date().toISOString()
+      ts: new Date().toISOString(),
+      replyTo: safeReplyTo
     };
 
     room.messages.push(msg);
@@ -2918,10 +2932,12 @@ io.on("connection", (socket) => {
     io.to(`user:${toLc}`).emit("privateMsg:received", {
       fromUsername: socket._regUser.username,
       message: msg.text,
-      timestamp: msg.ts
+      timestamp: msg.ts,
+      messageId: msg.id,
+      replyTo: msg.replyTo
     });
 
-    socket.emit("privateMsg:sent", { success: true });
+    socket.emit("privateMsg:sent", { success: true, messageId: msg.id });
   });
 
   // ── friendChat:join — subscribe socket to its friend-chat pair room ───────
@@ -2972,6 +2988,54 @@ io.on("connection", (socket) => {
       fromUsername: socket._regUser.username,
       url:          url,
       timestamp:    new Date().toISOString()
+    });
+  });
+
+  // ── friendChat:react — react to a friend-chat message (mirrors "react") ──
+  socket.on("friendChat:react", ({ toUsername, messageId, emoji }) => {
+    if (!socket._regUser || !toUsername || !messageId || !emoji) return;
+    if (!VALID_EMOJIS.has(emoji)) return;
+    const toLc = String(toUsername).toLowerCase().trim();
+    const myUser = registeredUsers.get(socket._regUser.usernameLower);
+    if (!myUser || !(myUser.friends || []).includes(toLc)) return;
+
+    // Persist on the stored message so it survives a reload
+    const roomId = privRoomId(socket._regUser.usernameLower, toLc);
+    const room = privateRooms.get(roomId);
+    if (room) {
+      const m = room.messages.find(mm => mm.id === messageId);
+      if (m) {
+        m.reactions = m.reactions || {};
+        m.reactions[socket._regUser.usernameLower] = emoji;
+        savePrivateMsgs();
+      }
+    }
+
+    io.to(`user:${toLc}`).emit("friendChat:reacted", {
+      fromUsername: socket._regUser.username,
+      messageId,
+      emoji
+    });
+  });
+
+  // ── friendChat:seen — read receipt for friend-chat messages (mirrors "seen") ──
+  socket.on("friendChat:seen", ({ toUsername, messageId }) => {
+    if (!socket._regUser || !toUsername || !messageId) return;
+    const toLc = String(toUsername).toLowerCase().trim();
+    io.to(`user:${toLc}`).emit("friendChat:partnerSeen", { messageId });
+  });
+
+  // ── friendChat:question — random question card (mirrors "sendQuestion") ──
+  socket.on("friendChat:question", ({ toUsername, text }) => {
+    if (!socket._regUser || !toUsername || typeof text !== "string") return;
+    const toLc = String(toUsername).toLowerCase().trim();
+    const myUser = registeredUsers.get(socket._regUser.usernameLower);
+    if (!myUser || !(myUser.friends || []).includes(toLc)) return;
+    const safeText = text.slice(0, 300).replace(/<[^>]*>/g, "").trim();
+    if (!safeText) return;
+    io.to(`user:${toLc}`).emit("friendChat:question", {
+      fromUsername: socket._regUser.username,
+      text: safeText
     });
   });
 
