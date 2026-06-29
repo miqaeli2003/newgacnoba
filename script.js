@@ -1616,9 +1616,54 @@ socket.on("message", (msg) => {
   addMessage(msg.text, false, msg.messageId, msg.replyTo || null);
   playNotification("message");
   incrementUnread();
+  // Show in-page notification banner when tab is visible
+  if (!document.hidden) showMessageNotif(partnerName || "პარტნიორი", msg.text);
   // Only send seen receipt if the tab is actually visible
   if (msg.messageId && !document.hidden) socket.emit("seen", { messageId: msg.messageId });
 });
+
+// ── Message notification banner ───────────────────────────────────────────────
+let _msgNotifTimer = null;
+
+function showMessageNotif(senderName, text) {
+  // Remove any existing notif
+  document.getElementById("msgNotifBanner")?.remove();
+  clearTimeout(_msgNotifTimer);
+
+  const banner       = document.createElement("div");
+  banner.id          = "msgNotifBanner";
+  banner.className   = "msg-notif-banner";
+
+  const nameEl       = document.createElement("span");
+  nameEl.className   = "msg-notif-name";
+  nameEl.textContent = senderName;
+
+  const textEl       = document.createElement("span");
+  textEl.className   = "msg-notif-text";
+  const preview      = text.length > 55 ? text.slice(0, 55) + "…" : text;
+  textEl.textContent = preview;
+
+  banner.appendChild(nameEl);
+  banner.appendChild(textEl);
+  document.body.appendChild(banner);
+
+  // Slide in
+  requestAnimationFrame(() => banner.classList.add("msg-notif-visible"));
+
+  // Auto-dismiss after 3 s
+  _msgNotifTimer = setTimeout(() => {
+    banner.classList.remove("msg-notif-visible");
+    setTimeout(() => banner.remove(), 350);
+  }, 3000);
+
+  // Click → scroll to bottom and dismiss
+  banner.addEventListener("click", () => {
+    clearTimeout(_msgNotifTimer);
+    banner.classList.remove("msg-notif-visible");
+    setTimeout(() => banner.remove(), 350);
+    chat.scrollTop = chat.scrollHeight;
+  });
+}
 
 socket.on("partnerSeen", ({ messageId }) => {
   const el = document.getElementById(`seen_${messageId}`);
