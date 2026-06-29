@@ -594,7 +594,6 @@ function showNameError(msg) {
   nameError.style.display = "block";
   const _ov = document.getElementById("modalLoadingOverlay");
   if (_ov) _ov.style.display = "none";
-}
   nameInput.classList.add("error");
 }
 
