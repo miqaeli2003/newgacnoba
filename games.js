@@ -127,6 +127,7 @@
       if (!menu) return;
       menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
     }
+    window._toggleGameMenu = toggleGameMenu;
 
     // ────────────────────────────────────────────────────────────
     // 3.  Game overlay window

@@ -686,10 +686,12 @@
   // 🎮 Games
   $("regMenuGames")?.addEventListener("click", () => {
     closeRegMenu();
-    // gameBtn is injected by games.js into the top bar
-    const gamesBtn = $("gameBtn");
-    if (gamesBtn && !gamesBtn.disabled) {
-      gamesBtn.click();
+    if (!window.partnerConnected) {
+      showToast("🎮 თამაშები მხოლოდ ჩატის დროს ხელმისაწვდომია");
+      return;
+    }
+    if (typeof window._toggleGameMenu === "function") {
+      window._toggleGameMenu();
     } else {
       showToast("🎮 თამაშები მხოლოდ ჩატის დროს ხელმისაწვდომია");
     }
