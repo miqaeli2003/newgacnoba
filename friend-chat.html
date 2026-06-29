@@ -131,10 +131,12 @@
       display: flex;
       align-items: flex-end;
       gap: 6px;
-      max-width: 100%;
+      width: 100%;
+      justify-content: flex-start;
+      box-sizing: border-box;
     }
     .fc-row.me {
-      flex-direction: row-reverse;
+      justify-content: flex-end;
     }
 
     .fc-row-avatar {
@@ -148,6 +150,10 @@
     }
     .fc-row.me .fc-row-avatar {
       background: rgba(88,101,242,0.35);
+    }
+    .fc-row-spacer {
+      width: 26px;
+      flex-shrink: 0;
     }
 
     .fc-bubble-wrap {
@@ -973,23 +979,25 @@
   /* ── Build a single chat row (text / photo / gif) ─────────────── */
   function buildRow(msg, consec) {
     const isMe = msg.from.toLowerCase() === myUsername.toLowerCase();
+    const isMedia = msg.type === "photo" || msg.type === "gif";
 
     const row = document.createElement("div");
     row.className = "fc-row" + (isMe ? " me" : "") + (consec ? " consec" : "");
     row.dataset.from = msg.from;
     if (msg.id) row.dataset.msgid = msg.id;
 
+    /* Avatar (or invisible spacer to keep alignment for consecutive messages) */
+    let avatarEl;
     if (!consec) {
-      const av = document.createElement("div");
-      av.className = "fc-row-avatar";
-      av.textContent = msg.from.charAt(0).toUpperCase();
-      row.appendChild(av);
+      avatarEl = document.createElement("div");
+      avatarEl.className = "fc-row-avatar";
+      avatarEl.textContent = msg.from.charAt(0).toUpperCase();
     } else {
-      const sp = document.createElement("div");
-      sp.style.width = "26px"; sp.style.flexShrink = "0";
-      row.appendChild(sp);
+      avatarEl = document.createElement("div");
+      avatarEl.className = "fc-row-spacer";
     }
 
+    /* Bubble + its wrapper (meta, reactions, seen) */
     const wrap = document.createElement("div");
     wrap.className = "fc-bubble-wrap";
 
@@ -997,7 +1005,7 @@
     bubble.className = "fc-bubble";
 
     /* Reply quote (text messages only) */
-    if (msg.type !== "photo" && msg.type !== "gif" && msg.replyTo && msg.replyTo.text) {
+    if (!isMedia && msg.replyTo && msg.replyTo.text) {
       const quote = document.createElement("div");
       quote.className = "fc-reply-quote";
       if (msg.replyTo.senderName) {
@@ -1032,51 +1040,11 @@
       bubble.appendChild(textSpan);
     }
 
-    /* Row contents differ slightly by side, mirroring random-chat layout */
-    const isMedia = msg.type === "photo" || msg.type === "gif";
-
     wrap.appendChild(bubble);
-
-    if (!isMedia) {
-      const actions = document.createElement("div");
-      actions.className = "fc-msg-actions";
-
-      const replyBtn = document.createElement("button");
-      replyBtn.className = "fc-action-btn fc-reply-btn";
-      replyBtn.innerHTML = "↩";
-      replyBtn.title = "პასუხი";
-      replyBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        setFCReplyTo({
-          text: msg.text,
-          senderName: isMe ? myUsername : friendName,
-          messageId: msg.id,
-        });
-      });
-      actions.appendChild(replyBtn);
-
-      if (!isMe) {
-        const reactBtn = document.createElement("button");
-        reactBtn.className = "fc-action-btn fc-react-btn";
-        reactBtn.innerHTML = "🙂";
-        reactBtn.title = "რეაქცია";
-        reactBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          showFCReactionPicker(reactBtn, msg.id);
-        });
-        actions.appendChild(reactBtn);
-      }
-
-      row.appendChild(wrap);
-      isMe ? row.insertBefore(actions, wrap) : row.appendChild(actions);
-    } else {
-      row.appendChild(wrap);
-    }
 
     const meta = document.createElement("div");
     meta.className = "fc-meta";
     meta.textContent = fmtTime(msg.ts);
-
     if (msg.expiresAt) {
       const hint = expiryHint(msg.expiresAt);
       if (hint) {
@@ -1105,6 +1073,52 @@
       seen.className = "fc-seen" + (msg.seen ? " is-seen" : "");
       seen.textContent = msg.seen ? "✓✓" : "✓";
       wrap.appendChild(seen);
+    }
+
+    /* Reply / react action buttons (text messages only) */
+    let actions = null;
+    if (!isMedia) {
+      actions = document.createElement("div");
+      actions.className = "fc-msg-actions";
+
+      const replyBtn = document.createElement("button");
+      replyBtn.className = "fc-action-btn fc-reply-btn";
+      replyBtn.innerHTML = "↩";
+      replyBtn.title = "პასუხი";
+      replyBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setFCReplyTo({
+          text: msg.text,
+          senderName: isMe ? myUsername : friendName,
+          messageId: msg.id,
+        });
+      });
+      actions.appendChild(replyBtn);
+
+      if (!isMe) {
+        const reactBtn = document.createElement("button");
+        reactBtn.className = "fc-action-btn fc-react-btn";
+        reactBtn.innerHTML = "🙂";
+        reactBtn.title = "რეაქცია";
+        reactBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          showFCReactionPicker(reactBtn, msg.id);
+        });
+        actions.appendChild(reactBtn);
+      }
+    }
+
+    /* Explicit left-to-right DOM order — no flex-direction tricks.
+       Friend (left-aligned): avatar, bubble, actions
+       Me     (right-aligned): actions, bubble, avatar               */
+    if (isMe) {
+      if (actions) row.appendChild(actions);
+      row.appendChild(wrap);
+      row.appendChild(avatarEl);
+    } else {
+      row.appendChild(avatarEl);
+      row.appendChild(wrap);
+      if (actions) row.appendChild(actions);
     }
 
     return row;
