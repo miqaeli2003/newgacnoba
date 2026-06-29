@@ -169,6 +169,11 @@
   }
 
   function autoSetNameAfterAuth(username) {
+    // Hide the name modal immediately — registered users never need to see it
+    const nameModal = document.getElementById("nameModal");
+    const overlay   = document.getElementById("modalLoadingOverlay");
+    if (nameModal) nameModal.style.display = "none";
+
     // Used by tryAutoLogin so returning registered users skip the name modal
     setTimeout(() => {
       if (typeof window.socket !== "undefined" && window.socket.connected) {

@@ -1994,6 +1994,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // Always show the welcome modal — user must press the button themselves.
   // We never auto-submit the name or auto-search on page load.
   try { sessionStorage.removeItem("gaicani_username"); } catch (_) {}
-  nameModal.style.display = "flex";
-  setTimeout(() => nameInput.focus(), 100);
+
+  // If a saved auth token exists, auth-client.js will hide this immediately.
+  // Still show briefly for guests; auth-client suppresses for registered users.
+  const _hasToken = (() => { try { return !!localStorage.getItem("gaicani_auth_token"); } catch(_){return false;} })();
+  if (!_hasToken) {
+    nameModal.style.display = "flex";
+    setTimeout(() => nameInput.focus(), 100);
+  }
 });
