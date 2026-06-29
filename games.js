@@ -115,10 +115,22 @@
         });
       });
 
-      // Close on outside click
+      // Close on outside click (exclude gameBtn, regMenuBtn, and regMenuDropdown
+      // so that clicking the three-dot menu's 🎮 item doesn't immediately re-close
+      // the menu that was just opened by that same click)
       document.addEventListener('click', e => {
-        const _btn = el('gameBtn'); if (menu.style.display !== 'none' && !menu.contains(e.target) && !(_btn && _btn.contains(e.target)))
+        const _btn     = el('gameBtn');
+        const _regBtn  = el('regMenuBtn');
+        const _regDrop = el('regMenuDropdown');
+        if (
+          menu.style.display !== 'none' &&
+          !menu.contains(e.target) &&
+          !(_btn    && _btn.contains(e.target)) &&
+          !(_regBtn && _regBtn.contains(e.target)) &&
+          !(_regDrop && _regDrop.contains(e.target))
+        ) {
           menu.style.display = 'none';
+        }
       });
     }
 
