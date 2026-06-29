@@ -2652,12 +2652,12 @@ html, body {
   display: none;
   align-items: center;
   gap: 5px;
-  background: rgba(192, 132, 252, 0.12);
-  border: 1px solid rgba(192, 132, 252, 0.35);
-  color: #c084fc;
+  background: #5a0a0a;
+  border: 1px solid #7a1a1a;
+  color: #ffaaaa;
   font-size: 0.78em;
   font-weight: 600;
-  border-radius: 20px;
+  border-radius: 4px;
   padding: 6px 12px;
   cursor: pointer;
   white-space: nowrap;
@@ -2665,6 +2665,6 @@ html, body {
 }
 
 .my-page-btn:hover {
-  background: rgba(192, 132, 252, 0.22);
-  color: #d8b4fe;
+  background: #6e0f0f;
+  color: #ffcccc;
 }
