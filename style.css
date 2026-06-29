@@ -2651,21 +2651,28 @@ html, body {
 .my-page-btn {
   display: none;
   align-items: center;
-  gap: 5px;
-  background: #5a0a0a;
-  border: 1px solid #7a1a1a;
-  color: #ffaaaa;
-  font-size: 0.78em;
-  font-weight: 600;
-  border-radius: 4px;
-  padding: 6px 12px;
+  gap: 6px;
+  background: #5865f2;
+  border: none;
+  color: #fff;
+  font-size: 0.8em;
+  font-weight: 700;
+  border-radius: 20px;
+  padding: 7px 14px;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.2s, color 0.2s;
+  letter-spacing: 0.01em;
+  box-shadow: 0 2px 8px rgba(88, 101, 242, 0.35);
+  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .my-page-btn:hover {
-  background: #6e0f0f;
-  color: #ffcccc;
+  background: #4752c4;
+  box-shadow: 0 4px 14px rgba(88, 101, 242, 0.45);
 }
 
+.my-page-btn:active {
+  transform: scale(0.95);
+  box-shadow: 0 1px 4px rgba(88, 101, 242, 0.3);
+}
