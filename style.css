@@ -77,9 +77,9 @@ html, body {
 .partner-name-display {
   font-size: 0.82em;
   font-weight: 600;
-  color: #f23f42;
-  background: rgba(242, 63, 66, 0.10);
-  border: 1px solid rgba(242, 63, 66, 0.35);
+  color: #5b9cf6;
+  background: rgba(91, 156, 246, 0.10);
+  border: 1px solid rgba(91, 156, 246, 0.35);
   border-radius: 20px;
   padding: 8px 15px;
   white-space: nowrap;
@@ -88,7 +88,13 @@ html, body {
   min-width: 90px;
   max-width: 110px;
   order: 2;
-  transition: opacity 0.2s;
+  transition: opacity 0.2s, color 0.3s, background 0.3s, border-color 0.3s;
+}
+
+.partner-name-display.is-registered {
+  color: #c084fc;
+  background: rgba(192, 132, 252, 0.12);
+  border-color: rgba(192, 132, 252, 0.40);
 }
 
 /* ── BUTTONS ─────────────────────────────────────────────────────────────── */

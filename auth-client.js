@@ -253,6 +253,8 @@
     s.on("auth:partnerRegInfo", ({ partnerRegName, isFriend }) => {
       showPartnerRegBanner(partnerRegName, isFriend);
       updateAddFriendBtn(partnerRegName, isFriend);
+      const nameEl = document.getElementById("partnerNameDisplay");
+      if (nameEl) nameEl.classList.add("is-registered");
     });
 
     // ── Incoming friend request ───────────────────────────────────────
@@ -317,6 +319,8 @@
       hidePartnerRegBanner();
       const addBtn = $("addFriendIconBtn");
       if (addBtn) addBtn.style.display = "none";
+      const nameEl = document.getElementById("partnerNameDisplay");
+      if (nameEl) nameEl.classList.remove("is-registered");
     });
 
     // ── When a new partner is found, check if they're registered ────
@@ -324,6 +328,8 @@
       hidePartnerRegBanner();
       const addBtn = $("addFriendIconBtn");
       if (addBtn) addBtn.style.display = "none";
+      const nameEl = document.getElementById("partnerNameDisplay");
+      if (nameEl) nameEl.classList.remove("is-registered");
       // Ask server if partner is a registered user (only if we're logged in)
       if (authUser) {
         setTimeout(() => s.emit("auth:checkPartner"), 400);

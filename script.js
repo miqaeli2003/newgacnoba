@@ -585,6 +585,7 @@ function setPartnerNameDisplay(name) {
   } else {
     el.textContent = "👤 ---";
     el.style.opacity = "0.25";
+    el.classList.remove("is-registered");
   }
 }
 
@@ -593,6 +594,7 @@ function showNameError(msg) {
   nameError.style.display = "block";
   const _ov = document.getElementById("modalLoadingOverlay");
   if (_ov) _ov.style.display = "none";
+}
   nameInput.classList.add("error");
 }
 
