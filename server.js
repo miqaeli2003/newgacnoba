@@ -2615,6 +2615,11 @@ app.get("/api/priv/history", (req, res) => {
 
   if (!room) return res.json({ messages: [] });
 
+  // Opening the chat / fetching history marks it as read up to now
+  room.lastRead = room.lastRead || {};
+  room.lastRead[myLc] = Date.now();
+  savePrivateMsgs();
+
   const msgs = (room.messages || []).map(m => ({
     from:      m.from,
     text:      m.text,
@@ -2626,6 +2631,37 @@ app.get("/api/priv/history", (req, res) => {
   }));
 
   res.json({ messages: msgs });
+});
+
+// GET /api/priv/unread — which friends have unread messages waiting
+// Auth: Bearer token in Authorization header.
+// Returns: { unread: ["friendname1", "friendname2", ...] }  (lowercase usernames)
+app.get("/api/priv/unread", (req, res) => {
+  const token = (req.headers.authorization || "").replace("Bearer ", "").trim();
+  if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+  const entry = authTokens.get(token);
+  if (!entry || Date.now() >= entry.expiry) {
+    return res.status(401).json({ error: "Token expired" });
+  }
+
+  const myLc   = entry.usernameLower;
+  const myUser = registeredUsers.get(myLc);
+  const friends = (myUser && myUser.friends) || [];
+
+  const unread = [];
+  for (const friendLc of friends) {
+    const roomId = privRoomId(myLc, friendLc);
+    const room   = privateRooms.get(roomId);
+    if (!room || !room.messages || !room.messages.length) continue;
+    const lastReadAt = (room.lastRead && room.lastRead[myLc]) || 0;
+    const hasUnread = room.messages.some(
+      m => m.from === friendLc && new Date(m.ts).getTime() > lastReadAt
+    );
+    if (hasUnread) unread.push(friendLc);
+  }
+
+  res.json({ unread });
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -3022,6 +3058,15 @@ io.on("connection", (socket) => {
   socket.on("friendChat:seen", ({ toUsername, messageId }) => {
     if (!socket._regUser || !toUsername || !messageId) return;
     const toLc = String(toUsername).toLowerCase().trim();
+
+    // Keep the persisted "last read" marker current while the chat stays open
+    const roomId = privRoomId(socket._regUser.usernameLower, toLc);
+    const room = privateRooms.get(roomId);
+    if (room) {
+      room.lastRead = room.lastRead || {};
+      room.lastRead[socket._regUser.usernameLower] = Date.now();
+    }
+
     io.to(`user:${toLc}`).emit("friendChat:partnerSeen", { messageId });
   });
 

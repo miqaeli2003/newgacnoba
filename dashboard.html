@@ -367,6 +367,7 @@
           authUser.pendingRequests = pendingRequests || [];
         }
         renderFriends(friends || []);
+        fetchUnreadFriends();
       });
 
       socket.on("auth:invalid", () => {
@@ -430,6 +431,23 @@
       unreadFromFriends.delete(usernameLc);
       const dots = document.querySelectorAll(`.act-chat[data-f="${usernameLc}"] .chat-unread-dot`);
       dots.forEach(d => d.remove());
+    }
+
+    /* ── Check server for messages that arrived while we were away ──── */
+    async function fetchUnreadFriends() {
+      try {
+        const { token } = loadAuth();
+        if (!token) return;
+        const res = await fetch("/api/priv/unread", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        (data.unread || []).forEach(lc => {
+          unreadFromFriends.add(lc);
+          markUnreadDot(lc);
+        });
+      } catch (_) { /* silent — non-critical */ }
     }
 
     /* ── Render friends list ─────────────────────────────────────── */
