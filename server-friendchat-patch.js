@@ -92,6 +92,19 @@ app.get("/api/priv/history", (req, res) => {
     const roomId = privRoomId(socket._regUser.usernameLower, friendLc);
     socket.join(`friendchat:${roomId}`);
     socket._friendChatRoom = roomId;
+
+    // ── Link socket.partner so game:request / game:response routing works ──
+    // Find the friend's socket that is already in the same friendchat room.
+    for (const [, sock] of io.sockets.sockets) {
+      if (
+        sock._regUser?.usernameLower === friendLc &&
+        sock._friendChatRoom === roomId
+      ) {
+        socket.partner = sock;
+        sock.partner   = socket;
+        break;
+      }
+    }
   });
 
   // ── friendChat:typing — relay typing indicator to the other person ────────

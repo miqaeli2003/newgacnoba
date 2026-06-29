@@ -140,22 +140,7 @@
       justify-content: flex-end;
     }
 
-    .fc-row-avatar {
-      width: 26px; height: 26px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, var(--accent), var(--accent-lt));
-      display: flex; align-items: center; justify-content: center;
-      font-size: 0.7em; font-weight: 700; color: #fff;
-      flex-shrink: 0;
-      margin-bottom: 2px;
-    }
-    .fc-row.me .fc-row-avatar {
-      background: rgba(88,101,242,0.35);
-    }
-    .fc-row-spacer {
-      width: 26px;
-      flex-shrink: 0;
-    }
+    .fc-row-avatar, .fc-row-spacer { display: none; }
 
     .fc-bubble-wrap {
       display: flex;
@@ -697,22 +682,25 @@
     }
     .fc-row.me .fc-reply-quote-text { color: rgba(255,255,255,0.7); }
 
-    /* ── Reply / react action buttons next to a bubble ── */
-    .fc-msg-actions { display: flex; align-items: center; gap: 2px; margin: 0 2px; flex-shrink: 0; }
+    /* ── Reply / react action buttons — inline in the meta row ── */
+    .fc-msg-actions { display: none; } /* removed — buttons now live inside .fc-meta */
     .fc-action-btn {
-      background: rgba(255,255,255,0.07);
+      background: none;
       border: none;
       color: var(--muted);
-      width: 26px; height: 26px;
+      width: 22px; height: 22px;
       border-radius: 50%;
-      font-size: 0.78em;
+      font-size: 0.8em;
       cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      opacity: 0.6;
+      display: inline-flex; align-items: center; justify-content: center;
+      opacity: 0;
       transition: opacity 0.15s, background 0.15s, transform 0.1s;
       flex-shrink: 0;
+      padding: 0;
+      line-height: 1;
     }
-    .fc-action-btn:hover { opacity: 1; background: rgba(255,255,255,0.14); transform: scale(1.1); }
+    .fc-bubble-wrap:hover .fc-action-btn { opacity: 0.7; }
+    .fc-action-btn:hover { opacity: 1 !important; background: rgba(255,255,255,0.12); transform: scale(1.15); }
 
     /* ── Reaction pills ── */
     .fc-reaction-area { display: flex; gap: 4px; margin-top: 2px; flex-wrap: wrap; }
@@ -1129,6 +1117,36 @@
         meta.appendChild(sp);
       }
     }
+
+    /* Reply + React buttons inline in the meta row */
+    if (!isMedia) {
+      const replyBtn = document.createElement("button");
+      replyBtn.className = "fc-action-btn fc-reply-btn";
+      replyBtn.innerHTML = "↩";
+      replyBtn.title = "პასუხი";
+      replyBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setFCReplyTo({
+          text: msg.text,
+          senderName: isMe ? myUsername : friendName,
+          messageId: msg.id,
+        });
+      });
+      meta.appendChild(replyBtn);
+
+      if (!isMe) {
+        const reactBtn = document.createElement("button");
+        reactBtn.className = "fc-action-btn fc-react-btn";
+        reactBtn.innerHTML = "🙂";
+        reactBtn.title = "რეაქცია";
+        reactBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          showFCReactionPicker(reactBtn, msg.id);
+        });
+        meta.appendChild(reactBtn);
+      }
+    }
+
     wrap.appendChild(meta);
 
     if (!isMedia) {
@@ -1150,50 +1168,15 @@
       wrap.appendChild(seen);
     }
 
-    /* Reply / react action buttons (text messages only) */
-    let actions = null;
-    if (!isMedia) {
-      actions = document.createElement("div");
-      actions.className = "fc-msg-actions";
-
-      const replyBtn = document.createElement("button");
-      replyBtn.className = "fc-action-btn fc-reply-btn";
-      replyBtn.innerHTML = "↩";
-      replyBtn.title = "პასუხი";
-      replyBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        setFCReplyTo({
-          text: msg.text,
-          senderName: isMe ? myUsername : friendName,
-          messageId: msg.id,
-        });
-      });
-      actions.appendChild(replyBtn);
-
-      if (!isMe) {
-        const reactBtn = document.createElement("button");
-        reactBtn.className = "fc-action-btn fc-react-btn";
-        reactBtn.innerHTML = "🙂";
-        reactBtn.title = "რეაქცია";
-        reactBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          showFCReactionPicker(reactBtn, msg.id);
-        });
-        actions.appendChild(reactBtn);
-      }
-    }
-
     /* Explicit left-to-right DOM order — no flex-direction tricks.
-       Friend (left-aligned): avatar, bubble, actions
-       Me     (right-aligned): actions, bubble, avatar               */
+       Friend (left-aligned): avatar, bubble
+       Me     (right-aligned): bubble, avatar               */
     if (isMe) {
-      if (actions) row.appendChild(actions);
       row.appendChild(wrap);
       row.appendChild(avatarEl);
     } else {
       row.appendChild(avatarEl);
       row.appendChild(wrap);
-      if (actions) row.appendChild(actions);
     }
 
     return row;
@@ -1843,12 +1826,46 @@
 
   socket.on("game:update", (data) => {
     if (!fcGame) return;
-    if (data.result) {
-      showFCGameResult(data.result, fcGame.role, data.winnerSymbol, data.winLine);
+
+    // Wrong answer in math duel
+    if (data.wrong) {
+      showToast("❌ არასწორი პასუხი!");
       return;
     }
-    fcGame.state = data.state || fcGame.state;
-    renderFCGame(fcGame.type, fcGame.state, fcGame.role, data);
+    // Opponent chose in RPS (don't reveal what)
+    if (data.opponentChose) {
+      showToast("✅ მოწინააღმდეგემ აირჩია, ელოდება...");
+      return;
+    }
+
+    // Game over — server sends winnerSocketId (or null for draw)
+    if (data.winnerSocketId !== undefined || data.draw) {
+      let result;
+      if (data.draw) result = "draw";
+      else if (data.winnerSocketId === socket.id) result = "win";
+      else result = "lose";
+
+      // Update state so board/choices show final state before result screen
+      if (fcGame.type === "ttt" && data.board) {
+        fcGame.state = { ...fcGame.state, board: data.board, winLine: data.winLine };
+        renderFCGame(fcGame.type, fcGame.state, fcGame.role, data);
+      } else if (fcGame.type === "rps" && data.choices) {
+        fcGame.state = { ...fcGame.state, choices: data.choices };
+        renderFCGame(fcGame.type, fcGame.state, fcGame.role, data);
+      }
+      setTimeout(() => showFCGameResult(result, fcGame?.role), fcGame.type === "ttt" ? 700 : 200);
+      return;
+    }
+
+    // Mid-game TTT board update
+    if (fcGame.type === "ttt" && data.board) {
+      fcGame.state = {
+        ...fcGame.state,
+        board: data.board,
+        currentTurnSocketId: data.currentTurnSocketId,
+      };
+      renderFCGame(fcGame.type, fcGame.state, fcGame.role, data);
+    }
   });
 
   socket.on("game:partnerLeft", () => {
@@ -1866,7 +1883,7 @@
 
   function renderTTT(state, role, update) {
     const board = state?.board || Array(9).fill(null);
-    const myTurn = state?.currentTurn === role;
+    const myTurn = state?.currentTurnSocketId === socket?.id;
     const status = document.createElement("div");
     status.className = "fc-game-status";
     status.textContent = myTurn ? "🟢 შენი ჯერია" : "⏳ ელოდება...";
@@ -1915,7 +1932,7 @@
     if (!state?.question) { elGameBoard.innerHTML = '<div class="fc-game-status">⏳ Loading...</div>'; return; }
     const q = document.createElement("div");
     q.className = "fc-math-q";
-    q.textContent = `${state.question} = ?`;
+    q.textContent = `${state.question.display || state.question} = ?`;
     elGameBoard.appendChild(q);
 
     const row = document.createElement("div");
