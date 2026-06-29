@@ -170,6 +170,25 @@
     .act-remove:hover { background: rgba(242,63,66,0.2); color: #f23f42; }
     .act-block:hover { background: rgba(250,166,26,0.15); color: #faa61a; }
 
+    /* ── Unread message badge on 💬 chat button ── */
+    .act-chat { position: relative; }
+    .chat-unread-dot {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      width: 10px;
+      height: 10px;
+      background: #f23f42;
+      border-radius: 50%;
+      border: 2px solid #1e1f22;
+      pointer-events: none;
+      animation: unreadPulse 1.4s ease-in-out infinite;
+    }
+    @keyframes unreadPulse {
+      0%, 100% { transform: scale(1);   opacity: 1; }
+      50%       { transform: scale(1.3); opacity: 0.7; }
+    }
+
     /* ── Blocked section ── */
     .blocked-avatar {
       background: rgba(242,63,66,0.15) !important;
@@ -333,6 +352,7 @@
     let authUser = null;
     let sessionBlocked = new Set(); // lowercase usernames blocked this session
     let socket = null;
+    let unreadFromFriends = new Set(); // lowercase usernames with unread messages
 
     /* ── Socket setup ────────────────────────────────────────────── */
     function setupSocket(token) {
@@ -384,6 +404,32 @@
       });
 
       socket.on("friend:error", ({ msg }) => showToast(`❌ ${esc(msg)}`));
+
+      // ── Unread private messages — show red dot on 💬 button ───────────────
+      socket.on("privateMsg:received", ({ fromUsername }) => {
+        if (!fromUsername) return;
+        const lc = fromUsername.toLowerCase();
+        unreadFromFriends.add(lc);
+        markUnreadDot(lc);
+      });
+    }
+
+    /* ── Unread dot helpers ──────────────────────────────────────── */
+    function markUnreadDot(usernameLc) {
+      const btn = document.querySelector(`.act-chat[data-f="${CSS.escape(usernameLc)}"]`) ||
+                  document.querySelector(`.act-chat[data-f="${usernameLc}"]`);
+      if (!btn) return;
+      if (!btn.querySelector(".chat-unread-dot")) {
+        const dot = document.createElement("span");
+        dot.className = "chat-unread-dot";
+        btn.appendChild(dot);
+      }
+    }
+
+    function clearUnreadDot(usernameLc) {
+      unreadFromFriends.delete(usernameLc);
+      const dots = document.querySelectorAll(`.act-chat[data-f="${usernameLc}"] .chat-unread-dot`);
+      dots.forEach(d => d.remove());
     }
 
     /* ── Render friends list ─────────────────────────────────────── */
@@ -412,10 +458,15 @@
 
       list.querySelectorAll(".act-chat").forEach(btn => {
         btn.addEventListener("click", () => {
+          // Clear the unread dot for this friend before navigating
+          clearUnreadDot(btn.dataset.f.toLowerCase());
           // Navigate to the dedicated full-screen friend chat page
           window.location.href = `/friend-chat.html?friend=${encodeURIComponent(btn.dataset.f)}`;
         });
       });
+
+      // Re-apply any existing unread dots (dots survive re-renders)
+      unreadFromFriends.forEach(lc => markUnreadDot(lc));
 
       list.querySelectorAll(".act-remove").forEach(btn => {
         btn.addEventListener("click", () => {
