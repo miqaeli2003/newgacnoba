@@ -59,6 +59,7 @@ if (!_isBotDetected) {
 let userName            = "";
 let userBio             = "";
 let partnerConnected    = false;
+Object.defineProperty(window, 'partnerConnected', { get: () => partnerConnected });
 let partnerName         = "";
 let isFirstLogin        = true;
 let isReconnecting      = false;
@@ -585,7 +586,6 @@ function setPartnerNameDisplay(name) {
   } else {
     el.textContent = "👤 ---";
     el.style.opacity = "0.25";
-    el.classList.remove("is-registered");
   }
 }
 

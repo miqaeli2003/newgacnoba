@@ -191,12 +191,13 @@
   /* ── Update top bar badge ──────────────────────────────────────────── */
   function updateAuthBadge() {
     const badge = $("auth-user-badge");
-    if (!badge) return;
+    if (badge) badge.style.display = "none"; // always hidden now
+    const myPageBtn = $("myPageBtn");
+    if (!myPageBtn) return;
     if (authUser) {
-      badge.textContent = `🔐 ${authUser.username}`;
-      badge.style.display = "inline-flex";
+      myPageBtn.style.display = "inline-flex";
     } else {
-      badge.style.display = "none";
+      myPageBtn.style.display = "none";
     }
   }
 
@@ -253,8 +254,6 @@
     s.on("auth:partnerRegInfo", ({ partnerRegName, isFriend }) => {
       showPartnerRegBanner(partnerRegName, isFriend);
       updateAddFriendBtn(partnerRegName, isFriend);
-      const nameEl = document.getElementById("partnerNameDisplay");
-      if (nameEl) nameEl.classList.add("is-registered");
     });
 
     // ── Incoming friend request ───────────────────────────────────────
@@ -319,8 +318,6 @@
       hidePartnerRegBanner();
       const addBtn = $("addFriendIconBtn");
       if (addBtn) addBtn.style.display = "none";
-      const nameEl = document.getElementById("partnerNameDisplay");
-      if (nameEl) nameEl.classList.remove("is-registered");
     });
 
     // ── When a new partner is found, check if they're registered ────
@@ -328,8 +325,6 @@
       hidePartnerRegBanner();
       const addBtn = $("addFriendIconBtn");
       if (addBtn) addBtn.style.display = "none";
-      const nameEl = document.getElementById("partnerNameDisplay");
-      if (nameEl) nameEl.classList.remove("is-registered");
       // Ask server if partner is a registered user (only if we're logged in)
       if (authUser) {
         setTimeout(() => s.emit("auth:checkPartner"), 400);
@@ -661,8 +656,17 @@
   function toggleRegMenu(e) {
     const dd = $("regMenuDropdown");
     if (!dd) return;
-    if (dd.style.display === "none" || !dd.style.display) openRegMenu();
-    else closeRegMenu();
+    // Only allow opening while actively chatting with a partner
+    if (dd.style.display === "none" || !dd.style.display) {
+      if (!window.partnerConnected) {
+        showToast("⋮ მენიუ მხოლოდ ჩატის დროს ხელმისაწვდომია");
+        e.stopPropagation();
+        return;
+      }
+      openRegMenu();
+    } else {
+      closeRegMenu();
+    }
     e.stopPropagation();
   }
 
