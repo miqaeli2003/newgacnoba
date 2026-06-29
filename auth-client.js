@@ -684,7 +684,11 @@
   $("regMenuBtn")?.addEventListener("click", toggleRegMenu);
 
   // 🎮 Games
-  $("regMenuGames")?.addEventListener("click", () => {
+  $("regMenuGames")?.addEventListener("click", (e) => {
+    // stopPropagation prevents the document-level outside-click listener in
+    // games.js from firing on this same event and immediately re-closing the
+    // game menu that _toggleGameMenu() is about to open.
+    e.stopPropagation();
     closeRegMenu();
     if (!window.partnerConnected) {
       showToast("🎮 თამაშები მხოლოდ ჩატის დროს ხელმისაწვდომია");
