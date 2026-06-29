@@ -77,9 +77,9 @@ html, body {
 .partner-name-display {
   font-size: 0.82em;
   font-weight: 600;
-  color: #5b9cf6;
-  background: rgba(91, 156, 246, 0.10);
-  border: 1px solid rgba(91, 156, 246, 0.35);
+  color: #f23f42;
+  background: rgba(242, 63, 66, 0.10);
+  border: 1px solid rgba(242, 63, 66, 0.35);
   border-radius: 20px;
   padding: 8px 15px;
   white-space: nowrap;
@@ -88,13 +88,7 @@ html, body {
   min-width: 90px;
   max-width: 110px;
   order: 2;
-  transition: opacity 0.2s, color 0.3s, background 0.3s, border-color 0.3s;
-}
-
-.partner-name-display.is-registered {
-  color: #c084fc;
-  background: rgba(192, 132, 252, 0.12);
-  border-color: rgba(192, 132, 252, 0.40);
+  transition: opacity 0.2s;
 }
 
 /* ── BUTTONS ─────────────────────────────────────────────────────────────── */
@@ -2651,4 +2645,88 @@ html, body {
     padding: 10px 14px;
     font-size: 0.85em;
   }
+}
+
+/* ── Registered user three-dots menu ─────────────────────────────────────── */
+.reg-menu-container {
+  position: relative;
+  z-index: 99999;
+}
+
+.reg-menu-btn {
+  background: none;
+  border: none;
+  color: #b5bac1;
+  font-size: 1.4em;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
+}
+
+.reg-menu-btn:hover {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+}
+
+.reg-menu-dropdown {
+  position: fixed;
+  top: 52px;
+  right: 12px;
+  background: #2b2d31;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+  z-index: 99999;
+  min-width: 190px;
+  overflow: hidden;
+  animation: menuSlideIn 0.18s ease-out;
+}
+
+.reg-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  color: #dcddde;
+  font-size: 0.9em;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.reg-menu-item:last-child {
+  border-bottom: none;
+}
+
+.reg-menu-item:hover {
+  background: rgba(88,101,242,0.18);
+  color: #fff;
+}
+
+.reg-menu-icon {
+  font-size: 1.1em;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.reg-menu-divider {
+  height: 1px;
+  background: rgba(255,255,255,0.08);
+  margin: 4px 0;
+}
+
+.reg-menu-logout {
+  color: #f23f42;
+}
+
+.reg-menu-logout:hover {
+  background: rgba(242,63,66,0.15);
+  color: #f23f42;
 }
