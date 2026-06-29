@@ -953,7 +953,7 @@
 
   /* ── Build a question card element ───────────────────────────── */
   function buildQuestionCard(msg) {
-    const isMe = msg.from.toLowerCase() === myUsername.toLowerCase();
+    const isMe = !msg.from || msg.from.toLowerCase() !== friendName.toLowerCase();
     const card = document.createElement("div");
     card.className = "fc-question-card";
     if (msg.id) card.dataset.msgid = msg.id;
@@ -978,7 +978,9 @@
 
   /* ── Build a single chat row (text / photo / gif) ─────────────── */
   function buildRow(msg, consec) {
-    const isMe = msg.from.toLowerCase() === myUsername.toLowerCase();
+    // Anchor on friendName (URL param) — more reliable than comparing against
+    // myUsername which may have case mismatches with server's stored lowercase.
+    const isMe = !msg.from || msg.from.toLowerCase() !== friendName.toLowerCase();
     const isMedia = msg.type === "photo" || msg.type === "gif";
 
     const row = document.createElement("div");
@@ -1154,7 +1156,7 @@
         return;
       }
 
-      const consec = lastFrom === msg.from;
+      const consec = lastFrom !== null && lastFrom.toLowerCase() === msg.from.toLowerCase();
       lastFrom = msg.from;
       elMessages.appendChild(buildRow(msg, consec));
     });
@@ -1182,7 +1184,7 @@
 
     const lastRow = elMessages.lastElementChild;
     const lastFrom = lastRow?.dataset?.from;
-    const consec = lastFrom === msg.from;
+    const consec = lastFrom != null && lastFrom.toLowerCase() === msg.from?.toLowerCase();
 
     elMessages.appendChild(buildRow(msg, consec));
     scrollToBottom();
