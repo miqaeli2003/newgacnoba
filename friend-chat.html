@@ -1035,6 +1035,8 @@
     /* Row contents differ slightly by side, mirroring random-chat layout */
     const isMedia = msg.type === "photo" || msg.type === "gif";
 
+    wrap.appendChild(bubble);
+
     if (!isMedia) {
       const actions = document.createElement("div");
       actions.className = "fc-msg-actions";
@@ -1297,6 +1299,7 @@
 
     clearFCReplyTo();
     updateFCCharCount();
+    elInput.focus();
   }
 
   /* ── Load history ────────────────────────────────────────────── */
