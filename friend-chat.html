@@ -840,7 +840,6 @@
     <input type="file" id="fc-photo-input" accept="image/*">
     <button class="fc-extra-btn" id="fc-gif-btn" title="GIF">GIF</button>
     <button class="fc-extra-btn" id="fc-question-btn" title="შემთხვევითი კითხვა">?</button>
-    <button class="fc-extra-btn" id="fc-game-btn" title="თამაში">🎮</button>
     <textarea id="fc-input" placeholder="შეტყობინება..." rows="1" maxlength="2000"></textarea>
     <span id="fc-char-count" class="fc-char-count"></span>
     <button id="fc-send" title="გაგზავნა">➤</button>
@@ -1118,35 +1117,6 @@
       }
     }
 
-    /* Reply + React buttons inline in the meta row */
-    if (!isMedia) {
-      const replyBtn = document.createElement("button");
-      replyBtn.className = "fc-action-btn fc-reply-btn";
-      replyBtn.innerHTML = "↩";
-      replyBtn.title = "პასუხი";
-      replyBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        setFCReplyTo({
-          text: msg.text,
-          senderName: isMe ? myUsername : friendName,
-          messageId: msg.id,
-        });
-      });
-      meta.appendChild(replyBtn);
-
-      if (!isMe) {
-        const reactBtn = document.createElement("button");
-        reactBtn.className = "fc-action-btn fc-react-btn";
-        reactBtn.innerHTML = "🙂";
-        reactBtn.title = "რეაქცია";
-        reactBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          showFCReactionPicker(reactBtn, msg.id);
-        });
-        meta.appendChild(reactBtn);
-      }
-    }
-
     wrap.appendChild(meta);
 
     if (!isMedia) {
@@ -1160,13 +1130,7 @@
       }
     }
 
-    /* Seen indicator — only on our own sent text messages (matches random chat) */
-    if (isMe && !isMedia) {
-      const seen = document.createElement("div");
-      seen.className = "fc-seen" + (msg.seen ? " is-seen" : "");
-      seen.textContent = msg.seen ? "✓✓" : "✓";
-      wrap.appendChild(seen);
-    }
+    /* (seen indicator removed) */
 
     /* Explicit left-to-right DOM order — no flex-direction tricks.
        Friend (left-aligned): avatar, bubble
