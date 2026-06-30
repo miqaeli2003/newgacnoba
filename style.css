@@ -2676,3 +2676,19 @@ html, body {
   transform: scale(0.95);
   box-shadow: 0 1px 4px rgba(26, 35, 126, 0.4);
 }
+
+.add-friend-icon-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(59,165,93,0.2);
+  color: #3ba55d;
+  font-size: 0.82em;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  flex-shrink: 0;
+}
