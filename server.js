@@ -725,8 +725,12 @@ app.get("/api/gifs", gifHttpLimiter, async (req, res) => {
     : `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_KEY}&limit=24&rating=pg-13`;
   try {
     const response = await fetch(endpoint);
-    if (!response.ok) throw new Error(`Giphy HTTP ${response.status}`);
     const data = await response.json();
+
+    if (!response.ok || data.meta?.status !== 200) {
+      console.error("Giphy error:", response.status, data.meta || data);
+      return res.status(502).json({ error: "Failed to fetch GIFs" });
+    }
 
     // Normalize Giphy's shape into the old Tenor-style shape so the
     // frontend (script.js) doesn't need to change at all.
@@ -739,7 +743,10 @@ app.get("/api/gifs", gifHttpLimiter, async (req, res) => {
 
     res.set("Cache-Control", "public, max-age=300");
     res.json({ results });
-  } catch { res.status(502).json({ error: "Failed to fetch GIFs" }); }
+  } catch (err) {
+    console.error("Giphy fetch failed:", err.message);
+    res.status(502).json({ error: "Failed to fetch GIFs" });
+  }
 });
 
 app.get("/api/random-fact", (req, res) => {
