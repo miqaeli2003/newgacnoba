@@ -17,7 +17,7 @@ const io     = new Server(server, {
 });
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const TENOR_KEY          = process.env.TENOR_KEY || "LIVDSRZULELA";
+const GIPHY_KEY           = process.env.GIPHY_KEY || "PUT_YOUR_GIPHY_KEY_HERE";
 const NAME_MIN           = 2;
 const NAME_MAX           = 20;
 const MSG_MAX            = 2000;
@@ -721,14 +721,24 @@ const gifHttpLimiter = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: 
 app.get("/api/gifs", gifHttpLimiter, async (req, res) => {
   const q = (req.query.q || "").trim().slice(0, 100);
   const endpoint = q
-    ? `https://api.tenor.com/v1/search?q=${encodeURIComponent(q)}&key=${TENOR_KEY}&limit=24&media_filter=minimal&contentfilter=medium`
-    : `https://api.tenor.com/v1/trending?key=${TENOR_KEY}&limit=24&media_filter=minimal&contentfilter=medium`;
+    ? `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_KEY}&q=${encodeURIComponent(q)}&limit=24&rating=pg-13`
+    : `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_KEY}&limit=24&rating=pg-13`;
   try {
     const response = await fetch(endpoint);
-    if (!response.ok) throw new Error(`Tenor HTTP ${response.status}`);
+    if (!response.ok) throw new Error(`Giphy HTTP ${response.status}`);
     const data = await response.json();
+
+    // Normalize Giphy's shape into the old Tenor-style shape so the
+    // frontend (script.js) doesn't need to change at all.
+    const results = (data.data || []).map(g => ({
+      media: [{
+        tinygif: { url: g.images?.fixed_width_small?.url || g.images?.fixed_height_small?.url },
+        gif:     { url: g.images?.original?.url || g.images?.fixed_height?.url }
+      }]
+    }));
+
     res.set("Cache-Control", "public, max-age=300");
-    res.json(data);
+    res.json({ results });
   } catch { res.status(502).json({ error: "Failed to fetch GIFs" }); }
 });
 
