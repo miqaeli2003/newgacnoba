@@ -17,7 +17,7 @@ const io     = new Server(server, {
 });
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const GIPHY_KEY           = process.env.GIPHY_KEY || "PUT_YOUR_GIPHY_KEY_HERE";
+const GIPHY_KEY           = process.env.GIPHY_KEY || "UFauF9jrzjxyDsxqXi7rVnfRdvmuMmsL";
 const NAME_MIN           = 2;
 const NAME_MAX           = 20;
 const MSG_MAX            = 2000;
