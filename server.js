@@ -2592,7 +2592,7 @@ app.post("/api/users/avatars", express.json({ limit: "2kb" }), (req, res) => {
     if (typeof raw !== "string") continue;
     const lc = raw.toLowerCase().trim();
     const u = registeredUsers.get(lc);
-    out[lc] = (u && u.avatar) ? u.avatar : DEFAULT_AVATAR;
+    out[lc] = u ? (u.avatar || DEFAULT_AVATAR) : null;
   }
   res.json({ avatars: out });
 });

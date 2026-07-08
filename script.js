@@ -236,8 +236,9 @@ function addPartnerFoundCard(name) {
   chat.appendChild(card);
   scheduleScroll();
 
-  // Load the partner's real profile picture if they're a registered user
-  // (falls back to the letter avatar above on failure)
+  // Load the partner's real profile picture if they're a registered user,
+  // otherwise fall back to the default (unregistered) picture.
+  const DEFAULT_PARTNER_PIC = "https://raw.githubusercontent.com/miqaeli2003/newgacnoba/master/images%20(1).jpeg";
   fetch("/api/users/avatars", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -246,9 +247,11 @@ function addPartnerFoundCard(name) {
     .then(r => r.json())
     .then(d => {
       const file = d?.avatars?.[(name || "").toLowerCase()];
-      if (file) avatar.innerHTML = `<img src="/${file}" alt="avatar" />`;
+      avatar.innerHTML = `<img src="${file ? "/" + file : DEFAULT_PARTNER_PIC}" alt="avatar" />`;
     })
-    .catch(() => {});
+    .catch(() => {
+      avatar.innerHTML = `<img src="${DEFAULT_PARTNER_PIC}" alt="avatar" />`;
+    });
 }
 function addDisconnectMessage(text)        { _appendInfoMessage(text, "system-message-disconnect"); }
 function addReconnectingMessage(name)      {
