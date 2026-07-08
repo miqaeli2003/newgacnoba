@@ -547,6 +547,15 @@ function updateTypingIndicatorPosition() {
   const kbH = getKeyboardHeight();
   const bottom = kbH + chatInputBar.offsetHeight + 8;
   document.documentElement.style.setProperty("--typing-bottom", bottom + "px");
+
+  // Reserve matching room at the bottom of the message list so the newest
+  // message scrolls in ABOVE the fixed indicator bubble instead of under it.
+  // Only applies while the indicator is actually visible; hideTypingIndicator()
+  // resets this back to normal padding.
+  const el = document.getElementById("typingIndicator");
+  if (el && el.style.display !== "none") {
+    chat.style.paddingBottom = (bottom + el.offsetHeight + 10) + "px";
+  }
 }
 
 function showTypingIndicator() {
