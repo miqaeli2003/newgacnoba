@@ -3190,11 +3190,6 @@ io.on("connection", (socket) => {
     socket.partner.emit("message", { msg, name: socket.userName });
   });
 
-  // ── Typing indicator ─────────────────────────────────────────────────────
-  socket.on("typing", () => {
-    if (socket.partner) socket.partner.emit("partnerTyping");
-  });
-
   // ── Name change ──────────────────────────────────────────────────────────
   socket.on("namechange", ({ name }) => {
     if (!name || typeof name !== "string") return;
