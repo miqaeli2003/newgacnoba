@@ -405,7 +405,7 @@
       "avatar1.png", "avatar2.png", "avatar3.png", "avatar4.png",
       "avatar5.png", "avatar6.png", "avatar7.png", "avatar8.png"
     ];
-    const AVATAR_DIR = "/avatars/";
+    const AVATAR_DIR = "/";
 
     function paintUserAvatar() {
       const el = document.getElementById("userAvatar");
@@ -642,7 +642,7 @@
             const lc = item.dataset.friend.toLowerCase();
             const file = avatars[lc];
             const av = item.querySelector(".friend-avatar");
-            if (file && av) av.innerHTML = `<img src="/avatars/${file}" alt="avatar" />`;
+            if (file && av) av.innerHTML = `<img src="${AVATAR_DIR}${file}" alt="avatar" />`;
           });
         })
         .catch(() => {});

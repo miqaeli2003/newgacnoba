@@ -35,7 +35,7 @@
     "avatar1.png", "avatar2.png", "avatar3.png", "avatar4.png",
     "avatar5.png", "avatar6.png", "avatar7.png", "avatar8.png"
   ];
-  const AVATAR_DIR = "/avatars/";
+  const AVATAR_DIR = "/";
   let signupSelectedAvatar = AVAILABLE_AVATARS[0];
 
   function renderAvatarGrid(containerEl, selected, onPick) {

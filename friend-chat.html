@@ -991,7 +991,7 @@
     .then(r => r.json())
     .then(d => {
       const file = d?.avatars?.[friendName.toLowerCase()];
-      if (file) $("fcAvatar").innerHTML = `<img src="/avatars/${file}" alt="avatar" />`;
+      if (file) $("fcAvatar").innerHTML = `<img src="/${file}" alt="avatar" />`;
     })
     .catch(() => {});
 

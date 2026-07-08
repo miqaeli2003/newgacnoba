@@ -2366,7 +2366,7 @@ ${queue.length ? `<h2>Pending queue (${queue.length})</h2>
 // AUTH · FRIENDS · PRIVATE CHAT  (GAICANI Registered Users)
 // ════════════════════════════════════════════════════════════════════════════
 
-// ── Predefined profile avatars (served as static files from /avatars/) ──────
+// ── Predefined profile avatars (PNG files served from the site root, e.g. /avatar1.png) ──
 const AVAILABLE_AVATARS = [
   "avatar1.png", "avatar2.png", "avatar3.png", "avatar4.png",
   "avatar5.png", "avatar6.png", "avatar7.png", "avatar8.png"
