@@ -544,19 +544,14 @@ function addQuestionCard(questionText, isYou) {
 // appears between messages. We just show/hide it and update its bottom offset.
 
 function updateTypingIndicatorPosition() {
-  const kbH = getKeyboardHeight();
-  const bottom = kbH + chatInputBar.offsetHeight + 8;
-  document.documentElement.style.setProperty("--typing-bottom", bottom + "px");
+  // No-op: the indicator is now pinned to a fixed bottom-left corner via CSS
+  // and no longer needs to be repositioned relative to the input bar/keyboard.
 }
 
 function showTypingIndicator() {
   const el = document.getElementById("typingIndicator");
   if (!el) return;
   el.style.display = "flex";
-  updateTypingIndicatorPosition();
-  // Add indicator height on top of the existing input-bar padding so the
-  // last message is never hidden behind the dots
-  chat.style.paddingBottom = "calc(72px + env(safe-area-inset-bottom, 0px) + 56px)";
   scheduleScroll();
 }
 

@@ -201,13 +201,22 @@
 
     /* ── TYPING INDICATOR ── */
     #fc-typing {
+      position: fixed;
+      left: 12px;
+      bottom: 12px;
+      z-index: 999999;
       min-height: 24px;
-      padding: 0 12px 4px;
+      padding: 6px 12px;
       font-size: 0.76em;
       color: var(--muted);
+      background: #33364a;
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 18px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
       display: none;
       align-items: center;
       gap: 6px;
+      pointer-events: none;
     }
     #fc-typing.visible { display: flex; }
 

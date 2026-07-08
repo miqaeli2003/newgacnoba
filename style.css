@@ -1583,9 +1583,9 @@ html, body {
 .typing-indicator {
   /* Fixed overlay — always bottom-left, never inside the message scroll */
   position: fixed;
-  left: 16px;
-  bottom: var(--typing-bottom, 70px); /* updated dynamically by JS */
-  z-index: 60;
+  left: 12px;
+  bottom: 12px;
+  z-index: 999999;
 
   display: flex;
   align-items: center;
