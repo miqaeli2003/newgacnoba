@@ -150,8 +150,8 @@ function enqueueForVT(ip) {
 // These replace every predictable /admin/* and old panel/stats paths.
 const ROUTE = {
   panel:       "/x7k2mq9pn4w",  // visual admin panel  (users, ban/unban)
-  stats:       "/r3tz8vj1qs6",  // stats dashboard HTML
-  statsApi:    "/n5ph2ck7ew0",  // stats JSON API       (called by stats page)
+  stats:       "/r3tz8vj1qs6",  // stats dashboard HTML — PUBLIC, no IP gate (by design)
+  statsApi:    "/n5ph2ck7ew0",  // stats JSON API — PUBLIC, no IP gate (called by stats page)
   users:       "/b9wf4yd6ul3",  // list connected users JSON
   ban:         "/m2xg7rn0ks5",  // POST ban an IP
   unban:       "/q6jd1vc8zt4",  // POST unban an IP
@@ -245,8 +245,14 @@ const stats = {
 //    newIPs:         Set<string>,   IPs never seen before this day
 //  }
 
+// Tbilisi (Georgia) is a fixed UTC+4 all year round — no DST, safe to hardcode.
+const TBILISI_OFFSET_MS = 4 * 60 * 60 * 1000;
+function tbilisiNow() {
+  return new Date(Date.now() + TBILISI_OFFSET_MS);
+}
+
 function todayKey() {
-  return new Date().toISOString().slice(0, 10);
+  return tbilisiNow().toISOString().slice(0, 10);
 }
 
 function getOrCreateDay(key) {
@@ -266,7 +272,7 @@ function getOrCreateDay(key) {
 
 function recordConnect(ip) {
   const day = getOrCreateDay(todayKey());
-  const hour = new Date().getUTCHours();
+  const hour = tbilisiNow().getUTCHours(); // 0-23, Tbilisi local hour
 
   day.ips.add(ip);
   day.sessions++;
@@ -1552,7 +1558,7 @@ io.on("connection", (socket) => {
   // ── GIF ──────────────────────────────────────────────────────────────────
   socket.on("gif", (data) => {
     if (!socket.partner || typeof data?.url !== "string") return;
-    if (!/^https:\/\/(?:[a-z0-9-]+\.)?giphy\.com\//i.test(data.url)) return;
+    if (!data.url.startsWith("https://media.giphy.com/") && !data.url.startsWith("https://i.giphy.com/")) return;
     if (socket.partner._isGhost) return; // partner mid-reconnect
     socket.partner.emit("gif", { url: data.url, preview: data.preview });
   });
@@ -1942,7 +1948,7 @@ io.on("connection", (socket) => {
 });
 
 // ── Stats API ────────────────────────────────────────────────────────────────
-app.get(ROUTE.statsApi, ownerOnly, (req, res) => {
+app.get(ROUTE.statsApi, (req, res) => {
   const now       = Date.now();
   const uptimeSec = Math.floor((now - stats.serverStartedAt) / 1000);
   const days      = [];
@@ -1954,7 +1960,7 @@ app.get(ROUTE.statsApi, ownerOnly, (req, res) => {
 
     // Hourly breakdown — serialize Sets to counts
     const hours = d.hours.map((h, i) => ({
-      hour:     i,           // 0-23 UTC
+      hour:     i,           // 0-23, Tbilisi local time
       label:    i.toString().padStart(2, "0") + ":00",
       uniqueIPs: h.ips.size,
       sessions:  h.sessions,
@@ -1990,8 +1996,8 @@ app.get(ROUTE.statsApi, ownerOnly, (req, res) => {
 });
 
 
-// GET <stats route> — stats dashboard (IP-only, no key)
-app.get(ROUTE.stats, ownerOnly, (req, res) => {
+// GET <stats route> — stats dashboard (now public — anyone with the link can view)
+app.get(ROUTE.stats, (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   const API = ROUTE.statsApi;
   res.send(`<!DOCTYPE html>
@@ -2038,7 +2044,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
 </head>
 <body>
 <h1>📊 GAICANI Statistics</h1>
-<p class="sub">Last 14 days · Hours in UTC · Auto-refreshes every 20s</p>
+<p class="sub">Last 14 days · Hours in Tbilisi time (GMT+4) · Auto-refreshes every 20s</p>
 <button class="rb" onclick="load()">↻ Refresh</button><span id="lu"></span>
 
 <h2>Right Now</h2>
@@ -2075,7 +2081,7 @@ async function load() {
     document.getElementById('now').innerHTML =
       sc(d.currentOnline, 'Online now', 'g') +
       sc(d.peakOnline,    'All-time peak', 'y') +
-      (d.peakOnlineAt ? sc(new Date(d.peakOnlineAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) + ' ' + new Date(d.peakOnlineAt).toLocaleDateString(), 'Peak time', '') : '');
+      (d.peakOnlineAt ? sc(new Date(d.peakOnlineAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',timeZone:'Asia/Tbilisi'}) + ' ' + new Date(d.peakOnlineAt).toLocaleDateString([], {timeZone:'Asia/Tbilisi'}), 'Peak time', '') : '');
 
     // ── All time ──
     document.getElementById('alltime').innerHTML =
@@ -2084,7 +2090,7 @@ async function load() {
 
     if (!d.days || !d.days.length) {
       document.getElementById('daily').innerHTML = '<p style="color:#72767d;padding:12px 0">No data yet</p>';
-      document.getElementById('lu').textContent = 'Updated ' + new Date().toLocaleTimeString();
+      document.getElementById('lu').textContent = 'Updated ' + new Date().toLocaleTimeString([], {timeZone:'Asia/Tbilisi'});
       return;
     }
 
@@ -2095,7 +2101,7 @@ async function load() {
     let html = '';
     days.forEach(day => {
       const peakHr  = day.peakHour;
-      const isToday = day.date === new Date().toISOString().slice(0,10);
+      const isToday = day.date === new Date(Date.now() + 4*60*60*1000).toISOString().slice(0,10);
 
       // Hourly bars
       const maxHourIPs = Math.max(...day.hours.map(h => h.uniqueIPs), 1);
@@ -2111,7 +2117,7 @@ async function load() {
       html += '<div class="day-block">' +
         '<div class="day-title">' +
           '<span>' + esc(day.date) + (isToday ? ' <span style="color:#3ba55d;font-size:.75em">(today)</span>' : '') + '</span>' +
-          (peakHr.uniqueIPs > 0 ? '<span class="peak-badge">⏰ Peak ' + esc(peakHr.label) + ' UTC (' + peakHr.uniqueIPs + ' IPs)</span>' : '') +
+          (peakHr.uniqueIPs > 0 ? '<span class="peak-badge">⏰ Peak ' + esc(peakHr.label) + ' Tbilisi (' + peakHr.uniqueIPs + ' IPs)</span>' : '') +
         '</div>' +
 
         '<div class="day-grid">' +
@@ -2124,13 +2130,13 @@ async function load() {
           dsc(day.peakOnline,    'Peak online', '#faa61a') +
         '</div>' +
 
-        '<div style="font-size:.72em;color:#72767d;margin-bottom:6px">Unique IPs per hour (UTC)</div>' +
+        '<div style="font-size:.72em;color:#72767d;margin-bottom:6px">Unique IPs per hour (Tbilisi time)</div>' +
         '<div class="hour-chart">' + hourBars + '</div>' +
         '</div>';
     });
 
     document.getElementById('daily').innerHTML = html;
-    document.getElementById('lu').textContent = 'Updated ' + new Date().toLocaleTimeString();
+    document.getElementById('lu').textContent = 'Updated ' + new Date().toLocaleTimeString([], {timeZone:'Asia/Tbilisi'});
   } catch(e) { console.error(e); }
 }
 
