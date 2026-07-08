@@ -243,7 +243,7 @@
   border-radius: 12px;
   padding: 6px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-  z-index: 500;
+  z-index: 999999;
   animation: menuFadeIn 0.15s ease;
 }
 @keyframes menuFadeIn {
