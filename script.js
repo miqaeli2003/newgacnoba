@@ -554,7 +554,7 @@ function updateTypingIndicatorPosition() {
   // resets this back to normal padding.
   const el = document.getElementById("typingIndicator");
   if (el && el.style.display !== "none") {
-    chat.style.paddingBottom = (bottom + el.offsetHeight + 10) + "px";
+    chat.style.paddingBottom = (bottom + el.offsetHeight + 2) + "px";
   }
 }
 
