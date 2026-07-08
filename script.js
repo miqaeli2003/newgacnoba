@@ -208,6 +208,48 @@ function _appendInfoMessage(text, className, id) {
 }
 
 function addSystemMessage(text)            { _appendInfoMessage(text, "system-message"); }
+
+// ── Partner-found card (avatar + name + status) ─────────────────────────────
+function addPartnerFoundCard(name) {
+  const card       = document.createElement("div");
+  card.className   = "partner-found-card";
+
+  const avatar     = document.createElement("div");
+  avatar.className = "pfc-avatar";
+  avatar.textContent = (name || "?").charAt(0).toUpperCase();
+
+  const info       = document.createElement("div");
+  info.className   = "pfc-info";
+
+  const nameEl       = document.createElement("div");
+  nameEl.className   = "pfc-name";
+  nameEl.textContent = name;
+
+  const statusEl       = document.createElement("div");
+  statusEl.className   = "pfc-status";
+  statusEl.textContent = "პარტნიორი ნაპოვნია";
+
+  info.appendChild(nameEl);
+  info.appendChild(statusEl);
+  card.appendChild(avatar);
+  card.appendChild(info);
+  chat.appendChild(card);
+  scheduleScroll();
+
+  // Load the partner's real profile picture if they're a registered user
+  // (falls back to the letter avatar above on failure)
+  fetch("/api/users/avatars", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ usernames: [name] }),
+  })
+    .then(r => r.json())
+    .then(d => {
+      const file = d?.avatars?.[(name || "").toLowerCase()];
+      if (file) avatar.innerHTML = `<img src="/${file}" alt="avatar" />`;
+    })
+    .catch(() => {});
+}
 function addDisconnectMessage(text)        { _appendInfoMessage(text, "system-message-disconnect"); }
 function addReconnectingMessage(name)      {
   document.getElementById("reconnectingMsg")?.remove();
@@ -1519,7 +1561,7 @@ socket.on("partnerFound", (partner) => {
   // ── DOM updates ────────────────────────────────────────────────────────
   clearChat();
   setPartnerNameDisplay(partnerName);
-  addSystemMessage(`გილოცავთ პარტნიორი ნაპოვნია 🥳 : ${partnerName}`);
+  addPartnerFoundCard(partnerName);
 
   // Show partner's bio if they set one
   if (partner.partnerBio) {

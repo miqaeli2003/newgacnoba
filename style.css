@@ -2176,6 +2176,60 @@ html, body {
 }
 .bio-clear-btn:hover { background: #4a4d55; }
 
+/* ── PARTNER FOUND CARD ──────────────────────────────────────────────────── */
+
+.partner-found-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin: 6px auto 14px;
+  max-width: 420px;
+}
+
+.pfc-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6em;
+  font-weight: 700;
+  color: #2b2d31;
+}
+
+.pfc-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.pfc-info {
+  min-width: 0;
+}
+
+.pfc-name {
+  font-weight: 700;
+  font-size: 1.05em;
+  color: #fff;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pfc-status {
+  font-size: 0.85em;
+  color: #949ba4;
+}
+
 /* ── PARTNER BIO LINE ────────────────────────────────────────────────────── */
 
 .partner-bio-line {
