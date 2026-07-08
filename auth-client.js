@@ -578,6 +578,30 @@
         showToast(`🚫 ${esc(fname)} — დაბლოკილია ამ სესიაზე`);
       });
     });
+
+    paintFriendAvatars(friends, list);
+  }
+
+  /* Fetch real profile pictures for a list of usernames and swap them
+     into the letter-circles inside the given container. */
+  function paintFriendAvatars(usernames, container) {
+    if (!usernames || !usernames.length || !container) return;
+    fetch("/api/users/avatars", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ usernames }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        const avatars = d?.avatars || {};
+        container.querySelectorAll("[data-friend]").forEach(item => {
+          const lc = item.dataset.friend.toLowerCase();
+          const file = avatars[lc];
+          const av = item.querySelector(".dash-friend-avatar");
+          if (file && av) av.innerHTML = `<img src="${AVATAR_DIR}${file}" alt="avatar" />`;
+        });
+      })
+      .catch(() => {});
   }
 
   /* ── Dashboard blocked list ──────────────────────────────────────── */
@@ -594,7 +618,7 @@
     if (!blocked.length) { list.innerHTML = ""; return; }
 
     list.innerHTML = blocked.map(u => `
-      <div class="dash-friend-item">
+      <div class="dash-friend-item" data-friend="${esc(u)}">
         <div class="dash-friend-avatar" style="background:rgba(242,63,66,0.15);color:#f23f42;">${esc(u).charAt(0).toUpperCase()}</div>
         <span class="dash-friend-name" style="color:#f23f42;">${esc(u)}</span>
         <button class="dash-act-btn dash-act-unblock" data-u="${esc(u)}" title="ბლოკის მოხსნა" style="color:#3ba55d;">✓</button>
@@ -609,6 +633,8 @@
         showToast(`✅ ${esc(btn.dataset.u)} — ბლოკი მოხსნილია`);
       });
     });
+
+    paintFriendAvatars(blocked, list);
   }
 
   /* ══════════════════════════════════════════════════════════════════

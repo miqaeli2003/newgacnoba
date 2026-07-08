@@ -2582,6 +2582,21 @@ app.post("/api/auth/verify", express.json({ limit: "1kb" }), (req, res) => {
   });
 });
 
+// POST /api/users/avatars — bulk lookup: { usernames: [...] } → { avatars: { lowerUsername: file } }
+app.post("/api/users/avatars", express.json({ limit: "2kb" }), (req, res) => {
+  const { usernames } = req.body || {};
+  if (!Array.isArray(usernames)) return res.status(400).json({ error: "usernames array required" });
+
+  const out = {};
+  for (const raw of usernames.slice(0, 50)) {
+    if (typeof raw !== "string") continue;
+    const lc = raw.toLowerCase().trim();
+    const u = registeredUsers.get(lc);
+    out[lc] = (u && u.avatar) ? u.avatar : DEFAULT_AVATAR;
+  }
+  res.json({ avatars: out });
+});
+
 // POST /api/friends/request
 app.post("/api/friends/request", express.json({ limit: "2kb" }), (req, res) => {
   const token = req.headers.authorization?.replace("Bearer ", "");

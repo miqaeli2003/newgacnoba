@@ -609,7 +609,9 @@
   font-weight: 700;
   color: #a78bfa;
   flex-shrink: 0;
+  overflow: hidden;
 }
+.dash-friend-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .dash-friend-name {
   flex: 1;
   font-size: 0.86em;

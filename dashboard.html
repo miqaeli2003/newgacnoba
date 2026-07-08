@@ -151,7 +151,9 @@
       display: flex; align-items: center; justify-content: center;
       font-size: 0.92em; font-weight: 700; color: #a78bfa;
       flex-shrink: 0;
+      overflow: hidden;
     }
+    .friend-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .friend-name {
       flex: 1; font-size: 0.88em; color: #dcddde;
       font-weight: 500; overflow: hidden;
@@ -620,6 +622,30 @@
           showToast(`🚫 ${esc(fname)} — დაბლოკილია ამ სესიაზე`);
         });
       });
+
+      paintFriendAvatars(friends, list);
+    }
+
+    /* Fetch real profile pictures for a list of usernames and swap them
+       into the letter-circles inside the given container. */
+    function paintFriendAvatars(usernames, container) {
+      if (!usernames || !usernames.length || !container) return;
+      fetch("/api/users/avatars", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usernames }),
+      })
+        .then(r => r.json())
+        .then(d => {
+          const avatars = d?.avatars || {};
+          container.querySelectorAll("[data-friend]").forEach(item => {
+            const lc = item.dataset.friend.toLowerCase();
+            const file = avatars[lc];
+            const av = item.querySelector(".friend-avatar");
+            if (file && av) av.innerHTML = `<img src="/avatars/${file}" alt="avatar" />`;
+          });
+        })
+        .catch(() => {});
     }
 
     /* ── Render blocked list ─────────────────────────────────────── */
@@ -636,7 +662,7 @@
       if (!blocked.length) { list.innerHTML = ""; return; }
 
       list.innerHTML = blocked.map(u => `
-        <div class="friend-item">
+        <div class="friend-item" data-friend="${esc(u)}">
           <div class="friend-avatar blocked-avatar">${esc(u).charAt(0).toUpperCase()}</div>
           <span class="friend-name blocked-name">${esc(u)}</span>
           <button class="act-btn act-unblock" data-u="${esc(u)}" title="ბლოკის მოხსნა">✓</button>
@@ -651,6 +677,8 @@
           showToast(`✅ ${esc(btn.dataset.u)} — ბლოკი მოხსნილია`);
         });
       });
+
+      paintFriendAvatars(blocked, list);
     }
 
     /* ── Logout ──────────────────────────────────────────────────── */
