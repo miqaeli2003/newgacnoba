@@ -1558,7 +1558,7 @@ io.on("connection", (socket) => {
   // ── GIF ──────────────────────────────────────────────────────────────────
   socket.on("gif", (data) => {
     if (!socket.partner || typeof data?.url !== "string") return;
-    if (!data.url.startsWith("https://media.giphy.com/") && !data.url.startsWith("https://i.giphy.com/")) return;
+    if (!/^https:\/\/(?:[a-z0-9-]+\.)?giphy\.com\//i.test(data.url)) return;
     if (socket.partner._isGhost) return; // partner mid-reconnect
     socket.partner.emit("gif", { url: data.url, preview: data.preview });
   });
