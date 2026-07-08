@@ -255,6 +255,49 @@
     @media (max-width: 480px) {
       .page { padding: 20px 12px 60px; }
     }
+
+    /* ── Avatar image + change button ── */
+    .user-avatar img {
+      width: 100%; height: 100%;
+      object-fit: cover; border-radius: 50%;
+      display: block;
+    }
+    .btn-change-avatar {
+      margin-top: 8px;
+      padding: 4px 10px;
+      background: rgba(88,101,242,0.12);
+      border: 1px solid rgba(88,101,242,0.3);
+      color: #a78bfa;
+      border-radius: 7px;
+      font-size: 0.72em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-change-avatar:hover { background: rgba(88,101,242,0.22); }
+    .avatar-picker-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      padding: 12px 14px 16px;
+    }
+    .avatar-picker-option {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 50%;
+      border: 2.5px solid transparent;
+      background: rgba(255,255,255,0.06);
+      cursor: pointer;
+      padding: 0;
+      overflow: hidden;
+      transition: border-color 0.15s, transform 0.1s;
+    }
+    .avatar-picker-option img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .avatar-picker-option:hover { transform: scale(1.05); }
+    .avatar-picker-option.selected {
+      border-color: #5865f2;
+      box-shadow: 0 0 0 2px rgba(88,101,242,0.35);
+    }
   </style>
 </head>
 <body>
@@ -282,7 +325,14 @@
       <div class="user-info">
         <div class="user-name" id="userName">—</div>
         <div class="user-meta">რეგისტრირებული მომხმარებელი</div>
+        <button class="btn-change-avatar" id="changeAvatarBtn">🖼️ სურათის შეცვლა</button>
       </div>
+    </div>
+
+    <!-- Avatar picker (hidden until "სურათის შეცვლა" is clicked) -->
+    <div class="section avatar-picker-section" id="avatarPickerSection" style="display:none">
+      <div class="section-label">აირჩიე ახალი პროფილის სურათი</div>
+      <div class="avatar-picker-grid" id="avatarPickerGrid"></div>
     </div>
 
     <!-- Start Chat -->
@@ -347,6 +397,70 @@
         setTimeout(() => t.remove(), 320);
       }, ms);
     }
+
+    /* ── Predefined profile avatars ──────────────────────────────── */
+    const AVAILABLE_AVATARS = [
+      "avatar1.png", "avatar2.png", "avatar3.png", "avatar4.png",
+      "avatar5.png", "avatar6.png", "avatar7.png", "avatar8.png"
+    ];
+    const AVATAR_DIR = "/avatars/";
+
+    function paintUserAvatar() {
+      const el = document.getElementById("userAvatar");
+      if (!el || !authUser) return;
+      if (authUser.avatar) {
+        el.innerHTML = `<img src="${AVATAR_DIR}${authUser.avatar}" alt="avatar" />`;
+      } else {
+        el.textContent = authUser.username.charAt(0).toUpperCase();
+      }
+    }
+
+    function renderAvatarGrid(containerEl, selected, onPick) {
+      if (!containerEl) return;
+      containerEl.innerHTML = "";
+      AVAILABLE_AVATARS.forEach(file => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "avatar-picker-option" + (file === selected ? " selected" : "");
+        btn.innerHTML = `<img src="${AVATAR_DIR}${file}" alt="avatar" loading="lazy" />`;
+        btn.addEventListener("click", () => {
+          containerEl.querySelectorAll(".avatar-picker-option").forEach(b => b.classList.remove("selected"));
+          btn.classList.add("selected");
+          onPick(file);
+        });
+        containerEl.appendChild(btn);
+      });
+    }
+
+    document.getElementById("changeAvatarBtn")?.addEventListener("click", () => {
+      const section = document.getElementById("avatarPickerSection");
+      if (!section) return;
+      const showing = section.style.display !== "none";
+      if (showing) { section.style.display = "none"; return; }
+
+      renderAvatarGrid(document.getElementById("avatarPickerGrid"), authUser?.avatar, async (file) => {
+        if (!authUser) return;
+        const prev = authUser.avatar;
+        authUser.avatar = file;
+        paintUserAvatar(); // optimistic update
+
+        try {
+          const r = await fetch("/api/auth/avatar", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authUser.token}` },
+            body: JSON.stringify({ avatar: file }),
+          });
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.error || "შეცდომა");
+          showToast("✅ პროფილის სურათი განახლდა");
+        } catch (e) {
+          authUser.avatar = prev; // revert on failure
+          paintUserAvatar();
+          showToast("⚠️ სურათის შენახვა ვერ მოხერხდა");
+        }
+      });
+      section.style.display = "block";
+    });
 
     /* ── State ───────────────────────────────────────────────────── */
     let authUser = null;
@@ -579,6 +693,7 @@
           token,
           friends: d.friends || [],
           pendingRequests: d.pendingRequests || [],
+          avatar: d.avatar || AVAILABLE_AVATARS[0],
         };
       } catch (_) {
         // Network error — best-effort: show page with stored username, no friend data yet
@@ -586,10 +701,9 @@
       }
 
       // Populate UI
-      const avatarEl   = document.getElementById("userAvatar");
       const nameEl     = document.getElementById("userName");
       const topUserEl  = document.getElementById("topUsername");
-      if (avatarEl)  avatarEl.textContent = authUser.username.charAt(0).toUpperCase();
+      paintUserAvatar();
       if (nameEl)    nameEl.textContent   = authUser.username;
       if (topUserEl) topUserEl.textContent = `🔐 ${authUser.username}`;
 

@@ -30,8 +30,36 @@
     try { localStorage.removeItem(LS_TOKEN); localStorage.removeItem(LS_USER); } catch (_) {}
   }
 
+  /* ── Predefined profile avatars ──────────────────────────────────── */
+  const AVAILABLE_AVATARS = [
+    "avatar1.png", "avatar2.png", "avatar3.png", "avatar4.png",
+    "avatar5.png", "avatar6.png", "avatar7.png", "avatar8.png"
+  ];
+  const AVATAR_DIR = "/avatars/";
+  let signupSelectedAvatar = AVAILABLE_AVATARS[0];
+
+  function renderAvatarGrid(containerEl, selected, onPick) {
+    if (!containerEl) return;
+    containerEl.innerHTML = "";
+    AVAILABLE_AVATARS.forEach(file => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "avatar-picker-option" + (file === selected ? " selected" : "");
+      btn.dataset.avatar = file;
+      btn.innerHTML = `<img src="${AVATAR_DIR}${file}" alt="avatar" loading="lazy" />`;
+      btn.addEventListener("click", () => {
+        containerEl.querySelectorAll(".avatar-picker-option").forEach(b => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        onPick(file);
+      });
+      containerEl.appendChild(btn);
+    });
+  }
+
+  renderAvatarGrid($("signup-avatar-grid"), signupSelectedAvatar, file => { signupSelectedAvatar = file; });
+
   /* ── State ───────────────────────────────────────────────────────── */
-  let authUser = null;    // { username, token, friends:[], pendingRequests:[] }
+  let authUser = null;    // { username, token, friends:[], pendingRequests:[], avatar }
   let authSocket = null;  // reference to the main socket
   let sessionBlocked = new Set();  // lowercase usernames blocked this session
 
@@ -105,7 +133,7 @@
       const r = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, avatar: signupSelectedAvatar }),
       });
       const d = await r.json();
       if (!r.ok) {
@@ -113,7 +141,7 @@
         return;
       }
       // Success — auto-login
-      handleAuthSuccess(d.token, d.username, d.friends || [], d.pendingRequests || []);
+      handleAuthSuccess(d.token, d.username, d.friends || [], d.pendingRequests || [], d.avatar);
     } catch (_) {
       setError("signup-error", "კავშირის შეცდომა. კვლავ სცადეთ.");
     } finally {
@@ -145,7 +173,7 @@
       });
       const d = await r.json();
       if (!r.ok) { setError("login-error", d.error || "არასწორი სახელი ან პაროლი"); return; }
-      handleAuthSuccess(d.token, d.username, d.friends || [], d.pendingRequests || []);
+      handleAuthSuccess(d.token, d.username, d.friends || [], d.pendingRequests || [], d.avatar);
     } catch (_) {
       setError("login-error", "კავშირის შეცდომა. კვლავ სცადეთ.");
     } finally {
@@ -156,9 +184,10 @@
   /* ══════════════════════════════════════════════════════════════════
      AUTH SUCCESS — called after login or register
      ══════════════════════════════════════════════════════════════════ */
-  function handleAuthSuccess(token, username, friends, pendingRequests) {
+  function handleAuthSuccess(token, username, friends, pendingRequests, avatar) {
     saveAuth(token, username);
-    authUser = { username, token, friends: friends || [], pendingRequests: pendingRequests || [] };
+    authUser = { username, token, friends: friends || [], pendingRequests: pendingRequests || [],
+                 avatar: avatar || AVAILABLE_AVATARS[0] };
     window.gaicaniAuthUser = authUser;
 
     // Show success toast, then redirect straight to the dashboard
@@ -424,16 +453,29 @@
   /* ══════════════════════════════════════════════════════════════════
      DASHBOARD PANEL (inline sheet)
      ══════════════════════════════════════════════════════════════════ */
+  function paintDashAvatar() {
+    const dashAvatar = $("dashAvatar");
+    if (!dashAvatar || !authUser) return;
+    if (authUser.avatar) {
+      dashAvatar.innerHTML = `<img src="${AVATAR_DIR}${authUser.avatar}" alt="avatar" />`;
+    } else {
+      dashAvatar.textContent = authUser.username.charAt(0).toUpperCase();
+    }
+  }
+
   function openDashboard() {
     const panel = $("dashboard-panel");
     if (!panel) return;
     panel.style.display = "block";
 
     // Populate user info
-    const dashAvatar   = $("dashAvatar");
     const dashUsername = $("dashUsername");
-    if (dashAvatar && authUser)   dashAvatar.textContent = authUser.username.charAt(0).toUpperCase();
+    paintDashAvatar();
     if (dashUsername && authUser) dashUsername.textContent = authUser.username;
+
+    // Collapse the avatar picker each time the dashboard is (re)opened
+    const pickerPanel = $("avatarPickerPanel");
+    if (pickerPanel) pickerPanel.style.display = "none";
 
     renderDashFriends(authUser?.friends || []);
     renderDashBlocked();
@@ -443,6 +485,37 @@
     const panel = $("dashboard-panel");
     if (panel) panel.style.display = "none";
   }
+
+  /* ── Change avatar (from ჩემი გვერდი) ─────────────────────────────── */
+  $("dashChangeAvatarBtn")?.addEventListener("click", () => {
+    const pickerPanel = $("avatarPickerPanel");
+    if (!pickerPanel) return;
+    const showing = pickerPanel.style.display !== "none";
+    if (showing) { pickerPanel.style.display = "none"; return; }
+
+    renderAvatarGrid($("dash-avatar-grid"), authUser?.avatar, async (file) => {
+      if (!authUser) return;
+      const prev = authUser.avatar;
+      authUser.avatar = file;
+      paintDashAvatar(); // optimistic update
+
+      try {
+        const r = await fetch("/api/auth/avatar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authUser.token}` },
+          body: JSON.stringify({ avatar: file }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "შეცდომა");
+        showToast("✅ პროფილის სურათი განახლდა");
+      } catch (e) {
+        authUser.avatar = prev; // revert on failure
+        paintDashAvatar();
+        showToast("⚠️ სურათის შენახვა ვერ მოხერხდა");
+      }
+    });
+    pickerPanel.style.display = "block";
+  });
 
   $("dashClose")?.addEventListener("click", closeDashboard);
   $("dashOverlay")?.addEventListener("click", closeDashboard);
@@ -769,6 +842,7 @@
         token,
         friends: d.friends || [],
         pendingRequests: d.pendingRequests || [],
+        avatar: d.avatar || AVAILABLE_AVATARS[0],
       };
       window.gaicaniAuthUser = authUser;
       updateAuthBadge();

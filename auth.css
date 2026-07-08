@@ -90,6 +90,70 @@
 }
 .auth-form-note a { color: #a78bfa; }
 
+/* ── Avatar Picker (signup + dashboard) ───────────────────────────────────── */
+.avatar-picker-label {
+  font-size: 0.78em;
+  color: #b5bac1;
+  font-weight: 600;
+  margin: 4px 0 8px;
+  text-align: center;
+}
+.avatar-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.avatar-picker-option {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  border: 2.5px solid transparent;
+  background: rgba(255,255,255,0.06);
+  cursor: pointer;
+  padding: 0;
+  overflow: hidden;
+  transition: border-color 0.15s, transform 0.1s;
+}
+.avatar-picker-option img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.avatar-picker-option:hover { transform: scale(1.05); }
+.avatar-picker-option.selected {
+  border-color: #5865f2;
+  box-shadow: 0 0 0 2px rgba(88,101,242,0.35);
+}
+.dash-change-avatar-btn {
+  margin-top: 6px;
+  padding: 4px 10px;
+  background: rgba(88,101,242,0.12);
+  border: 1px solid rgba(88,101,242,0.3);
+  color: #a78bfa;
+  border-radius: 7px;
+  font-size: 0.72em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.dash-change-avatar-btn:hover { background: rgba(88,101,242,0.22); }
+.avatar-picker-panel {
+  background: rgba(255,255,255,0.03);
+  border-radius: 12px;
+  padding: 14px;
+  margin: 4px 0 16px;
+}
+/* Show the real image instead of the letter once an avatar is set */
+.dash-avatar img, .user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
 /* ── Auth Badge (top bar) ──────────────────────────────────────────────────── */
 #auth-user-badge {
   font-size: 0.78em;

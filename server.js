@@ -2366,6 +2366,13 @@ ${queue.length ? `<h2>Pending queue (${queue.length})</h2>
 // AUTH · FRIENDS · PRIVATE CHAT  (GAICANI Registered Users)
 // ════════════════════════════════════════════════════════════════════════════
 
+// ── Predefined profile avatars (served as static files from /avatars/) ──────
+const AVAILABLE_AVATARS = [
+  "avatar1.png", "avatar2.png", "avatar3.png", "avatar4.png",
+  "avatar5.png", "avatar6.png", "avatar7.png", "avatar8.png"
+];
+const DEFAULT_AVATAR = AVAILABLE_AVATARS[0];
+
 const USERS_FILE        = path.join(__dirname, "registered_users.json");
 const PRIV_MSGS_FILE    = path.join(__dirname, "private_messages.json");
 const PRIVATE_MSG_TTL   = 12 * 60 * 60 * 1000; // 12 h — auto-delete
@@ -2398,6 +2405,7 @@ function loadAuthUsers() {
   try {
     const obj = JSON.parse(fs.readFileSync(USERS_FILE, "utf8"));
     for (const u of Object.values(obj)) {
+      if (!u.avatar || !AVAILABLE_AVATARS.includes(u.avatar)) u.avatar = DEFAULT_AVATAR;
       registeredUsers.set(u.username.toLowerCase(), u);
       authReservedNames.add(u.username.toLowerCase());
     }
@@ -2409,7 +2417,8 @@ function saveAuthUsers() {
   for (const [k, u] of registeredUsers) {
     obj[k] = { username: u.username, passwordHash: u.passwordHash,
                createdAt: u.createdAt, friends: u.friends || [],
-               pendingRequests: u.pendingRequests || [] };
+               pendingRequests: u.pendingRequests || [],
+               avatar: u.avatar || DEFAULT_AVATAR };
   }
   try { fs.writeFileSync(USERS_FILE, JSON.stringify(obj, null, 2), "utf8"); }
   catch (e) { console.error("[AUTH] save failed:", e.message); }
@@ -2452,7 +2461,7 @@ const authLimiter = rateLimit({ windowMs: 15 * 60_000, max: 30, standardHeaders:
 
 // POST /api/auth/register
 app.post("/api/auth/register", authLimiter, express.json({ limit: "5kb" }), (req, res) => {
-  const { username, password } = req.body || {};
+  const { username, password, avatar } = req.body || {};
   if (!username || !password || typeof username !== "string" || typeof password !== "string")
     return res.status(400).json({ error: "სახელი და პაროლი სავალდებულოა" });
 
@@ -2468,12 +2477,17 @@ app.post("/api/auth/register", authLimiter, express.json({ limit: "5kb" }), (req
   if (registeredUsers.has(lc))
     return res.status(409).json({ error: "ეს სახელი უკვე დაკავებულია" });
 
+  const chosenAvatar = (typeof avatar === "string" && AVAILABLE_AVATARS.includes(avatar))
+    ? avatar
+    : DEFAULT_AVATAR;
+
   const user = {
     username: clean,
     passwordHash: authHashPassword(password),
     createdAt: new Date().toISOString(),
     friends: [],
-    pendingRequests: []
+    pendingRequests: [],
+    avatar: chosenAvatar
   };
 
   registeredUsers.set(lc, user);
@@ -2483,7 +2497,35 @@ app.post("/api/auth/register", authLimiter, express.json({ limit: "5kb" }), (req
   const token = authToken();
   authTokens.set(token, { usernameLower: lc, expiry: Date.now() + AUTH_TOKEN_TTL });
 
-  res.status(201).json({ success: true, token, username: user.username });
+  res.status(201).json({ success: true, token, username: user.username, avatar: user.avatar });
+});
+
+// GET /api/auth/avatars — list the predefined avatar options
+app.get("/api/auth/avatars", (req, res) => {
+  res.json({ avatars: AVAILABLE_AVATARS });
+});
+
+// POST /api/auth/avatar — change the logged-in user's avatar
+app.post("/api/auth/avatar", express.json({ limit: "1kb" }), (req, res) => {
+  const token = req.headers.authorization?.replace("Bearer ", "") || req.body?.token;
+  const { avatar } = req.body || {};
+
+  if (!token) return res.status(401).json({ error: "No token" });
+  const entry = authTokens.get(token);
+  if (!entry || Date.now() >= entry.expiry) {
+    authTokens.delete(token);
+    return res.status(401).json({ error: "Token expired" });
+  }
+  if (typeof avatar !== "string" || !AVAILABLE_AVATARS.includes(avatar))
+    return res.status(400).json({ error: "არასწორი ავატარი" });
+
+  const user = registeredUsers.get(entry.usernameLower);
+  if (!user) return res.status(401).json({ error: "User not found" });
+
+  user.avatar = avatar;
+  saveAuthUsers();
+
+  res.json({ success: true, avatar: user.avatar });
 });
 
 // POST /api/auth/login
@@ -2505,7 +2547,8 @@ app.post("/api/auth/login", authLimiter, express.json({ limit: "5kb" }), (req, r
     token,
     username: user.username,
     friends: user.friends || [],
-    pendingRequests: user.pendingRequests || []
+    pendingRequests: user.pendingRequests || [],
+    avatar: user.avatar || DEFAULT_AVATAR
   });
 });
 
@@ -2534,7 +2577,8 @@ app.post("/api/auth/verify", express.json({ limit: "1kb" }), (req, res) => {
     success: true,
     username: user.username,
     friends: user.friends || [],
-    pendingRequests: user.pendingRequests || []
+    pendingRequests: user.pendingRequests || [],
+    avatar: user.avatar || DEFAULT_AVATAR
   });
 });
 

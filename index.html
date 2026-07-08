@@ -230,6 +230,10 @@
           <input id="signup-confirm" class="auth-input" type="password"
                  placeholder="გაიმეორე პაროლი" autocomplete="new-password" maxlength="100" />
         </div>
+
+        <div class="avatar-picker-label">აირჩიე პროფილის სურათი</div>
+        <div id="signup-avatar-grid" class="avatar-picker-grid"></div>
+
         <div id="signup-error" class="auth-form-error"></div>
         <button id="signup-btn" class="auth-submit-btn">რეგისტრაცია</button>
         <p class="auth-form-note">
@@ -303,7 +307,14 @@
         <div class="dash-user-info">
           <div class="dash-username" id="dashUsername">—</div>
           <div class="dash-user-meta">რეგისტრირებული მომხმარებელი</div>
+          <button class="dash-change-avatar-btn" id="dashChangeAvatarBtn">🖼️ სურათის შეცვლა</button>
         </div>
+      </div>
+
+      <!-- Avatar picker (hidden until "სურათის შეცვლა" is clicked) -->
+      <div id="avatarPickerPanel" class="avatar-picker-panel" style="display:none">
+        <div class="avatar-picker-label">აირჩიე ახალი პროფილის სურათი</div>
+        <div id="dash-avatar-grid" class="avatar-picker-grid"></div>
       </div>
 
       <!-- Action buttons -->
