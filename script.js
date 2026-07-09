@@ -539,38 +539,24 @@ function addQuestionCard(questionText, isYou) {
   scheduleScroll();
 }
 
-// ── Typing indicator (fixed overlay — Instagram style) ────────────────────────
-// The element lives in the HTML outside the chat scroll area so it never
-// appears between messages. We just show/hide it and update its bottom offset.
-
-function updateTypingIndicatorPosition() {
-  const kbH = getKeyboardHeight();
-  const bottom = kbH + chatInputBar.offsetHeight + 8;
-  document.documentElement.style.setProperty("--typing-bottom", bottom + "px");
-
-  // Reserve matching room at the bottom of the message list so the newest
-  // message scrolls in ABOVE the fixed indicator bubble instead of under it.
-  // Only applies while the indicator is actually visible; hideTypingIndicator()
-  // resets this back to normal padding.
-  const el = document.getElementById("typingIndicator");
-  if (el && el.style.display !== "none") {
-    chat.style.paddingBottom = (bottom + el.offsetHeight + 2) + "px";
-  }
-}
+// ── Typing indicator (inline chat bubble) ──────────────────────────────────
+// Rendered as a real message-list entry, styled like a partner bubble, sitting
+// wherever the partner's next message will land. hideTypingIndicator() removes
+// it outright, so the real message (added right after) drops into that spot.
 
 function showTypingIndicator() {
-  const el = document.getElementById("typingIndicator");
-  if (!el) return;
-  el.style.display = "flex";
-  updateTypingIndicatorPosition();
+  if (document.getElementById("liveTypingBubble")) return; // already showing
+  const el     = document.createElement("div");
+  el.id        = "liveTypingBubble";
+  el.className = "typing-indicator";
+  el.innerHTML = "<span></span><span></span><span></span>";
+  chat.appendChild(el); // sits in the message flow, right where the partner's next message will land
   scheduleScroll();
 }
 
 function hideTypingIndicator() {
-  const el = document.getElementById("typingIndicator");
-  if (el) el.style.display = "none";
-  // Restore normal padding
-  chat.style.paddingBottom = "";
+  const el = document.getElementById("liveTypingBubble");
+  if (el) el.remove();
 }
 
 function clearChat() { chat.innerHTML = ""; clearReply(); }
@@ -774,8 +760,6 @@ function updateViewportOffsets() {
 
   // Pin scroll to bottom whenever the viewport shifts
   scheduleScroll();
-  // Keep typing indicator pinned above the input bar
-  updateTypingIndicatorPosition();
 }
 
 if (window.visualViewport) {

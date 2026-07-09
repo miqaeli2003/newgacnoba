@@ -1581,23 +1581,18 @@ html, body {
 /* ── TYPING INDICATOR ────────────────────────────────────────────────────── */
 
 .typing-indicator {
-  /* Fixed overlay — always bottom-left, never inside the message scroll */
-  position: fixed;
-  left: 12px;
-  bottom: var(--typing-bottom, 78px);
-  z-index: 999999;
+  /* Inline chat bubble — sits in the message list like a partner message */
+  align-self: flex-start;
 
   display: flex;
   align-items: center;
   gap: 5px;
   padding: 10px 14px;
   background: #33364a;
-  border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 18px;
+  border-radius: 20px;
   width: fit-content;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
   animation: typingFadeIn 0.18s ease forwards;
-  pointer-events: none; /* don't block taps on messages */
 }
 
 @keyframes typingFadeIn {
@@ -1837,11 +1832,6 @@ html, body {
     border-radius: 18px 18px 0 0;
     padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
   }
-
-  /* ── TYPING INDICATOR: bump up when keyboard open ─────────────────────── */
-  .typing-indicator {
-    left: 12px;
-  }
 }
 
 /* ── KEYBOARD-OPEN ZOOM ───────────────────────────────────────────────────── */
@@ -1879,15 +1869,6 @@ html, body {
 .system-message-reconnecting {
   font-size: 0.7em;
   margin: 1px 0;
-}
-
-.keyboard-open .typing-indicator {
-  padding: 6px 10px;
-}
-
-.keyboard-open .typing-indicator span {
-  width: 5px;
-  height: 5px;
 }
 
 .keyboard-open .seen-status {
@@ -2550,11 +2531,6 @@ html, body {
   /* ── 17. Away-ended / toast — don't overlap the notch area ────────────────── */
   .toast-popup {
     top: max(72px, calc(56px + env(safe-area-inset-top, 16px)));
-  }
-
-  /* ── 18. Typing indicator safe-area alignment ─────────────────────────────── */
-  .typing-indicator {
-    left: max(16px, env(safe-area-inset-left, 16px));
   }
 
 } /* end @supports (-webkit-touch-callout: none) */
