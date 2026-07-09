@@ -200,26 +200,9 @@
     }
 
     /* ── TYPING INDICATOR ── */
-    #fc-typing {
-      position: fixed;
-      left: 12px;
-      bottom: calc(80px + var(--safe-bottom));
-      z-index: 999999;
-      min-height: 24px;
-      padding: 6px 12px;
-      font-size: 0.76em;
-      color: var(--muted);
-      background: #33364a;
-      border: 1px solid rgba(255,255,255,0.07);
-      border-radius: 18px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-      display: none;
-      align-items: center;
-      gap: 6px;
-      pointer-events: none;
-    }
-    #fc-typing.visible { display: flex; }
-
+    /* Rendered as a real .fc-row/.fc-bubble in #fc-messages (see showTyping()),
+       so it's pixel-identical to a real incoming message. Only the dots
+       themselves need their own styles. */
     .typing-dots {
       display: flex;
       gap: 3px;
@@ -815,15 +798,6 @@
     <small style="color:var(--muted);font-size:0.8em">შეტყობინებები ავტომატურად წაიშლება 12 საათში</small>
   </div>
 
-  <!-- TYPING -->
-  <div id="fc-typing">
-    <div class="typing-dots">
-      <span></span><span></span><span></span>
-    </div>
-    <span id="fc-typing-name"></span>
-    <span>წერს...</span>
-  </div>
-
   <!-- GAME INVITE BAR -->
   <div id="fc-game-invite-bar">
     <span id="fc-game-invite-text">🎮 თამაშის მოთხოვნა</span>
@@ -967,7 +941,6 @@
   const elMessages  = $("fc-messages");
   const elEmpty     = $("fc-empty");
   const elInputBar  = $("fc-input-bar");
-  const elTyping    = $("fc-typing");
   const elInput     = $("fc-input");
   const elSend      = $("fc-send");
   const elAuth      = $("fc-auth-screen");
@@ -1326,14 +1299,33 @@
     if (seenEl) { seenEl.textContent = "✓✓"; seenEl.classList.add("is-seen"); }
   }
 
-  /* ── Typing indicator ────────────────────────────────────────── */
+  /* ── Typing indicator (inline chat bubble) ──────────────────────
+     Built as a real .fc-row/.fc-bubble and appended to #fc-messages,
+     so it looks identical to a real incoming message and sits right
+     where the friend's next message will land. hideTyping() removes
+     it outright — the four "hideTyping(); appendMessage(...)" call
+     sites below then drop the real message into that same spot. */
   function showTyping() {
-    $("fc-typing-name").textContent = friendName;
-    elTyping.classList.add("visible");
+    if ($("fcLiveTyping")) { scrollToBottom(); return; } // already showing
+    const row = document.createElement("div");
+    row.className = "fc-row";
+    row.id = "fcLiveTyping";
+
+    const wrap = document.createElement("div");
+    wrap.className = "fc-bubble-wrap";
+
+    const bubble = document.createElement("div");
+    bubble.className = "fc-bubble";
+    bubble.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+
+    wrap.appendChild(bubble);
+    row.appendChild(wrap);
+    elMessages.appendChild(row);
     scrollToBottom();
   }
   function hideTyping() {
-    elTyping.classList.remove("visible");
+    const row = $("fcLiveTyping");
+    if (row) row.remove();
   }
 
   /* ── Send message ────────────────────────────────────────────── */
