@@ -56,7 +56,14 @@
     });
   }
 
-  renderAvatarGrid($("signup-avatar-grid"), signupSelectedAvatar, file => { signupSelectedAvatar = file; });
+  // ── Avatar grid rendering (PATCH: only render once) ───────────────────────────
+  const avatarGridEl = $("signup-avatar-grid");
+  if (avatarGridEl && !avatarGridEl.dataset.rendered) {
+    renderAvatarGrid(avatarGridEl, signupSelectedAvatar, file => {
+      signupSelectedAvatar = file;
+    });
+    avatarGridEl.dataset.rendered = "true";
+  }
 
   /* ── State ───────────────────────────────────────────────────────── */
   let authUser = null;    // { username, token, friends:[], pendingRequests:[], avatar }
