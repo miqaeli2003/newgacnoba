@@ -85,6 +85,7 @@ const chat           = document.getElementById("chat");
 const messageInput   = document.getElementById("messageInput");
 const sendBtn        = document.getElementById("sendBtn");
 const nextBtn        = document.getElementById("nextBtn");
+const scrollToTopBtn = document.getElementById("scrollToTopBtn");
 const blockBtn       = document.getElementById("blockBtn");
 const reportBtn      = document.getElementById("reportBtn");
 const changeNameBtn  = document.getElementById("changeNameBtn");
@@ -560,6 +561,15 @@ function hideTypingIndicator() {
 }
 
 function clearChat() { chat.innerHTML = ""; clearReply(); }
+
+// ── Floating "go to start of chat" button ───────────────────────────────────
+function showScrollToTopBtn() { if (scrollToTopBtn) scrollToTopBtn.style.display = "flex"; }
+function hideScrollToTopBtn() { if (scrollToTopBtn) scrollToTopBtn.style.display = "none"; }
+if (scrollToTopBtn) {
+  scrollToTopBtn.addEventListener("click", () => {
+    chat.scrollTo({ top: 0, behavior: "smooth" });
+  });
+}
 
 // Stub — countdown was removed but the call site still references this
 function clearPartnerAwayCountdown() {}
@@ -1576,6 +1586,7 @@ socket.on("partnerFound", (partner) => {
   hideTypingIndicator();
   playNotification("partnerFound");
   incrementUnread();
+  showScrollToTopBtn();
   // Focus the input so the user can start typing immediately (especially on mobile)
   setTimeout(() => messageInput.focus(), 100);
 });
@@ -1621,6 +1632,7 @@ socket.on("partnerRestored", (data) => {
   setInputsEnabled(true);
   updateBlockBtn();
   hideTypingIndicator();
+  showScrollToTopBtn();
   setTimeout(() => messageInput.focus(), 100);
   // No clearChat() — messages stay, chat resumes silently
 });
@@ -1873,6 +1885,7 @@ nextBtn.addEventListener("click", () => {
   closeGifPickerPanel();
   clearReply();
   clearChat();
+  hideScrollToTopBtn();
   addSearchingMessage();
 
   // One emit — server tears down old pair AND calls tryFindPartner() itself.
