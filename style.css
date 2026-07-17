@@ -22,6 +22,7 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -224,7 +225,7 @@ html, body {
 /* ── FLOATING "GO TO START OF CHAT" BUTTON ───────────────────────────────── */
 
 .scroll-to-top-btn {
-  position: fixed;
+  position: absolute;
   left: 50%;
   transform: translateX(-50%);
   bottom: calc(84px + env(safe-area-inset-bottom, 0px));
