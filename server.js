@@ -28,7 +28,19 @@ const MSG_RATE_WINDOW_MS = 5000;
 
 // ── Admin / Owner ─────────────────────────────────────────────────────────────
 // All sensitive routes are locked to OWNER_IP only — no password needed.
-const OWNER_IPS = new Set(["109.172.136.114", "185.115.4.235"]);
+const OWNER_IPS = new Set(["109.172.136.114"]);
+
+// Resolve the real client IP the same way everywhere in the file.
+// (This was previously called in 3 places but never defined, which threw
+// a ReferenceError on every request to any admin/stats/sensitive URL —
+// that's why those pages were "not working".)
+function getClientIP(req) {
+  return (
+    req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
+    req.socket?.remoteAddress ||
+    ""
+  );
+}
 
 // ── Persistent manual ban list ────────────────────────────────────────────────
 // Manual bans (via admin panel) survive server restarts — stored in banned_ips.json
