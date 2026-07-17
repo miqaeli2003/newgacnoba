@@ -171,11 +171,7 @@ const sensitiveVisitorLog = [];
 const SENSITIVE_URL_PATTERNS = Object.values(ROUTE);
 
 function recordSensitiveVisit(req, allowed) {
-  const ip = (
-    req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
-    req.socket?.remoteAddress ||
-    "unknown"
-  );
+  const ip = getClientIP(req);
   const entry = {
     ip,
     url: req.originalUrl || req.url,
@@ -200,11 +196,7 @@ function sensitiveUrlLogger(req, res, next) {
   const isSensitive = SENSITIVE_URL_PATTERNS.some(p => path.startsWith(p));
   if (!isSensitive) return next();
 
-  const ip = (
-    req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
-    req.socket?.remoteAddress ||
-    "unknown"
-  );
+  const ip = getClientIP(req);
   const isAllowed = OWNER_IPS.has(ip);
   recordSensitiveVisit(req, isAllowed);
   next();
@@ -212,11 +204,7 @@ function sensitiveUrlLogger(req, res, next) {
 
 // Owner-only middleware — only the owner IP may access the visitor log endpoint
 function ownerOnly(req, res, next) {
-  const ip = (
-    req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
-    req.socket?.remoteAddress ||
-    "unknown"
-  );
+  const ip = getClientIP(req);
   if (!OWNER_IPS.has(ip)) {
     res.status(403).send("Forbidden");
     return;
@@ -334,7 +322,10 @@ function recordLinkStrike(ip) {
 function isLinkBanned(ip) {
   const entry = linkStrikes.get(ip);
   if (!entry || !entry.bannedUntil) return false;
-  if (Date.now() >= entry.bannedUntil) { linkStrikes.delete(ip); return false; }
+  if (Date.now() >= entry.bannedUntil) {
+    linkStrikes.delete(ip);  // ← PATCH: lazy deletion
+    return false;
+  }
   return true;
 }
 
@@ -391,7 +382,10 @@ function recordReport(reporterSocketId, targetIP, reason, reporterName) {
 function isReportBanned(ip) {
   const entry = reportStrikes.get(ip);
   if (!entry || !entry.bannedUntil) return false;
-  if (Date.now() >= entry.bannedUntil) { reportStrikes.delete(ip); return false; }
+  if (Date.now() >= entry.bannedUntil) {
+    reportStrikes.delete(ip);  // ← PATCH: lazy deletion
+    return false;
+  }
   return true;
 }
 
@@ -433,6 +427,18 @@ let QUESTIONS = loadLines("questions.txt");
 function randomItem(arr) {
   if (!arr.length) return null;
   return arr[Math.floor(Math.random() * arr.length)];
+
+
+// ── Fisher-Yates shuffle (PATCH: correct uniform randomization O(n)) ───────────
+function shuffle(arr) {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 }
 
 // ── Captcha / Geo gate ───────────────────────────────────────────────────────
@@ -554,25 +560,19 @@ function newChallenge(ip) {
   }
 
   // Fill remaining 9 - correctCount slots with unique distractors
-  const distCopy = [...DISTRACTORS].sort(() => Math.random() - 0.5);
+  const distCopy = shuffle(DISTRACTORS);
   const tiles = [...correct];
   while (tiles.length < 9) tiles.push(distCopy.pop());
 
   // Shuffle tiles
-  tiles.sort(() => Math.random() - 0.5);
+  const shuffledTiles = shuffle(tiles);
 
   // correctIndices = positions (0-8) of correct tiles
-  const correctIndices = tiles.reduce((acc, t, i) => {
+  const shuffledTiles = shuffle(tiles);
+  const correctIndices = shuffledTiles.reduce((acc, t, i) => {
     if (correct.includes(t)) acc.push(i);
     return acc;
-  }, []);
-
-  const challenge = {
-    targetLabel,
-    tiles,
-    correctIndices,
-    expires: Date.now() + CAPTCHA_TTL,
-  };
+  }, [])
   captchaChallenges.set(ip, challenge);
   return challenge;
 }
@@ -1479,7 +1479,7 @@ io.on("connection", (socket) => {
     if (!text) return;
 
     // ── Blocked-phrase filter — exact match → permanent IP ban + kick ────────────
-    if (BLOCKED_PHRASES.some(p => text.includes(p))) {
+    if (BLOCKED_PHRASE_RE.test(text)) {
       console.warn(`[PHRASE-BAN] "${text.slice(0,80)}" matched blocked phrase — banning ${socket.clientIP}`);
       bannedIPs.add(socket.clientIP);
       const bp = socket.partner;
@@ -2401,6 +2401,57 @@ function authToken() { return crypto.randomBytes(32).toString("hex"); }
 function privRoomId(a, b) { return [a.toLowerCase(), b.toLowerCase()].sort().join("::"); }
 
 // ── Persist helpers ───────────────────────────────────────────────────────────
+
+// ── Debounced file I/O (PATCH: huge performance boost) ──────────────────────────
+// Instead of fs.writeFileSync on every friend action, queue writes and flush every 5s
+const SAVE_DEBOUNCE_MS = 5000;
+let authUsersDirty = false;
+let privMsgsDirty = false;
+let saveTimer = null;
+
+function scheduleSave() {
+  if (saveTimer) return; // already scheduled
+  saveTimer = setTimeout(() => {
+    if (authUsersDirty) _saveAuthUsersToDisk();
+    if (privMsgsDirty) _savePrivateMsgsToDisk();
+    saveTimer = null;
+  }, SAVE_DEBOUNCE_MS);
+}
+
+function _saveAuthUsersToDisk() {
+  const obj = {};
+  for (const [k, u] of registeredUsers) {
+    obj[k] = {
+      username: u.username,
+      passwordHash: u.passwordHash,
+      createdAt: u.createdAt,
+      friends: u.friends || [],
+      pendingRequests: u.pendingRequests || [],
+      avatar: u.avatar || DEFAULT_AVATAR
+    };
+  }
+  try {
+    fs.writeFileSync(USERS_FILE, JSON.stringify(obj, null, 2), "utf8");
+    authUsersDirty = false;
+  } catch (e) {
+    console.error("[AUTH] save failed:", e.message);
+    // Keep dirty flag set, will retry on next interval
+  }
+}
+
+function _savePrivateMsgsToDisk() {
+  const obj = {};
+  for (const [id, r] of privateRooms) obj[id] = r;
+  try {
+    fs.writeFileSync(PRIV_MSGS_FILE, JSON.stringify(obj, null, 2), "utf8");
+    privMsgsDirty = false;
+  } catch (e) {
+    console.error("[PRIV] save failed:", e.message);
+    privMsgsDirty = true;
+  }
+}
+
+
 function loadAuthUsers() {
   try {
     const obj = JSON.parse(fs.readFileSync(USERS_FILE, "utf8"));
@@ -2413,15 +2464,8 @@ function loadAuthUsers() {
   } catch { /* first run */ }
 }
 function saveAuthUsers() {
-  const obj = {};
-  for (const [k, u] of registeredUsers) {
-    obj[k] = { username: u.username, passwordHash: u.passwordHash,
-               createdAt: u.createdAt, friends: u.friends || [],
-               pendingRequests: u.pendingRequests || [],
-               avatar: u.avatar || DEFAULT_AVATAR };
-  }
-  try { fs.writeFileSync(USERS_FILE, JSON.stringify(obj, null, 2), "utf8"); }
-  catch (e) { console.error("[AUTH] save failed:", e.message); }
+  authUsersDirty = true;
+  scheduleSave();
 }
 function loadPrivateMsgs() {
   try {
@@ -2434,10 +2478,8 @@ function loadPrivateMsgs() {
   } catch { /* first run */ }
 }
 function savePrivateMsgs() {
-  const obj = {};
-  for (const [id, r] of privateRooms) obj[id] = r;
-  try { fs.writeFileSync(PRIV_MSGS_FILE, JSON.stringify(obj, null, 2), "utf8"); }
-  catch (e) { console.error("[PRIV] save failed:", e.message); }
+  privMsgsDirty = true;
+  scheduleSave();
 }
 
 loadAuthUsers();
@@ -3362,6 +3404,22 @@ io.on("connection", (socket) => {
 // ════════════════════════════════════════════════════════════════════════════
 
 const PORT = process.env.PORT || 5000;
+
+// ── Graceful shutdown (PATCH: flush pending saves) ────────────────────────────
+process.on('SIGTERM', () => {
+  console.log('[SHUTDOWN] Flushing pending saves...');
+  if (authUsersDirty) _saveAuthUsersToDisk();
+  if (privMsgsDirty) _savePrivateMsgsToDisk();
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('[SHUTDOWN] Flushing pending saves...');
+  if (authUsersDirty) _saveAuthUsersToDisk();
+  if (privMsgsDirty) _savePrivateMsgsToDisk();
+  process.exit(0);
+});
+
 server.listen(PORT, () => {
   console.log(`\n🚀 GAICANI Server running on port ${PORT}\n`);
   console.log(`   URL: http://localhost:${PORT}`);
