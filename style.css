@@ -2256,6 +2256,33 @@ html, body {
   color: #949ba4;
 }
 
+/* ── ADD-FRIEND HINT (points to the ➕ button in the top bar) ────────────── */
+
+.friend-add-hint {
+  text-align: center;
+  font-size: 0.86em;
+  font-weight: 600;
+  color: #dcddde;
+  line-height: 1.5;
+  max-width: 320px;
+  margin: 4px auto 16px;
+}
+
+.friend-add-hint .fah-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  color: #ffb547;
+  font-weight: 800;
+  animation: fahPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes fahPulse {
+  0%, 100% { text-shadow: 0 0 4px rgba(255,181,71,0.5); transform: scale(1); }
+  50%      { text-shadow: 0 0 14px rgba(255,181,71,0.95), 0 0 26px rgba(255,181,71,0.5); transform: scale(1.18); }
+}
+
 /* ── PARTNER BIO LINE ────────────────────────────────────────────────────── */
 
 .partner-bio-line {

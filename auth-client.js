@@ -290,6 +290,7 @@
     s.on("auth:partnerRegInfo", ({ partnerRegName, isFriend }) => {
       showPartnerRegBanner(partnerRegName, isFriend);
       updateAddFriendBtn(partnerRegName, isFriend);
+      if (isFriend) hideFriendAddHint(); else showFriendAddHint();
     });
 
     // ── Incoming friend request ───────────────────────────────────────
@@ -352,6 +353,7 @@
     // ── When partner disconnects, clear + hide add friend btn / banner ─
     s.on("partnerDisconnected", () => {
       hidePartnerRegBanner();
+      hideFriendAddHint();
       const addBtn = $("addFriendIconBtn");
       if (addBtn) addBtn.style.display = "none";
     });
@@ -359,6 +361,7 @@
     // ── When a new partner is found, check if they're registered ────
     s.on("partnerFound", () => {
       hidePartnerRegBanner();
+      hideFriendAddHint();
       const addBtn = $("addFriendIconBtn");
       if (addBtn) addBtn.style.display = "none";
       // Ask server if partner is a registered user (only if we're logged in)
@@ -398,6 +401,28 @@
   }
 
   /* ══════════════════════════════════════════════════════════════════
+     ADD-FRIEND HINT CARD — shown inside the chat, points to the ➕ btn
+     ══════════════════════════════════════════════════════════════════ */
+  function showFriendAddHint() {
+    hideFriendAddHint(); // no duplicates
+    const chatEl = $("chat");
+    if (!chatEl) return;
+
+    const hint = document.createElement("div");
+    hint.className = "friend-add-hint";
+    hint.id = "friendAddHint";
+    hint.innerHTML =
+      `რომ დაამატოთ პარტნიორი, სწორად დააჭირეთ ღილაკს <span class="fah-plus">➕</span>`;
+    chatEl.appendChild(hint);
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
+  function hideFriendAddHint() {
+    const hint = $("friendAddHint");
+    if (hint) hint.remove();
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
      ADD FRIEND ICON BUTTON (➕)
      ══════════════════════════════════════════════════════════════════ */
   function updateAddFriendBtn(partnerRegName, isFriend) {
@@ -418,6 +443,7 @@
       if (!authUser || !partnerRegName) return;
       authSocket?.emit("friend:request", { toUsername: partnerRegName });
       newBtn.style.display = "none";
+      hideFriendAddHint();
       showToast(`📨 მეგობრობის მოთხოვნა გაიგზავნა ${esc(partnerRegName)}-სთვის`);
     });
   }
