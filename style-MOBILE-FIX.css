@@ -12,6 +12,10 @@ html, body {
   padding: 0;
   height: 100%;
   height: 100dvh; /* Dynamic viewport height — accounts for mobile keyboard */
+  /* Fallback for browsers without dvh support (older Android WebViews,
+     some in-app/social-media browsers). keyboard-handler.js keeps this
+     in sync with the real usable viewport height via visualViewport. */
+  height: var(--app-height, 100dvh);
   font-family: -apple-system, "SF Pro Text", "Segoe UI", Arial, sans-serif;
   background: #23252f;
   color: #fff;

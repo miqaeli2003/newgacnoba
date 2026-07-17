@@ -57,13 +57,19 @@
     messageInputElement.addEventListener("focus", handleInputFocus, { passive: true });
     messageInputElement.addEventListener("blur", handleInputBlur, { passive: true });
 
-    // Window resize (keyboard open/close triggers resize)
+    // Window resize (some Android browsers don't fire visualViewport resize)
     window.addEventListener("resize", handleWindowResize, { passive: true });
 
-    // iOS specific: detect keyboard via visual viewport
-    if (isIOS) {
-      log("iOS detected, setting up visual viewport listener...");
-      window.visualViewport?.addEventListener("resize", handleVisualViewportResize, {
+    // visualViewport is the reliable way to detect the on-screen keyboard on
+    // BOTH iOS and modern Android Chrome — window.innerHeight often does not
+    // change when the Android keyboard opens, depending on the browser's
+    // interactive-widget resize mode.
+    if (window.visualViewport) {
+      log("visualViewport supported, setting up listener...");
+      window.visualViewport.addEventListener("resize", handleVisualViewportResize, {
+        passive: true,
+      });
+      window.visualViewport.addEventListener("scroll", handleVisualViewportResize, {
         passive: true,
       });
     }
@@ -73,6 +79,10 @@
 
     // Prevent double-tap zoom (improves responsiveness)
     document.addEventListener("touchstart", handleTouchStart, { passive: true });
+
+    // Keep a real viewport-height CSS var in sync as a fallback for browsers
+    // (older Android WebViews, in-app browsers) that don't support 100dvh.
+    updateAppHeight();
 
     log("Keyboard handler initialized");
   }
@@ -102,35 +112,41 @@
     }, 100);
   }
 
-  // ── Window Resize (Keyboard Detection) ─────────────────────────────────
+  // ── Window Resize (fallback for browsers without visualViewport) ──────
   function handleWindowResize() {
     const currentHeight = window.innerHeight;
     log(`Window resize: ${currentHeight}px`);
 
-    // iOS: visual viewport will be smaller when keyboard open
-    // Android: window.innerHeight will change
-    if (isIOS && window.visualViewport) {
-      const ratio = window.visualViewport.height / window.innerHeight;
-      const isOpen = ratio < 0.9; // Keyboard covers >10% of viewport
-      updateKeyboardState(isOpen);
-    } else if (isAndroid) {
-      // Android: assume keyboard is open if input is focused
+    updateAppHeight();
+
+    if (!window.visualViewport) {
+      // No visualViewport support at all — fall back to a focus-based guess.
       const isOpen = document.activeElement === messageInputElement;
       updateKeyboardState(isOpen);
+      adjustInputPosition();
     }
+  }
 
+  // ── Visual Viewport Resize (keyboard detection, iOS + Android) ────────
+  function handleVisualViewportResize() {
+    if (!window.visualViewport) return;
+    const vv = window.visualViewport;
+    const ratio = vv.height / window.innerHeight;
+    log(`Visual viewport ratio: ${ratio.toFixed(2)}`);
+
+    // Keyboard open = visual viewport meaningfully smaller than layout viewport
+    updateKeyboardState(ratio < 0.85);
+    updateAppHeight();
     adjustInputPosition();
   }
 
-  // ── Visual Viewport Resize (iOS Keyboard) ─────────────────────────────
-  function handleVisualViewportResize(e) {
-    if (!window.visualViewport) return;
-    const ratio = window.visualViewport.height / window.innerHeight;
-    log(`Visual viewport ratio: ${ratio.toFixed(2)}`);
-
-    // Keyboard open = visual viewport much smaller
-    updateKeyboardState(ratio < 0.85);
-    adjustInputPosition();
+  // ── App Height Fallback ─────────────────────────────────────────────
+  // Sets --app-height to the real usable height in px. Use this in CSS
+  // (height: var(--app-height, 100dvh)) as a safety net for browsers that
+  // don't support 100dvh (older Android WebViews, some in-app browsers).
+  function updateAppHeight() {
+    const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    document.documentElement.style.setProperty("--app-height", `${h}px`);
   }
 
   // ── Orientation Change ────────────────────────────────────────────────
