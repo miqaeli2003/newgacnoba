@@ -410,6 +410,15 @@ const BLOCKED_PHRASES = [
   
 ];
 
+// Case-insensitive regex matching any blocked phrase, escaped so special
+// regex characters in a phrase (., *, etc.) are treated literally.
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+const BLOCKED_PHRASE_RE = BLOCKED_PHRASES.length
+  ? new RegExp(BLOCKED_PHRASES.map(escapeRegExp).join("|"), "i")
+  : /(?!)/; // matches nothing if the list is empty
+
 // Phone number pattern — bots often drop numbers when links are blocked
 const PHONE_RE = /(?:\+?[0-9]{1,3}[\s\-.]?)?(?:\(?\d{3}\)?[\s\-.]?)[\d\s\-.]{6,}/g;
 
@@ -3413,6 +3422,18 @@ io.on("connection", (socket) => {
 const PORT = process.env.PORT || 5000;
 
 // ── Graceful shutdown (PATCH: flush pending saves) ────────────────────────────
+// ── Crash safety net ──────────────────────────────────────────────────────────
+// A thrown error inside a socket event handler (like the BLOCKED_PHRASE_RE bug)
+// otherwise kills the ENTIRE process and disconnects everyone. Log it instead
+// and keep the server alive. This does NOT replace fixing the actual bug —
+// it just stops one bad message from taking the whole site down.
+process.on('uncaughtException', (err) => {
+  console.error('[UNCAUGHT EXCEPTION] Server stayed alive despite this error:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[UNHANDLED REJECTION] Server stayed alive despite this rejection:', reason);
+});
+
 process.on('SIGTERM', () => {
   console.log('[SHUTDOWN] Flushing pending saves...');
   if (authUsersDirty) _saveAuthUsersToDisk();
