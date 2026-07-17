@@ -242,7 +242,7 @@ html, body {
 
 .message-content {
   max-width: 100%;
-  min-width: 52px; /* keeps short messages (e.g. "hi") from shrinking into a near-square/circle shape */
+  min-width: 60px; /* keeps short messages (e.g. "hi") from shrinking into a near-square/circle shape */
   box-sizing: border-box;
   padding: 10px 14px;
   border-radius: 20px;
@@ -257,7 +257,7 @@ html, body {
 .message-content.you {
   background: linear-gradient(135deg, #5865f2 0%, #4752c4 100%);
   color: white;
-  box-shadow: 0 2px 8px rgba(88,101,242,0.35);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3); /* was a wide, soft, colour-matched glow that blurred the bubble's straight edges into a round blob look; now a tight neutral shadow like the received bubble */
 }
 
 /* ── SEEN STATUS ─────────────────────────────────────────────────────────── */
