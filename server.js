@@ -568,11 +568,18 @@ function newChallenge(ip) {
   const shuffledTiles = shuffle(tiles);
 
   // correctIndices = positions (0-8) of correct tiles
-  const shuffledTiles = shuffle(tiles);
   const correctIndices = shuffledTiles.reduce((acc, t, i) => {
     if (correct.includes(t)) acc.push(i);
     return acc;
-  }, [])
+  }, []);
+
+  const challenge = {
+    targetLabel,
+    tiles: shuffledTiles,
+    correctIndices,
+    expires: Date.now() + 5 * 60 * 1000, // 5 min to solve
+  };
+
   captchaChallenges.set(ip, challenge);
   return challenge;
 }
