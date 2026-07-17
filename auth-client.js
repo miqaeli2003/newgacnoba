@@ -290,7 +290,7 @@
     s.on("auth:partnerRegInfo", ({ partnerRegName, isFriend }) => {
       showPartnerRegBanner(partnerRegName, isFriend);
       updateAddFriendBtn(partnerRegName, isFriend);
-      if (isFriend) hideFriendAddHint(); else showFriendAddHint();
+      if (isFriend) hideFriendAddHint(); else showFriendAddHint(partnerRegName);
     });
 
     // ── Incoming friend request ───────────────────────────────────────
@@ -401,20 +401,39 @@
   }
 
   /* ══════════════════════════════════════════════════════════════════
+     SHARED: actually send the friend request (used by both the header
+     ➕ button and the glowing ➕ inside the in-chat hint)
+     ══════════════════════════════════════════════════════════════════ */
+  function sendFriendRequestTo(partnerRegName) {
+    if (!authUser || !partnerRegName) return;
+    authSocket?.emit("friend:request", { toUsername: partnerRegName });
+    const addBtn = $("addFriendIconBtn");
+    if (addBtn) addBtn.style.display = "none";
+    hideFriendAddHint();
+    showToast(`📨 მეგობრობის მოთხოვნა გაიგზავნა ${esc(partnerRegName)}-სთვის`);
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
      ADD-FRIEND HINT CARD — shown inside the chat, points to the ➕ btn
      ══════════════════════════════════════════════════════════════════ */
-  function showFriendAddHint() {
+  function showFriendAddHint(partnerRegName) {
     hideFriendAddHint(); // no duplicates
     const chatEl = $("chat");
-    if (!chatEl) return;
+    if (!chatEl || !partnerRegName) return;
 
     const hint = document.createElement("div");
     hint.className = "friend-add-hint";
     hint.id = "friendAddHint";
     hint.innerHTML =
-      `რომ დაამატოთ პარტნიორი, სწორად დააჭირეთ ღილაკს <span class="fah-plus">➕</span>`;
+      `რომ დაამატოთ პარტნიორი, სწორად დააჭირეთ ღილაკს <span class="fah-plus" id="fahPlusBtn">➕</span>`;
     chatEl.appendChild(hint);
     chatEl.scrollTop = chatEl.scrollHeight;
+
+    const plusBtn = hint.querySelector("#fahPlusBtn");
+    if (plusBtn) {
+      plusBtn.style.cursor = "pointer";
+      plusBtn.addEventListener("click", () => sendFriendRequestTo(partnerRegName));
+    }
   }
 
   function hideFriendAddHint() {
@@ -440,11 +459,7 @@
     btn.parentNode.replaceChild(newBtn, btn);
 
     newBtn.addEventListener("click", () => {
-      if (!authUser || !partnerRegName) return;
-      authSocket?.emit("friend:request", { toUsername: partnerRegName });
-      newBtn.style.display = "none";
-      hideFriendAddHint();
-      showToast(`📨 მეგობრობის მოთხოვნა გაიგზავნა ${esc(partnerRegName)}-სთვის`);
+      sendFriendRequestTo(partnerRegName);
     });
   }
 
