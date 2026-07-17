@@ -564,7 +564,6 @@ function clearChat() { chat.innerHTML = ""; clearReply(); }
 
 // ── Floating "go to start of chat" button ───────────────────────────────────
 function showScrollToTopBtn() { if (scrollToTopBtn) scrollToTopBtn.style.display = "flex"; }
-function hideScrollToTopBtn() { if (scrollToTopBtn) scrollToTopBtn.style.display = "none"; }
 if (scrollToTopBtn) {
   scrollToTopBtn.addEventListener("click", () => {
     chat.scrollTo({ top: 0, behavior: "smooth" });
@@ -1885,7 +1884,6 @@ nextBtn.addEventListener("click", () => {
   closeGifPickerPanel();
   clearReply();
   clearChat();
-  hideScrollToTopBtn();
   addSearchingMessage();
 
   // One emit — server tears down old pair AND calls tryFindPartner() itself.
