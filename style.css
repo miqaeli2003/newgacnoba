@@ -164,6 +164,32 @@ html, body {
 .btn-icon  { display: none; }
 .btn-label { display: inline; }
 
+/* ── INTERESTS / BIO BUTTON ──────────────────────────────────────────────── */
+/* NOTE: moved here (above the mobile media query) so its desktop sizing
+   can no longer override the mobile-compact version defined further down
+   in the @media (max-width: 600px) block. Previously this rule lived near
+   the end of the file, after the media query, which meant source order
+   made it win on every screen size and defeated the mobile layout. */
+
+.interests-btn {
+  border: none;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: filter 0.18s ease, transform 0.12s ease;
+  touch-action: manipulation;
+  background: linear-gradient(135deg, #3ba55c 0%, #2d8a4e 100%);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(59,165,92,0.3);
+}
+.interests-btn:hover { filter: brightness(1.1); }
+.interests-btn.has-bio {
+  background: linear-gradient(135deg, #3ba55c 0%, #2d8a4e 100%);
+  box-shadow: 0 0 0 2px rgba(59,165,92,0.4), 0 2px 8px rgba(59,165,92,0.3);
+}
+
 /* ── CHAT AREA ─────────────────────────────────────────────────────────── */
 
 .chat-container {
@@ -2030,27 +2056,6 @@ html, body {
 .toast-popup.toast-visible {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
-}
-
-/* ── INTERESTS / BIO BUTTON ──────────────────────────────────────────────── */
-
-.interests-btn {
-  border: none;
-  padding: 8px 14px;
-  border-radius: 10px;
-  font-weight: 700;
-  font-size: 0.9em;
-  cursor: pointer;
-  transition: filter 0.18s ease, transform 0.12s ease;
-  touch-action: manipulation;
-  background: linear-gradient(135deg, #3ba55c 0%, #2d8a4e 100%);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(59,165,92,0.3);
-}
-.interests-btn:hover { filter: brightness(1.1); }
-.interests-btn.has-bio {
-  background: linear-gradient(135deg, #3ba55c 0%, #2d8a4e 100%);
-  box-shadow: 0 0 0 2px rgba(59,165,92,0.4), 0 2px 8px rgba(59,165,92,0.3);
 }
 
 /* ── BIO POPUP ───────────────────────────────────────────────────────────── */
