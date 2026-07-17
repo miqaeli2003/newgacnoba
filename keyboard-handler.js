@@ -245,6 +245,7 @@
       "width": "device-width",
       "initial-scale": "1",
       "viewport-fit": "cover",
+      "interactive-widget": "resizes-content",
       "user-scalable": "no",
       "maximum-scale": "1",
       "minimum-scale": "1",
