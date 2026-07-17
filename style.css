@@ -242,6 +242,8 @@ html, body {
 
 .message-content {
   max-width: 100%;
+  min-width: 52px; /* keeps short messages (e.g. "hi") from shrinking into a near-square/circle shape */
+  box-sizing: border-box;
   padding: 10px 14px;
   border-radius: 20px;
   font-size: 15px;
