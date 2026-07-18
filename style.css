@@ -3,25 +3,25 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+html {
+  background: #1c1e24;
+}
+
 html, body {
   margin: 0;
   padding: 0;
-  /* Dynamic viewport height so the page shrinks to the REAL visible area
-     when the on-screen keyboard opens (Android + iOS), instead of staying
-     sized to the full un-shrunk layout viewport and leaving a dead gap
-     between the last chat message and the input bar above the keyboard.
-     --app-height is kept in sync with visualViewport.height by
-     keyboard-handler.js; browsers without JS/var()/dvh support just fall
-     back to the previous line, so this is safe everywhere. */
-  height: 100%;
-  height: 100dvh;
-  height: var(--app-height, 100dvh);
+  /* No forced height here on purpose. The page is only as tall as its
+     content (header + messages + input). Short chats end right after the
+     input with no leftover space; long chats simply make the page taller
+     than one screen and the page scrolls normally, with .chat-input
+     staying pinned via position:sticky. */
   font-family: -apple-system, "SF Pro Text", "Segoe UI", Arial, sans-serif;
-  background: #23252f;
+  background: #1c1e24;
   color: #fff;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   position: relative;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -204,16 +204,11 @@ html, body {
 /* ── CHAT AREA ─────────────────────────────────────────────────────────── */
 
 .chat-container {
-  flex: 0 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
+  flex: 0 0 auto;
   padding: 15px;
   padding-bottom: 15px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
   gap: 2px;
   background: #1c1e24;
 }
@@ -1177,7 +1172,8 @@ html, body {
 /* ── INPUT BAR ─────────────────────────────────────────────────────────── */
 
 .chat-input {
-  position: relative;
+  position: sticky;
+  bottom: 0;
   flex: 0 0 auto;
   z-index: 100;
   display: flex;
@@ -2304,8 +2300,7 @@ html, body {
      since it's not fixed. Just ensure the chat area still scrolls nicely. */
   .chat-container {
     padding-top: 10px;
-    /* Extra bottom room so last message isn't hidden behind input bar */
-    padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: 10px;
   }
 
   /* ── GIF on mobile: smaller and more compact ── */
@@ -2464,14 +2459,12 @@ html, body {
 
 @supports (-webkit-touch-callout: none) {
 
-  /* ── 1. True viewport height — use dvh where supported, fall back to 100% ──
-     html/body already use height:100%, but iOS Safari's 100vh includes the
-     address-bar chrome which causes the layout to be taller than the screen.
-     dvh = dynamic viewport height — it tracks the ACTUAL visible height.      */
-  html, body {
-    height: 100dvh;
-    min-height: 100dvh;
-  }
+  /* ── 1. iOS Safari's 100vh includes the address-bar chrome, which used to
+     cause layout issues when we forced a fixed height. Now that the page
+     itself scrolls naturally (no forced height), this isn't needed —
+     dvh only matters for the min-height fallback on html below, and we
+     deliberately don't set one (see style.css's html,body rule and the
+     comment there for why). Nothing to do here anymore. */
 
   /* ── 2. Textarea — always 16 px to prevent iOS auto-zoom on focus ────────── */
   .chat-input textarea {
@@ -2614,7 +2607,7 @@ html, body {
   @supports (-webkit-touch-callout: none) {
     /* In landscape the keyboard is almost full-height; shrink message area. */
     .chat-container {
-      padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+      padding-bottom: 10px;
     }
     /* Compact the top bar so more chat is visible */
     .top-bar {
