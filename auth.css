@@ -216,6 +216,7 @@
 .reg-menu-container {
   position: relative;
   flex-shrink: 0;
+  order: 3;
 }
 .reg-menu-btn {
   display: none;
