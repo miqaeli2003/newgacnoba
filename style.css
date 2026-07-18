@@ -48,7 +48,6 @@ html, body {
   align-items: center;
   gap: 10px;
   min-width: 0;
-  overflow: hidden;
 }
 
 .site-name {
@@ -1703,7 +1702,6 @@ html, body {
     gap: 8px;
     padding: 8px 14px 5px;
     min-width: 0;
-    overflow: hidden;
   }
 
   .site-name {
