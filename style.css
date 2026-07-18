@@ -2612,7 +2612,7 @@ html, body {
 
 /* ── iPhone landscape — extra horizontal safe-area clearance ─────────────────
    @supports alone is enough; the orientation media query handles landscape.    */
-@media screen and (orientation: landscape) and (max-height: 500px) {
+@media screen and (orientation: landscape) and (max-height: 500px) and (min-width: 560px) {
   @supports (-webkit-touch-callout: none) {
     /* In landscape the keyboard is almost full-height; shrink message area. */
     .chat-container {

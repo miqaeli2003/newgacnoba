@@ -171,7 +171,7 @@ html, body {
    LANDSCAPE PHONES
    ════════════════════════════════════════════════════════════════════════════ */
 
-@media (orientation: landscape) and (max-height: 500px) {
+@media (orientation: landscape) and (max-height: 500px) and (min-width: 560px) {
   .top-bar { flex-direction: row !important; height: 44px !important; }
   .right-side { width: auto !important; border-top: none; }
 }
