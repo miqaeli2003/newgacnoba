@@ -214,27 +214,23 @@
 
 /* ── Three-dot Menu ────────────────────────────────────────────────────────── */
 .reg-menu-container {
-  position: fixed;
-  top: calc(11px + env(safe-area-inset-top, 0px));
-  right: calc(12px + env(safe-area-inset-right, 0px));
-  z-index: 999999;
+  position: relative;
+  flex-shrink: 0;
 }
 .reg-menu-btn {
   display: none;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border: none;
   border-radius: 50%;
-  background: rgba(43,45,49,0.92);
+  background: rgba(255,255,255,0.08);
   border: 1px solid rgba(255,255,255,0.1);
   color: #b5bac1;
   font-size: 1.2em;
   cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.4);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  flex-shrink: 0;
   transition: background 0.15s, color 0.15s;
   letter-spacing: 0.1em;
 }

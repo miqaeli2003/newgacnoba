@@ -1735,6 +1735,8 @@ html, body {
     transition: opacity 0.2s;
   }
 
+  .reg-menu-container { order: 3; }
+
   /* Row 2: action buttons — compact strip */
   .right-side {
     display: flex;
