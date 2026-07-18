@@ -181,7 +181,7 @@ function scheduleScroll() {
   if (pendingScrollRaf) return;
   pendingScrollRaf = true;
   requestAnimationFrame(() => {
-    window.scrollTo(0, document.documentElement.scrollHeight);
+    chat.scrollTop   = chat.scrollHeight;
     pendingScrollRaf = false;
   });
 }
@@ -566,7 +566,7 @@ function clearChat() { chat.innerHTML = ""; clearReply(); }
 function showScrollToTopBtn() { if (scrollToTopBtn) scrollToTopBtn.style.display = "flex"; }
 if (scrollToTopBtn) {
   scrollToTopBtn.addEventListener("click", () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    chat.scrollTo({ top: 0, behavior: "smooth" });
   });
 }
 

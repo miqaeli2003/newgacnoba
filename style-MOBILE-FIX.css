@@ -7,18 +7,22 @@
    the final word on mobile layout.
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* ── VIEWPORT HEIGHT ───────────────────────────────────────────────────────
-   No forced height/min-height here on purpose — see style.css for why.
-   .chat-input uses position:sticky for normal page scroll, and
-   keyboard-handler.js switches it to position:fixed (which positions
-   relative to the visual viewport, independent of the page's own box
-   height) only while the keyboard is actually open. Forcing body to a
-   height floor here would just reintroduce dead space below the input
-   on short chats. */
+/* ── DYNAMIC VIEWPORT HEIGHT (keeps this — it's correct) ─────────────────── */
 
 html, body {
+  height: 100%;
+  height: 100dvh;
+  height: var(--app-height, 100dvh);
   -webkit-text-size-adjust: 100%;
 }
+
+/* NOTE: body.keyboard-open must NOT set height:auto here. Doing so cancels
+   the var(--app-height) rule above at the exact moment the keyboard opens,
+   collapsing <body> down to its content height instead of the real visible
+   viewport. Since .chat-input is position:fixed, it stays correctly pinned
+   above the keyboard either way — so the collapse just leaves a dead gap
+   between the last message and the input bar. Keep using var(--app-height)
+   in both states so .chat-container (flex:1) fills the actual visible area. */
 
 /* ── SAFE AREA (notch / gesture bar) ──────────────────────────────────────── */
 

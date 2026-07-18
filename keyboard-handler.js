@@ -204,14 +204,12 @@
 
       log("Input positioned above keyboard");
     } else {
-      // Keyboard closed: clear inline overrides so CSS's position:sticky
-      // takes over again (input sticks to the bottom of the page during
-      // scroll, but doesn't force extra space on short chats).
-      chatInput.style.position = "";
-      chatInput.style.bottom = "";
-      chatInput.style.left = "";
-      chatInput.style.right = "";
-      chatInput.style.zIndex = "";
+      // Keyboard closed: return to normal flow
+      chatInput.style.position = "relative";
+      chatInput.style.bottom = "auto";
+      chatInput.style.left = "auto";
+      chatInput.style.right = "auto";
+      chatInput.style.zIndex = "50";
       chatInput.style.paddingBottom = "";
 
       log("Input returned to normal position");
@@ -224,8 +222,8 @@
 
     // Use RAF for smooth animation
     requestAnimationFrame(() => {
-      window.scrollTo(0, document.documentElement.scrollHeight);
-      log(`Scrolled to bottom (${document.documentElement.scrollHeight}px)`);
+      chatContainerElement.scrollTop = chatContainerElement.scrollHeight;
+      log(`Scrolled to bottom (${chatContainerElement.scrollHeight}px)`);
     });
   }
 
