@@ -204,13 +204,13 @@ html, body {
 /* ── CHAT AREA ─────────────────────────────────────────────────────────── */
 
 .chat-container {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   padding: 15px;
-  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: 15px;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -1177,10 +1177,8 @@ html, body {
 /* ── INPUT BAR ─────────────────────────────────────────────────────────── */
 
 .chat-input {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  position: relative;
+  flex: 0 0 auto;
   z-index: 100;
   display: flex;
   flex-direction: column;
@@ -1189,7 +1187,6 @@ html, body {
   backdrop-filter: blur(24px) saturate(1.4);
   border-top: 1px solid rgba(255,255,255,0.06);
   box-shadow: 0 -2px 20px rgba(0,0,0,0.35);
-  will-change: bottom;
 }
 
 /* ── REPLY PREVIEW BAR ───────────────────────────────────────────────────── */
@@ -2499,12 +2496,12 @@ html, body {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
-  /* ── 5. Chat container — account for the dynamic top bar + input bar ────────
-     Using dvh instead of % means it won't overflow when the address bar shows. */
+  /* ── 5. Chat container — no longer needs extra bottom clearance now that
+     the input bar sits in normal flow right after it, instead of floating
+     as a fixed overlay. Keep the safe-area padding on .chat-input itself
+     (rule 4 above) — that's what clears the Home Indicator now.            */
   .chat-container {
-    /* Slightly more generous bottom padding so the last bubble clears
-       the input bar + home indicator on all iPhone models                      */
-    padding-bottom: calc(80px + env(safe-area-inset-bottom, 20px));
+    padding-bottom: 15px;
   }
 
   /* ── 6. Scroll momentum — critical for natural iOS feel ─────────────────── */
