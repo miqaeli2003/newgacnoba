@@ -1586,8 +1586,6 @@ socket.on("partnerFound", (partner) => {
   playNotification("partnerFound");
   incrementUnread();
   showScrollToTopBtn();
-  // Focus the input so the user can start typing immediately (especially on mobile)
-  setTimeout(() => messageInput.focus(), 100);
 });
 
 // Reconnect grace-period events
@@ -1615,7 +1613,6 @@ socket.on("partnerReconnected", (data) => {
   messageInput.style.pointerEvents = "";
   updateBlockBtn();
   hideTypingIndicator();
-  setTimeout(() => messageInput.focus(), 100);
 });
 
 // Own socket restored to previous partner after reconnecting
@@ -1632,7 +1629,6 @@ socket.on("partnerRestored", (data) => {
   updateBlockBtn();
   hideTypingIndicator();
   showScrollToTopBtn();
-  setTimeout(() => messageInput.focus(), 100);
   // No clearChat() — messages stay, chat resumes silently
 });
 
