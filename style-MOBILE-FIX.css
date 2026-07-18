@@ -56,14 +56,12 @@ html, body {
     padding: 0 !important;
     padding-top: max(0px, env(safe-area-inset-top)) !important;
     gap: 0 !important;
-    overflow: hidden;
   }
 
   .left-side {
     padding: 8px 14px 5px !important;
     gap: 8px !important;
     min-width: 0;
-    overflow: hidden;
   }
 
   .right-side {
