@@ -181,7 +181,7 @@ function scheduleScroll() {
   if (pendingScrollRaf) return;
   pendingScrollRaf = true;
   requestAnimationFrame(() => {
-    chat.scrollTop   = chat.scrollHeight;
+    window.scrollTo(0, document.documentElement.scrollHeight);
     pendingScrollRaf = false;
   });
 }
@@ -566,7 +566,7 @@ function clearChat() { chat.innerHTML = ""; clearReply(); }
 function showScrollToTopBtn() { if (scrollToTopBtn) scrollToTopBtn.style.display = "flex"; }
 if (scrollToTopBtn) {
   scrollToTopBtn.addEventListener("click", () => {
-    chat.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   });
 }
 
@@ -748,19 +748,30 @@ function updateViewportOffsets() {
   const vv  = window.visualViewport;
   const kbH = getKeyboardHeight();
 
-  // ── iOS Safari: use the actual visual-viewport height to clamp the body ──
-  // This prevents the layout from overflowing when the address bar is visible.
-  document.body.style.height = kbH > 0 ? vv.height + "px" : "";
+  // NOTE: no longer force-setting document.body.style.height here. The page
+  // now sizes itself naturally to its content (see style.css), so clamping
+  // body to the visual viewport isn't needed — and doing so via inline style
+  // would override that natural sizing even when kbH is just toolbar/address
+  // bar jitter rather than an actual open keyboard.
 
   // Toggle a class so CSS can zoom out messages slightly when keyboard is open.
   // Use a small threshold (> 80) to avoid triggering on iOS toolbar-resize jitter.
   document.body.classList.toggle("keyboard-open", kbH > 80);
 
-  // Input bar is position:fixed (layout-viewport coords) so it needs shifting
-  // up by the full keyboard height (Safari accessory bar included).
-  // When keyboard is closed, reset to 0 so CSS env(safe-area-inset-bottom) takes over.
-  chatInputBar.style.bottom     = kbH > 0 ? kbH + "px" : "";
-  chatInputBar.style.transition = kbH === 0 ? "bottom 0.22s ease" : "none";
+  // Input bar: only nudge it manually when the keyboard is genuinely open
+  // (kbH > 80, matching the threshold above). keyboard-handler.js switches
+  // .chat-input to position:fixed at that point; this covers the iOS Safari
+  // case where a fixed element still needs a manual offset to clear the
+  // keyboard, since fixed positioning uses the layout viewport, not the
+  // visual one. When the keyboard's closed, clear the offset so CSS's
+  // position:sticky (and env(safe-area-inset-bottom)) takes over.
+  if (kbH > 80) {
+    chatInputBar.style.bottom = kbH + "px";
+    chatInputBar.style.transition = "none";
+  } else {
+    chatInputBar.style.bottom = "";
+    chatInputBar.style.transition = "bottom 0.22s ease";
+  }
 
   // GIF picker: bottom sheet sits flush above keyboard
   if (gifPickerOpen) {
