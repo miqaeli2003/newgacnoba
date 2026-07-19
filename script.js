@@ -85,6 +85,7 @@ const chat           = document.getElementById("chat");
 const messageInput   = document.getElementById("messageInput");
 const sendBtn        = document.getElementById("sendBtn");
 const nextBtn        = document.getElementById("nextBtn");
+const scrollToTopBtn = document.getElementById("scrollToTopBtn");
 const blockBtn       = document.getElementById("blockBtn");
 const reportBtn      = document.getElementById("reportBtn");
 const changeNameBtn  = document.getElementById("changeNameBtn");
@@ -560,6 +561,14 @@ function hideTypingIndicator() {
 }
 
 function clearChat() { chat.innerHTML = ""; clearReply(); }
+
+// ── Floating "go to start of chat" button ───────────────────────────────────
+function showScrollToTopBtn() { if (scrollToTopBtn) scrollToTopBtn.style.display = "flex"; }
+if (scrollToTopBtn) {
+  scrollToTopBtn.addEventListener("click", () => {
+    chat.scrollTo({ top: 0, behavior: "smooth" });
+  });
+}
 
 // Stub — countdown was removed but the call site still references this
 function clearPartnerAwayCountdown() {}
@@ -1576,8 +1585,7 @@ socket.on("partnerFound", (partner) => {
   hideTypingIndicator();
   playNotification("partnerFound");
   incrementUnread();
-  // Focus the input so the user can start typing immediately (especially on mobile)
-  setTimeout(() => messageInput.focus(), 100);
+  showScrollToTopBtn();
 });
 
 // Reconnect grace-period events
@@ -1605,7 +1613,6 @@ socket.on("partnerReconnected", (data) => {
   messageInput.style.pointerEvents = "";
   updateBlockBtn();
   hideTypingIndicator();
-  setTimeout(() => messageInput.focus(), 100);
 });
 
 // Own socket restored to previous partner after reconnecting
@@ -1621,7 +1628,7 @@ socket.on("partnerRestored", (data) => {
   setInputsEnabled(true);
   updateBlockBtn();
   hideTypingIndicator();
-  setTimeout(() => messageInput.focus(), 100);
+  showScrollToTopBtn();
   // No clearChat() — messages stay, chat resumes silently
 });
 

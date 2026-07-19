@@ -6,13 +6,23 @@
 html, body {
   margin: 0;
   padding: 0;
+  /* Dynamic viewport height so the page shrinks to the REAL visible area
+     when the on-screen keyboard opens (Android + iOS), instead of staying
+     sized to the full un-shrunk layout viewport and leaving a dead gap
+     between the last chat message and the input bar above the keyboard.
+     --app-height is kept in sync with visualViewport.height by
+     keyboard-handler.js; browsers without JS/var()/dvh support just fall
+     back to the previous line, so this is safe everywhere. */
   height: 100%;
+  height: 100dvh;
+  height: var(--app-height, 100dvh);
   font-family: -apple-system, "SF Pro Text", "Segoe UI", Arial, sans-serif;
   background: #23252f;
   color: #fff;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -31,6 +41,8 @@ html, body {
   padding: 0 18px;
   border-bottom: 1px solid rgba(255,255,255,0.06);
   box-shadow: 0 1px 0 rgba(0,0,0,0.3);
+  position: relative;
+  z-index: 300;
 }
 
 .left-side {
@@ -38,7 +50,6 @@ html, body {
   align-items: center;
   gap: 10px;
   min-width: 0;
-  overflow: hidden;
 }
 
 .site-name {
@@ -164,6 +175,32 @@ html, body {
 .btn-icon  { display: none; }
 .btn-label { display: inline; }
 
+/* ── INTERESTS / BIO BUTTON ──────────────────────────────────────────────── */
+/* NOTE: moved here (above the mobile media query) so its desktop sizing
+   can no longer override the mobile-compact version defined further down
+   in the @media (max-width: 600px) block. Previously this rule lived near
+   the end of the file, after the media query, which meant source order
+   made it win on every screen size and defeated the mobile layout. */
+
+.interests-btn {
+  border: none;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: filter 0.18s ease, transform 0.12s ease;
+  touch-action: manipulation;
+  background: linear-gradient(135deg, #3ba55c 0%, #2d8a4e 100%);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(59,165,92,0.3);
+}
+.interests-btn:hover { filter: brightness(1.1); }
+.interests-btn.has-bio {
+  background: linear-gradient(135deg, #3ba55c 0%, #2d8a4e 100%);
+  box-shadow: 0 0 0 2px rgba(59,165,92,0.4), 0 2px 8px rgba(59,165,92,0.3);
+}
+
 /* ── CHAT AREA ─────────────────────────────────────────────────────────── */
 
 .chat-container {
@@ -185,6 +222,34 @@ html, body {
   background: #22242c;
   border-radius: 10px;
 }
+
+/* ── FLOATING "GO TO START OF CHAT" BUTTON ───────────────────────────────── */
+
+.scroll-to-top-btn {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  z-index: 150;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(88, 101, 242, 0.92);
+  color: #fff;
+  font-size: 1.3em;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  transition: transform 0.15s, background 0.15s, opacity 0.15s;
+}
+.scroll-to-top-btn:hover   { background: rgba(88, 101, 242, 1); }
+.scroll-to-top-btn:active  { transform: translateX(-50%) scale(0.92); }
 
 /* ── MESSAGE WRAPPER ─────────────────────────────────────────────────────── */
 
@@ -216,6 +281,8 @@ html, body {
 
 .message-content {
   max-width: 100%;
+  min-width: 60px; /* keeps short messages (e.g. "hi") from shrinking into a near-square/circle shape */
+  box-sizing: border-box;
   padding: 10px 14px;
   border-radius: 20px;
   font-size: 15px;
@@ -229,7 +296,7 @@ html, body {
 .message-content.you {
   background: linear-gradient(135deg, #5865f2 0%, #4752c4 100%);
   color: white;
-  box-shadow: 0 2px 8px rgba(88,101,242,0.35);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3); /* was a wide, soft, colour-matched glow that blurred the bubble's straight edges into a round blob look; now a tight neutral shadow like the received bubble */
 }
 
 /* ── SEEN STATUS ─────────────────────────────────────────────────────────── */
@@ -1637,7 +1704,6 @@ html, body {
     gap: 8px;
     padding: 8px 14px 5px;
     min-width: 0;
-    overflow: hidden;
   }
 
   .site-name {
@@ -1668,6 +1734,8 @@ html, body {
     order: 1;
     transition: opacity 0.2s;
   }
+
+  .reg-menu-container { order: 3; }
 
   /* Row 2: action buttons — compact strip */
   .right-side {
@@ -2032,27 +2100,6 @@ html, body {
   transform: translateX(-50%) translateY(0);
 }
 
-/* ── INTERESTS / BIO BUTTON ──────────────────────────────────────────────── */
-
-.interests-btn {
-  border: none;
-  padding: 8px 14px;
-  border-radius: 10px;
-  font-weight: 700;
-  font-size: 0.9em;
-  cursor: pointer;
-  transition: filter 0.18s ease, transform 0.12s ease;
-  touch-action: manipulation;
-  background: linear-gradient(135deg, #3ba55c 0%, #2d8a4e 100%);
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(59,165,92,0.3);
-}
-.interests-btn:hover { filter: brightness(1.1); }
-.interests-btn.has-bio {
-  background: linear-gradient(135deg, #3ba55c 0%, #2d8a4e 100%);
-  box-shadow: 0 0 0 2px rgba(59,165,92,0.4), 0 2px 8px rgba(59,165,92,0.3);
-}
-
 /* ── BIO POPUP ───────────────────────────────────────────────────────────── */
 
 .bio-popup {
@@ -2209,6 +2256,33 @@ html, body {
 .pfc-status {
   font-size: 0.85em;
   color: #949ba4;
+}
+
+/* ── ADD-FRIEND HINT (points to the ➕ button in the top bar) ────────────── */
+
+.friend-add-hint {
+  text-align: center;
+  font-size: 0.86em;
+  font-weight: 600;
+  color: #dcddde;
+  line-height: 1.5;
+  max-width: 320px;
+  margin: 4px auto 16px;
+}
+
+.friend-add-hint .fah-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  color: #ffb547;
+  font-weight: 800;
+  animation: fahPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes fahPulse {
+  0%, 100% { text-shadow: 0 0 4px rgba(255,181,71,0.5); transform: scale(1); }
+  50%      { text-shadow: 0 0 14px rgba(255,181,71,0.95), 0 0 26px rgba(255,181,71,0.5); transform: scale(1.18); }
 }
 
 /* ── PARTNER BIO LINE ────────────────────────────────────────────────────── */
@@ -2538,7 +2612,7 @@ html, body {
 
 /* ── iPhone landscape — extra horizontal safe-area clearance ─────────────────
    @supports alone is enough; the orientation media query handles landscape.    */
-@media screen and (orientation: landscape) and (max-height: 500px) {
+@media screen and (orientation: landscape) and (max-height: 500px) and (min-width: 560px) {
   @supports (-webkit-touch-callout: none) {
     /* In landscape the keyboard is almost full-height; shrink message area. */
     .chat-container {
