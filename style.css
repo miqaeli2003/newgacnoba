@@ -52,6 +52,41 @@ html, body {
   min-width: 0;
 }
 
+
+.desktop-prompt {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #2b2d31;
+  color: #fff;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  z-index: 9999;
+  font-size: 14px;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.3);
+}
+.desktop-prompt-actions button {
+  margin-left: 8px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+#desktopPromptYes {
+  background: #5865f2;
+  color: #fff;
+}
+#desktopPromptNo {
+  background: #40444b;
+  color: #ccc;
+}
+
+
+
 .site-name {
   font-weight: 800;
   font-size: 1.2em;
