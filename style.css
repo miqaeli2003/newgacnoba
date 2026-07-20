@@ -1946,19 +1946,13 @@ html, body {
 /* ── KEYBOARD-OPEN: mobile-only tightening ──────────────────────────────── */
 @media (max-width: 600px) {
   .keyboard-open .chat-container {
-    /* No env(safe-area-inset-bottom) here — the keyboard occupies that
-       area while it's open, so the inset would only add dead space above
-       the input bar. This value should track the input bar's actual
-       height below (7px + 7px padding + row content); adjust both
-       together if the row's content height changes. */
-    padding-bottom: 68px;
+    padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
   }
 
   /* Keep input bar flush & comfortable while keyboard is up */
   .keyboard-open .chat-input-row {
     padding-top: 7px;
-    /* No env(safe-area-inset-bottom) — see note above. */
-    padding-bottom: 7px;
+    padding-bottom: calc(7px + env(safe-area-inset-bottom, 0px));
   }
 
   /* Slightly compact message bubbles so more fit on screen */
@@ -2475,17 +2469,10 @@ html, body {
   /* ── 1. True viewport height — use dvh where supported, fall back to 100% ──
      html/body already use height:100%, but iOS Safari's 100vh includes the
      address-bar chrome which causes the layout to be taller than the screen.
-     dvh = dynamic viewport height — it tracks the ACTUAL visible height.
-     IMPORTANT: this must reference var(--app-height, ...) like the base
-     rule near the top of the file, NOT a bare 100dvh. This selector has
-     the same specificity as that base rule and comes later in the file,
-     so a bare 100dvh here was winning the cascade on every iOS browser —
-     silently overriding the keyboard-handler.js-driven --app-height and
-     re-introducing the dead gap above the keyboard that --app-height
-     exists to prevent. */
+     dvh = dynamic viewport height — it tracks the ACTUAL visible height.      */
   html, body {
-    height: var(--app-height, 100dvh);
-    min-height: var(--app-height, 100dvh);
+    height: 100dvh;
+    min-height: 100dvh;
   }
 
   /* ── 2. Textarea — always 16 px to prevent iOS auto-zoom on focus ────────── */
@@ -2627,12 +2614,9 @@ html, body {
    @supports alone is enough; the orientation media query handles landscape.    */
 @media screen and (orientation: landscape) and (max-height: 500px) and (min-width: 560px) {
   @supports (-webkit-touch-callout: none) {
-    /* In landscape the keyboard is almost full-height; shrink message area.
-       No env(safe-area-inset-bottom) — same reasoning as the portrait
-       .keyboard-open rule above: the keyboard, not the home indicator,
-       occupies that space here. */
+    /* In landscape the keyboard is almost full-height; shrink message area. */
     .chat-container {
-      padding-bottom: 68px;
+      padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
     }
     /* Compact the top bar so more chat is visible */
     .top-bar {
