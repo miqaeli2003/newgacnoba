@@ -42,6 +42,19 @@
     body.reg-user #reportBtn,
     body.reg-user #gameBtn,
     body.reg-user #changeNameBtn { display: none !important; }
+
+    /* ── Mobile Keyboard Optimization ──────────────────────────────────
+       When keyboard opens on mobile, it sits ABOVE the input bar.
+       No extra padding needed — keyboard occupies safe area automatically. */
+    @media (max-width: 600px) {
+      body.keyboard-open {
+        overflow: hidden;
+      }
+      
+      .keyboard-open .chat-container {
+        padding-bottom: 0 !important;
+      }
+    }
   </style>
 </head>
 <body>
