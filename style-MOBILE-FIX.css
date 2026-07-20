@@ -1,193 +1,347 @@
-/* ════════════════════════════════════════════════════════════════════════════
-   GAICANI MOBILE FIX v2 — single source of truth for mobile layout
-   Loads LAST (after style.css / games.css / auth.css) on purpose, so every
-   rule in here is written to WIN the cascade. Where a rule needs to survive
-   no matter what gets added later to style.css, it uses !important —
-   that's intentional here, not sloppiness: this file's whole job is to be
-   the final word on mobile layout.
-   ════════════════════════════════════════════════════════════════════════════ */
+/**
+ * ═════════════════════════════════════════════════════════════════════════════
+ * KEYBOARD HANDLER — Mobile-Optimized Viewport & Input Management
+ * ═════════════════════════════════════════════════════════════════════════════
+ * 
+ * Features:
+ * - Detects mobile keyboard open/close
+ * - Adjusts chat input position dynamically
+ * - Prevents keyboard overlap
+ * - Smooth scroll to input on focus
+ * - Cross-browser & cross-device compatible
+ * 
+ * Usage: Add <script src="keyboard-handler.js"></script> before </body>
+ * ═════════════════════════════════════════════════════════════════════════════
+ */
 
-/* ── DYNAMIC VIEWPORT HEIGHT (keeps this — it's correct) ─────────────────── */
+(function () {
+  "use strict";
 
-html, body {
-  height: 100%;
-  height: 100dvh;
-  height: var(--app-height, 100dvh);
-  -webkit-text-size-adjust: 100%;
-}
+  const DEBUG = false; // Set to true to see console logs
 
-/* NOTE: body.keyboard-open must NOT set height:auto here. Doing so cancels
-   the var(--app-height) rule above at the exact moment the keyboard opens,
-   collapsing <body> down to its content height instead of the real visible
-   viewport. Since .chat-input is position:fixed, it stays correctly pinned
-   above the keyboard either way — so the collapse just leaves a dead gap
-   between the last message and the input bar. Keep using var(--app-height)
-   in both states so .chat-container (flex:1) fills the actual visible area. */
+  // ── State ─────────────────────────────────────────────────────────────────
+  let keyboardOpen = false;
+  let originalScrollY = 0;
+  let chatInputElement = null;
+  let messageInputElement = null;
+  let chatContainerElement = null;
 
-/* ── SAFE AREA (notch / gesture bar) ──────────────────────────────────────── */
+  // Device detection
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent
+  );
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const isAndroid = /Android/.test(navigator.userAgent);
 
-@supports (padding: max(0px)) {
-  body {
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
-  }
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
-   PHONE LAYOUT — single breakpoint, matches style.css's 600px so both
-   files agree on when "mobile mode" starts.
-   ════════════════════════════════════════════════════════════════════════════ */
-
-@media (max-width: 600px) {
-
-  /* Hard guarantee: nothing in the top bar can ever push past the viewport
-     edge, no matter what gets added to style.css later. */
-  .top-bar,
-  .left-side,
-  .right-side {
-    max-width: 100vw !important;
-    box-sizing: border-box !important;
+  function log(...args) {
+    if (DEBUG) console.log("[KeyboardHandler]", ...args);
   }
 
-  .top-bar {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    height: auto !important;
-    padding: 0 !important;
-    padding-top: max(0px, env(safe-area-inset-top)) !important;
-    gap: 0 !important;
+  // ── Initialize ────────────────────────────────────────────────────────────
+  function init() {
+    log("Initializing keyboard handler...");
+
+    chatInputElement = document.querySelector(".chat-input");
+    messageInputElement = document.getElementById("messageInput");
+    chatContainerElement = document.querySelector(".chat-container");
+
+    if (!chatInputElement || !messageInputElement) {
+      log("Required elements not found, retrying in 100ms...");
+      setTimeout(init, 100);
+      return;
+    }
+
+    log("Elements found, setting up listeners...");
+
+    // Focus/blur on input
+    messageInputElement.addEventListener("focus", handleInputFocus, { passive: true });
+    messageInputElement.addEventListener("blur", handleInputBlur, { passive: true });
+
+    // Window resize (some Android browsers don't fire visualViewport resize)
+    window.addEventListener("resize", handleWindowResize, { passive: true });
+
+    // visualViewport is the reliable way to detect the on-screen keyboard on
+    // BOTH iOS and modern Android Chrome — window.innerHeight often does not
+    // change when the Android keyboard opens, depending on the browser's
+    // interactive-widget resize mode.
+    if (window.visualViewport) {
+      log("visualViewport supported, setting up listener...");
+      window.visualViewport.addEventListener("resize", handleVisualViewportResize, {
+        passive: true,
+      });
+      window.visualViewport.addEventListener("scroll", handleVisualViewportResize, {
+        passive: true,
+      });
+    }
+
+    // Orientation change
+    window.addEventListener("orientationchange", handleOrientationChange, { passive: true });
+
+    // Prevent double-tap zoom (improves responsiveness)
+    document.addEventListener("touchstart", handleTouchStart, { passive: true });
+
+    // Keep a real viewport-height CSS var in sync as a fallback for browsers
+    // (older Android WebViews, in-app browsers) that don't support 100dvh.
+    updateAppHeight();
+
+    log("Keyboard handler initialized");
   }
 
-  .left-side {
-    padding: 8px 14px 5px !important;
-    gap: 8px !important;
-    min-width: 0;
+  // ── Input Focus ───────────────────────────────────────────────────────────
+  function handleInputFocus(e) {
+    log("Input focused");
+    keyboardOpen = true;
+    document.body.classList.add("keyboard-open");
+
+    // Scroll chat to bottom after small delay (for keyboard animation)
+    setTimeout(() => {
+      scrollToBottom();
+    }, 300);
   }
 
-  .right-side {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    justify-content: flex-end !important;
-    align-items: center !important;
-    gap: 6px !important;
-    padding: 5px 10px 8px !important;
-    border-top: 1px solid rgba(255,255,255,0.05);
-    width: 100%;
+  // ── Input Blur ────────────────────────────────────────────────────────────
+  function handleInputBlur(e) {
+    log("Input blurred");
+    // Don't immediately mark as closed — wait for visual confirmation
+    setTimeout(() => {
+      if (document.activeElement !== messageInputElement) {
+        keyboardOpen = false;
+        document.body.classList.remove("keyboard-open");
+        log("Keyboard marked as closed");
+      }
+    }, 100);
   }
 
-  /* Every top-bar button becomes a small icon-only circle on phones —
-     this now applies to ALL of them, including the interests ("ინტ")
-     button that style.css was letting slip through at full size. */
-  .change-name-btn,
-  .block-button,
-  .report-button,
-  .next-button,
-  .interests-btn {
-    padding: 0 !important;
-    width: 38px !important;
-    height: 38px !important;
-    min-height: 0 !important;
-    border-radius: 50% !important;
-    font-size: 1.05em !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    flex-shrink: 0 !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  // ── Window Resize (fallback for browsers without visualViewport) ──────
+  function handleWindowResize() {
+    const currentHeight = window.innerHeight;
+    log(`Window resize: ${currentHeight}px`);
+
+    updateAppHeight();
+
+    if (!window.visualViewport) {
+      // No visualViewport support at all — fall back to a focus-based guess.
+      const isOpen = document.activeElement === messageInputElement;
+      updateKeyboardState(isOpen);
+      adjustInputPosition();
+    }
   }
 
-  .btn-label { display: none !important; }
-  .btn-icon  { display: inline !important; line-height: 1; }
+  // ── Visual Viewport Resize (keyboard detection, iOS + Android) ────────
+  function handleVisualViewportResize() {
+    if (!window.visualViewport) return;
+    const vv = window.visualViewport;
+    const ratio = vv.height / window.innerHeight;
+    log(`Visual viewport ratio: ${ratio.toFixed(2)}`);
 
-  /* ძებნა (search/next) stays a labeled pill — it's the primary action */
-  .next-button {
-    width: auto !important;
-    padding: 0 16px !important;
-    border-radius: 20px !important;
-    gap: 5px;
-  }
-  .next-button .btn-label { display: inline !important; font-size: 0.82em; }
-
-  /* ინტერესები keeps its label too, but at a size that actually fits */
-  .interests-btn {
-    width: auto !important;
-    padding: 0 12px !important;
-    border-radius: 20px !important;
-    font-size: 0.78em !important;
-    margin-right: auto;
-  }
-  .interests-btn .btn-icon  { display: none !important; }
-  .interests-btn .btn-label { display: inline !important; font-size: 1em; }
-
-  .user-name-display,
-  .partner-name-display {
-    font-size: 0.72em !important;
-    padding: 3px 10px !important;
-    max-width: 100px !important;
-    border-radius: 12px !important;
+    // Keyboard open = visual viewport meaningfully smaller than layout viewport
+    updateKeyboardState(ratio < 0.85);
+    updateAppHeight();
+    adjustInputPosition();
   }
 
-  .site-name { font-size: 1.05em; }
-  #onlineCount { font-size: 0.75em; color: #8b8fa8; }
-
-  /* ── CHAT AREA ─────────────────────────────────────────────────────────── */
-  .message-wrapper { max-width: 82%; }
-  .message-wrapper.gif-msg-wrapper { max-width: 200px; }
-
-  /* ── INPUT BAR ─────────────────────────────────────────────────────────── */
-  .chat-input-row {
-    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
-    gap: 7px;
-    align-items: center;
+  // ── App Height Fallback ─────────────────────────────────────────────
+  // Sets --app-height to the real usable height in px. Use this in CSS
+  // (height: var(--app-height, 100dvh)) as a safety net for browsers that
+  // don't support 100dvh (older Android WebViews, some in-app browsers).
+  function updateAppHeight() {
+    const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    document.documentElement.style.setProperty("--app-height", `${h}px`);
   }
 
-  .chat-input textarea,
-  .chat-input input,
-  #messageInput {
-    font-size: 16px; /* prevents iOS auto-zoom on focus */
+  // ── Orientation Change ────────────────────────────────────────────────
+  function handleOrientationChange() {
+    log(`Orientation changed to ${window.orientation}`);
+    setTimeout(() => {
+      adjustInputPosition();
+      scrollToBottom();
+    }, 200); // Wait for rotation animation
   }
 
-  .modal-content { padding: 20px 16px 18px; }
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
-   VERY SMALL PHONES (≤360px) — shrink the icon buttons one notch further
-   so 4-5 of them never crowd the search pill off the row.
-   ════════════════════════════════════════════════════════════════════════════ */
-
-@media (max-width: 360px) {
-  .change-name-btn,
-  .block-button,
-  .report-button,
-  .interests-btn {
-    width: 32px !important;
-    height: 32px !important;
-    font-size: 0.95em !important;
+  // ── Touch Start (Prevent double-tap zoom) ─────────────────────────────
+  let lastTouchTime = 0;
+  function handleTouchStart(e) {
+    const now = Date.now();
+    if (now - lastTouchTime < 300) {
+      e.preventDefault();
+    }
+    lastTouchTime = now;
   }
-  .next-button { padding: 0 12px !important; font-size: 0.85em; }
-}
 
-/* ════════════════════════════════════════════════════════════════════════════
-   LANDSCAPE PHONES
-   ════════════════════════════════════════════════════════════════════════════ */
+  // ── Update Keyboard State ─────────────────────────────────────────────
+  function updateKeyboardState(isOpen) {
+    if (isOpen === keyboardOpen) return; // No change
+    keyboardOpen = isOpen;
+    log(`Keyboard state: ${isOpen ? "OPEN" : "CLOSED"}`);
 
-@media (orientation: landscape) and (max-height: 500px) and (min-width: 560px) {
-  .top-bar { flex-direction: row !important; height: 44px !important; }
-  .right-side { width: auto !important; border-top: none; }
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
-   ACCESSIBILITY & PRINT
-   ════════════════════════════════════════════════════════════════════════════ */
-
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    if (isOpen) {
+      document.body.classList.add("keyboard-open");
+    } else {
+      document.body.classList.remove("keyboard-open");
+    }
   }
-}
 
-@media print {
-  .chat-input { display: none; }
-}
+  // ── Adjust Input Position ─────────────────────────────────────────────
+  function adjustInputPosition() {
+    if (!chatInputElement) return;
+
+    const chatInput = chatInputElement;
+
+    if (keyboardOpen) {
+      // Keyboard is open: ensure input is visible and above keyboard
+      chatInput.style.position = "fixed";
+      chatInput.style.bottom = "0";
+      chatInput.style.left = "0";
+      chatInput.style.right = "0";
+      chatInput.style.zIndex = "999";
+
+      // Flat comfortable padding only — do NOT add env(safe-area-inset-bottom)
+      // here. That inset reflects the home-indicator's fixed hardware
+      // geometry; it does not shrink to 0 once the keyboard covers that
+      // area, so adding it was leaving a permanent gap between the input
+      // bar and the keyboard. (Previously this also read a
+      // "--safe-area-bottom" custom property expecting a resolved px
+      // number — getPropertyValue() on a custom property returns the
+      // literal unresolved token text, not a computed value, so that
+      // lookup never did what it looked like it was doing.)
+      chatInput.style.paddingBottom = "12px";
+
+      log("Input positioned above keyboard");
+    } else {
+      // Keyboard closed: clear our inline overrides instead of setting
+      // position: "relative". style.css's base .chat-input rule already
+      // defines the correct closed-keyboard look (position: fixed;
+      // bottom: 0; z-index: 100); setting an inline "relative" here used
+      // to beat that rule via inline-style specificity, which is what
+      // broke the input bar's fixed positioning once the keyboard closed.
+      // Clearing the inline styles lets the CSS default take back over.
+      chatInput.style.position = "";
+      chatInput.style.bottom = "";
+      chatInput.style.left = "";
+      chatInput.style.right = "";
+      chatInput.style.zIndex = "";
+      chatInput.style.paddingBottom = "";
+
+      log("Input returned to normal position");
+    }
+  }
+
+  // ── Scroll to Bottom ──────────────────────────────────────────────────
+  function scrollToBottom() {
+    if (!chatContainerElement) return;
+
+    // Use RAF for smooth animation
+    requestAnimationFrame(() => {
+      chatContainerElement.scrollTop = chatContainerElement.scrollHeight;
+      log(`Scrolled to bottom (${chatContainerElement.scrollHeight}px)`);
+    });
+  }
+
+  // ── Setup Viewport Meta Tag ───────────────────────────────────────────
+  function setupViewportMeta() {
+    let viewport = document.querySelector('meta[name="viewport"]');
+
+    if (!viewport) {
+      viewport = document.createElement("meta");
+      viewport.name = "viewport";
+      document.head.appendChild(viewport);
+    }
+
+    // Ensure proper viewport settings
+    const currentContent = viewport.getAttribute("content") || "";
+
+    // Required settings for mobile keyboard handling
+    const requiredSettings = {
+      "width": "device-width",
+      "initial-scale": "1",
+      "viewport-fit": "cover",
+      "interactive-widget": "resizes-content",
+      "user-scalable": "no",
+      "maximum-scale": "1",
+      "minimum-scale": "1",
+    };
+
+    // Parse existing settings
+    const settings = {};
+    currentContent.split(",").forEach((part) => {
+      const [key, value] = part.trim().split("=");
+      if (key) settings[key.trim()] = value ? value.trim() : true;
+    });
+
+    // Apply required settings
+    Object.assign(settings, requiredSettings);
+
+    // Rebuild viewport meta
+    const newContent = Object.entries(settings)
+      .map(([k, v]) => (v === true ? k : `${k}=${v}`))
+      .join(", ");
+
+    viewport.setAttribute("content", newContent);
+    log("Viewport meta tag updated:", newContent);
+  }
+
+  // ── Add CSS Variables ─────────────────────────────────────────────────
+  function addCSSVariables() {
+    const root = document.documentElement;
+
+    // Safe area CSS variables
+    root.style.setProperty("--safe-area-top", "env(safe-area-inset-top)");
+    root.style.setProperty("--safe-area-bottom", "env(safe-area-inset-bottom)");
+    root.style.setProperty("--safe-area-left", "env(safe-area-inset-left)");
+    root.style.setProperty("--safe-area-right", "env(safe-area-inset-right)");
+
+    log("CSS variables set");
+  }
+
+  // ── Prevent Input Zoom on iOS ─────────────────────────────────────────
+  function preventInputZoom() {
+    // Set body font-size to 16px+ to prevent iOS auto-zoom on focus
+    const html = document.documentElement;
+    const currentSize = getComputedStyle(html).fontSize;
+    const size = parseFloat(currentSize);
+
+    if (size < 16) {
+      html.style.fontSize = "16px";
+      log("Set font-size to 16px to prevent iOS zoom");
+    }
+  }
+
+  // ── Smooth Scrolling ──────────────────────────────────────────────────
+  function enableSmoothScrolling() {
+    // Check if browser supports smooth scroll
+    if (CSS && CSS.supports && CSS.supports("scroll-behavior", "smooth")) {
+      document.documentElement.style.scrollBehavior = "smooth";
+      if (chatContainerElement) {
+        chatContainerElement.style.scrollBehavior = "smooth";
+      }
+      log("Smooth scrolling enabled");
+    }
+  }
+
+  // ── Main Setup ────────────────────────────────────────────────────────
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      setupViewportMeta();
+      addCSSVariables();
+      preventInputZoom();
+      enableSmoothScrolling();
+      init();
+    });
+  } else {
+    // DOM already loaded
+    setupViewportMeta();
+    addCSSVariables();
+    preventInputZoom();
+    enableSmoothScrolling();
+    init();
+  }
+
+  // ── Public API ────────────────────────────────────────────────────────
+  window.KeyboardHandler = {
+    isOpen: () => keyboardOpen,
+    scrollToBottom: scrollToBottom,
+    adjustPosition: adjustInputPosition,
+  };
+
+  log("Keyboard handler ready");
+})();
