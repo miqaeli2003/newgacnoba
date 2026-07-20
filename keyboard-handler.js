@@ -1,16 +1,16 @@
 /**
  * ═════════════════════════════════════════════════════════════════════════════
- * KEYBOARD HANDLER — Ultra-Optimized for ALL Phones (Strict 2px Gap Guaranteed)
+ * KEYBOARD HANDLER — Context-Aware & Optimized for Multi-Input Systems
  * ═════════════════════════════════════════════════════════════════════════════
  * 
  * ✅ FIXES:
- * ✓ Guarantees an exact 2px gap between the last message and the input field
- * ✓ Uses VisualViewport API to completely eliminate rendering overlap bugs
- * ✓ Works flawlessly across iOS Safari, Android Chrome, notches, and split keyboards
+ * ✓ Prevents layout breaking when typing names, passwords, or searching GIFs
+ * ✓ Natively handles Main Chat, Private Chat, GIF Picker, and Entry Modals
+ * ✓ Guarantees a strict 2px gap between the messages and the active keyboard input row
+ * ✓ Uses VisualViewport API to completely eliminate rendering overlap bugs on iOS & Android
  * ✓ Prevents iOS auto-zoom on input focus
- * ✓ Handles orientation changes seamlessly
  * 
- * Usage: <script src="keyboard-handler.js"></script> before </body>
+ * Usage: Replace the contents of keyboard-handler.js completely.
  * ═════════════════════════════════════════════════════════════════════════════
  */
 
@@ -36,7 +36,6 @@
   let dom = {
     chatContainer: null,
     chatInput: null,
-    messageInput: null,
     header: null,
   };
 
@@ -52,19 +51,18 @@
   }
 
   /**
-   * Cache all DOM elements we need
+   * Cache critical DOM elements dynamically
    */
   function cacheDOM() {
     dom.chatContainer = document.querySelector(".chat-container");
     dom.chatInput = document.querySelector(".chat-input");
-    dom.messageInput = document.getElementById("messageInput");
-    dom.header = document.querySelector("header") || document.querySelector(".header");
+    dom.header = document.querySelector(".top-bar") || document.querySelector("header") || document.querySelector(".header");
 
-    return !!(dom.chatContainer && dom.chatInput && dom.messageInput);
+    return !!(dom.chatContainer && dom.chatInput);
   }
 
   /**
-   * Setup viewport meta tag for proper mobile behavior
+   * Setup viewport meta tag for proper mobile scaling bounds
    */
   function setupViewportMeta() {
     let viewport = document.querySelector('meta[name="viewport"]');
@@ -87,74 +85,37 @@
         "minimum-scale=1",
       ].join(", ")
     );
-
-    log("✓ Viewport meta configured");
   }
 
   /**
-   * Setup CSS variables for dynamic values
-   */
-  function setupCSSVariables() {
-    const root = document.documentElement;
-
-    root.style.setProperty("--viewport-height", `${window.innerHeight}px`);
-    root.style.setProperty("--keyboard-height", "0px");
-    root.style.setProperty("--safe-area-top", "env(safe-area-inset-top)");
-    root.style.setProperty("--safe-area-bottom", "env(safe-area-inset-bottom)");
-    root.style.setProperty("--safe-area-left", "env(safe-area-inset-left)");
-    root.style.setProperty("--safe-area-right", "env(safe-area-inset-right)");
-
-    log("✓ CSS variables initialized");
-  }
-
-  /**
-   * Prevent iOS auto-zoom on input focus
+   * Prevent iOS auto-zoom on input elements (Forces minimum font rendering safety)
    */
   function preventIOSZoom() {
-    const html = document.documentElement;
-    const currentSize = parseFloat(getComputedStyle(html).fontSize);
-
-    if (currentSize < 16) {
-      html.style.fontSize = "16px";
-      log("✓ iOS zoom prevention enabled");
-    }
+    const inputs = document.querySelectorAll("input, textarea");
+    inputs.forEach(el => {
+      const currentSize = parseFloat(getComputedStyle(el).fontSize);
+      if (currentSize < 16) {
+        el.style.fontSize = "16px";
+      }
+    });
   }
 
   /**
-   * Measure header and input heights cleanly
+   * Update internal measurements safely
    */
   function measureHeights() {
     if (dom.header) {
-      const headerRect = dom.header.getBoundingClientRect();
-      state.headerHeight = Math.ceil(headerRect.height);
-    } else {
-      state.headerHeight = 0;
+      state.headerHeight = Math.ceil(dom.header.getBoundingClientRect().height);
     }
-
     if (dom.chatInput) {
-      const inputRect = dom.chatInput.getBoundingClientRect();
-      state.inputHeight = Math.ceil(inputRect.height);
-    } else {
-      state.inputHeight = 0;
+      state.inputHeight = Math.ceil(dom.chatInput.getBoundingClientRect().height);
     }
-
-    log(`Heights: header=${state.headerHeight}px, input=${state.inputHeight}px`);
   }
 
   /**
-   * Update CSS custom properties
-   */
-  function updateCSSVariables() {
-    const root = document.documentElement;
-    root.style.setProperty("--viewport-height", `${window.innerHeight}px`);
-    root.style.setProperty("--keyboard-height", `${state.keyboardHeight}px`);
-  }
-
-  /**
-   * Detect keyboard presence reliably using cross-platform safe check
+   * Detect keyboard presence reliably using visual viewport bounds
    */
   function detectKeyboard() {
-    // Detect via VisualViewport if available (captures iOS perfectly), fallback to layout height (Android)
     const isIOSKeyboard = window.visualViewport && (window.innerHeight - window.visualViewport.height > 100);
     const isAndroidKeyboard = (state.lastViewportHeight - window.innerHeight > 100);
     
@@ -162,13 +123,15 @@
 
     if (isKeyboardOpen && !state.keyboardOpen) {
       state.keyboardOpen = true;
+      document.body.classList.add("keyboard-open");
       log("✓ Keyboard OPENED");
-      onKeyboardOpen();
+      adjustLayout();
+      setTimeout(scrollToBottom, 50);
     } else if (!isKeyboardOpen && state.keyboardOpen) {
       state.keyboardOpen = false;
-      state.keyboardHeight = 0;
+      document.body.classList.remove("keyboard-open");
       log("✓ Keyboard CLOSED");
-      onKeyboardClose();
+      restoreLayout();
     } else if (state.keyboardOpen) {
       adjustLayout();
     }
@@ -179,205 +142,254 @@
   }
 
   /**
-   * Called when keyboard opens
-   */
-  function onKeyboardOpen() {
-    document.body.classList.add("keyboard-open");
-    updateCSSVariables();
-    adjustLayout();
-
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        scrollToBottom();
-      }, 50);
-    });
-  }
-
-  /**
-   * Called when keyboard closes
-   */
-  function onKeyboardClose() {
-    document.body.classList.remove("keyboard-open");
-    updateCSSVariables();
-    restoreLayout();
-  }
-
-  /**
-   * Adjust layout natively using explicit math bounds
+   * Core Context Engine: Adjusts layouts only for the specific input focused
    */
   function adjustLayout() {
-    if (!dom.chatContainer || !dom.chatInput) return;
+    const activeEl = document.activeElement;
+    if (!activeEl) return;
 
-    // Pull accurate current dimensions from the visual viewport
+    // Standard baseline definitions
     const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    const bottomOffset = window.visualViewport ? Math.max(0, window.innerHeight - window.visualViewport.height) : 0;
+    const GAP = 2; // Exact strict 2px spacing specification
 
-    const headerHeight = dom.header ? dom.header.getBoundingClientRect().height : state.headerHeight;
-    const inputHeight = dom.chatInput.getBoundingClientRect().height || state.inputHeight;
+    // ── CONTEXT 1: MAIN CHAT BOX ──
+    if (activeEl.id === "messageInput") {
+      if (!dom.chatContainer || !dom.chatInput) return;
 
-    // Calculate exact space covered by the keyboard at the screen baseline
-    const bottomOffset = window.visualViewport 
-      ? Math.max(0, window.innerHeight - window.visualViewport.height) 
-      : 0;
+      const headerHeight = dom.header ? dom.header.getBoundingClientRect().height : state.headerHeight;
+      const inputHeight = dom.chatInput.getBoundingClientRect().height || state.inputHeight;
 
-    // Set input fixed exactly to the top of the keyboard 
-    dom.chatInput.style.position = "fixed";
-    dom.chatInput.style.bottom = `${bottomOffset}px`;
-    dom.chatInput.style.left = "0";
-    dom.chatInput.style.right = "0";
-    dom.chatInput.style.zIndex = "9999";
-    dom.chatInput.style.transform = "translateZ(0)"; // Hardware acceleration
-    dom.chatInput.style.width = "100%";
-    dom.chatInput.style.boxSizing = "border-box";
+      dom.chatInput.style.position = "fixed";
+      dom.chatInput.style.bottom = `${bottomOffset}px`;
+      dom.chatInput.style.left = "0";
+      dom.chatInput.style.right = "0";
+      dom.chatInput.style.zIndex = "9999";
+      dom.chatInput.style.transform = "translateZ(0)";
+      dom.chatInput.style.width = "100%";
 
-    // Strict 2px gap separation rule
-    const GAP = 2;
-    
-    // Calculate the perfect remaining box height for the messages
-    const availableHeight = viewportHeight - headerHeight - inputHeight - GAP;
-
-    // Enforce layout constraints natively via CSS engine properties
-    dom.chatContainer.style.position = "relative";
-    dom.chatContainer.style.height = `${Math.max(0, availableHeight)}px`;
-    dom.chatContainer.style.marginBottom = `${GAP}px`; // Force exact 2px spacing natively
-    dom.chatContainer.style.overflowY = "auto";
-    dom.chatContainer.style.overflowX = "hidden";
-    dom.chatContainer.style.WebkitOverflowScrolling = "touch";
-    dom.chatContainer.style.flexShrink = "0";
-
-    log(`Layout forced: height=${availableHeight}px, gap=${GAP}px, bottomOffset=${bottomOffset}px`);
-  }
-
-  /**
-   * Restore normal layout when keyboard closes
-   */
-  function restoreLayout() {
-    if (!dom.chatContainer || !dom.chatInput) return;
-
-    dom.chatInput.style.position = "relative";
-    dom.chatInput.style.bottom = "auto";
-    dom.chatInput.style.left = "auto";
-    dom.chatInput.style.right = "auto";
-    dom.chatInput.style.zIndex = "50";
-    dom.chatInput.style.transform = "none";
-
-    dom.chatContainer.style.height = "auto";
-    dom.chatContainer.style.marginBottom = "";
-    dom.chatContainer.style.flexShrink = "1";
-
-    log("Layout restored to normal");
-  }
-
-  /**
-   * Scroll chat to bottom
-   */
-  function scrollToBottom() {
-    if (!dom.chatContainer) return;
-
-    requestAnimationFrame(() => {
-      dom.chatContainer.scrollTop = dom.chatContainer.scrollHeight;
-    });
-  }
-
-  /**
-   * Handle window resize
-   */
-  function handleWindowResize() {
-    measureHeights();
-    detectKeyboard();
-  }
-
-  /**
-   * Handle orientation change
-   */
-  function handleOrientationChange() {
-    log("Orientation changed");
-    state.lastViewportHeight = window.innerHeight;
-
-    setTimeout(() => {
-      measureHeights();
-      detectKeyboard();
-    }, 300);
-  }
-
-  /**
-   * Setup all event listeners
-   */
-  function setupEventListeners() {
-    dom.messageInput.addEventListener("focus", () => log("Focused"), { passive: true });
-    dom.messageInput.addEventListener("blur", () => log("Blurred"), { passive: true });
-
-    window.addEventListener("resize", handleWindowResize, { passive: true });
-    window.addEventListener("orientationchange", handleOrientationChange, { passive: true });
-
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener(
-        "resize",
-        () => {
-          detectKeyboard();
-          updateCSSVariables();
-          if (state.keyboardOpen) {
-            adjustLayout();
-          }
-        },
-        { passive: true }
-      );
+      const availableHeight = viewportHeight - headerHeight - inputHeight - GAP;
+      dom.chatContainer.style.position = "relative";
+      dom.chatContainer.style.height = `${Math.max(0, availableHeight)}px`;
+      dom.chatContainer.style.marginBottom = `${GAP}px`;
+      dom.chatContainer.style.overflowY = "auto";
+      dom.chatContainer.style.flexShrink = "0";
+      return;
     }
 
-    let lastTouchTime = 0;
-    document.addEventListener(
-      "touchstart",
-      (e) => {
-        const now = Date.now();
-        if (now - lastTouchTime < 300) {
-          e.preventDefault();
-        }
-        lastTouchTime = now;
-      },
-      { passive: true }
-    );
+    // ── CONTEXT 2: PRIVATE CHAT BOX ──
+    if (activeEl.id === "priv-input") {
+      const privPanel = document.getElementById("priv-panel");
+      const privMessages = document.getElementById("priv-messages");
+      const privInputRow = document.querySelector(".pc-input-row");
+      const privHeader = document.querySelector(".pc-header");
 
-    log("✓ Event listeners attached");
+      if (!privMessages || !privInputRow) return;
+
+      // Ensure main chat styles are cleared out of the way
+      resetMainChatStyles();
+
+      privInputRow.style.position = "fixed";
+      privInputRow.style.bottom = `${bottomOffset}px`;
+      privInputRow.style.left = "0";
+      privInputRow.style.right = "0";
+      privInputRow.style.zIndex = "9999";
+
+      const headerHeight = privHeader ? privHeader.getBoundingClientRect().height : 45;
+      const inputHeight = privInputRow.getBoundingClientRect().height;
+
+      const availableHeight = viewportHeight - headerHeight - inputHeight - GAP;
+      privMessages.style.height = `${Math.max(0, availableHeight)}px`;
+      privMessages.style.marginBottom = `${GAP}px`;
+      privMessages.style.overflowY = "auto";
+      return;
+    }
+
+    // ── CONTEXT 3: GIF PICKER PANEL ──
+    if (activeEl.id === "gifSearch") {
+      const gifPicker = document.getElementById("gifPicker");
+      const gifResults = document.getElementById("gifResults");
+      const gifHeader = document.querySelector(".gif-picker-header");
+
+      if (!gifPicker || !gifResults || !gifHeader) return;
+
+      resetMainChatStyles();
+
+      gifPicker.style.position = "fixed";
+      gifPicker.style.bottom = `${bottomOffset}px`;
+      gifPicker.style.zIndex = "9999";
+
+      const headerHeight = gifHeader.getBoundingClientRect().height;
+      const availableHeight = viewportHeight - headerHeight - GAP;
+      gifResults.style.height = `${Math.max(0, availableHeight)}px`;
+      gifResults.style.marginBottom = `${GAP}px`;
+      return;
+    }
+
+    // ── CONTEXT 4: NAME/AUTH MODALS ──
+    if (activeEl.id === "nameInput" || activeEl.id === "bioInput" || 
+        activeEl.id.startsWith("login-") || activeEl.id.startsWith("signup-")) {
+      
+      // Completely step away from chat views so modal interface operates safely
+      resetMainChatStyles();
+
+      const modalContent = activeEl.closest(".modal-content") || activeEl.closest(".bio-popup-content");
+      if (modalContent && modalContent.parentElement) {
+        modalContent.parentElement.style.overflowY = "auto";
+        modalContent.parentElement.style.zIndex = "10000";
+      }
+    }
   }
 
   /**
-   * Use ResizeObserver to watch element size changes
+   * Safe Reset utility specialized for Main Chat components
+   */
+  function resetMainChatStyles() {
+    if (dom.chatInput) {
+      dom.chatInput.style.position = "";
+      dom.chatInput.style.bottom = "";
+      dom.chatInput.style.left = "";
+      dom.chatInput.style.right = "";
+      dom.chatInput.style.zIndex = "";
+      dom.chatInput.style.transform = "";
+      dom.chatInput.style.width = "";
+    }
+    if (dom.chatContainer) {
+      dom.chatContainer.style.height = "";
+      dom.chatContainer.style.marginBottom = "";
+      dom.chatContainer.style.position = "";
+      dom.chatContainer.style.overflowY = "";
+      dom.chatContainer.style.flexShrink = "";
+    }
+  }
+
+  /**
+   * Reset function to return ALL view components back to standard stylesheet norms
+   */
+  function restoreLayout() {
+    resetMainChatStyles();
+
+    // Reset Private Chat Components
+    const privMessages = document.getElementById("priv-messages");
+    const privInputRow = document.querySelector(".pc-input-row");
+    if (privInputRow) {
+      privInputRow.style.position = "";
+      privInputRow.style.bottom = "";
+      privInputRow.style.left = "";
+      privInputRow.style.right = "";
+      privInputRow.style.zIndex = "";
+    }
+    if (privMessages) {
+      privMessages.style.height = "";
+      privMessages.style.marginBottom = "";
+    }
+
+    // Reset GIF Components
+    const gifPicker = document.getElementById("gifPicker");
+    const gifResults = document.getElementById("gifResults");
+    if (gifPicker) {
+      gifPicker.style.position = "";
+      gifPicker.style.bottom = "";
+      gifPicker.style.zIndex = "";
+    }
+    if (gifResults) {
+      gifResults.style.height = "";
+      gifResults.style.marginBottom = "";
+    }
+  }
+
+  /**
+   * Scroll chat view down
+   */
+  function scrollToBottom() {
+    const activeEl = document.activeElement;
+    if (activeEl && activeEl.id === "priv-input") {
+      const privMessages = document.getElementById("priv-messages");
+      if (privMessages) privMessages.scrollTop = privMessages.scrollHeight;
+    } else if (dom.chatContainer) {
+      dom.chatContainer.scrollTop = dom.chatContainer.scrollHeight;
+    }
+  }
+
+  /**
+   * Global event routing structure via event delegation hooks
+   */
+  function setupEventListeners() {
+    // Listens cleanly across all inputs/textareas dynamically
+    document.addEventListener("focusin", (e) => {
+      if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") {
+        preventIOSZoom();
+        setTimeout(() => {
+          detectKeyboard();
+          if (state.keyboardOpen) adjustLayout();
+        }, 60);
+      }
+    }, { passive: true });
+
+    document.addEventListener("focusout", (e) => {
+      if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") {
+        setTimeout(() => {
+          if (!document.activeElement || (document.activeElement.tagName !== "INPUT" && document.activeElement.tagName !== "TEXTAREA")) {
+            detectKeyboard();
+          }
+        }, 60);
+      }
+    }, { passive: true });
+
+    window.addEventListener("resize", () => {
+      measureHeights();
+      detectKeyboard();
+    }, { passive: true });
+
+    window.addEventListener("orientationchange", () => {
+      state.lastViewportHeight = window.innerHeight;
+      setTimeout(() => {
+        measureHeights();
+        detectKeyboard();
+      }, 300);
+    }, { passive: true });
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", () => {
+        detectKeyboard();
+        if (state.keyboardOpen) {
+          adjustLayout();
+        }
+      }, { passive: true });
+    }
+  }
+
+  /**
+   * Use ResizeObserver to track layout changes smoothly
    */
   function setupResizeObserver() {
     if (!window.ResizeObserver) return;
 
     observers.resize = new ResizeObserver(() => {
       measureHeights();
-      if (state.keyboardOpen) {
-        adjustLayout();
-      }
+      if (state.keyboardOpen) adjustLayout();
     });
 
     if (dom.header) observers.resize.observe(dom.header);
     if (dom.chatInput) observers.resize.observe(dom.chatInput);
-
-    log("✓ ResizeObserver active");
   }
 
   /**
-   * Main initialization
+   * Initialization Sequence
    */
   function init() {
-    log("Initializing keyboard handler...");
-
     if (!cacheDOM()) {
       setTimeout(init, 100);
       return;
     }
 
     setupViewportMeta();
-    setupCSSVariables();
     preventIOSZoom();
     measureHeights();
     setupEventListeners();
     setupResizeObserver();
-    updateCSSVariables();
 
-    log("✅ Keyboard handler ready (Strict 2px Gap Configured)");
+    log("✅ Advanced Context Keyboard Handler Ready.");
   }
 
   if (document.readyState === "loading") {
@@ -386,14 +398,13 @@
     init();
   }
 
+  // Public Interface exposure
   window.KeyboardHandler = {
     isOpen: () => state.keyboardOpen,
     scrollToBottom: scrollToBottom,
     refresh: () => {
       measureHeights();
-      if (state.keyboardOpen) {
-        adjustLayout();
-      }
+      if (state.keyboardOpen) adjustLayout();
     },
   };
 })();
