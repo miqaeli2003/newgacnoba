@@ -1,10 +1,10 @@
 /**
  * ═════════════════════════════════════════════════════════════════════════════
- * KEYBOARD HANDLER — Ultra-Optimized for ALL Phones (Gap-Free!)
+ * KEYBOARD HANDLER — Ultra-Optimized for ALL Phones (Strict 2px Gap)
  * ═════════════════════════════════════════════════════════════════════════════
  * 
  * ✅ FIXES:
- * ✓ Eliminates gaps between keyboard & last message
+ * ✓ Maintains a clean, strict 2px gap between keyboard/input & last message
  * ✓ Measures ACTUAL keyboard height dynamically
  * ✓ Works on ALL phone models (iOS, Android, notches, all keyboard sizes)
  * ✓ Real-time viewport monitoring with ResizeObserver
@@ -126,7 +126,6 @@
    * Measure header and input heights using getBoundingClientRect for accuracy
    */
   function measureHeights() {
-    // Use getBoundingClientRect for more reliable measurements on phones
     if (dom.header) {
       const headerRect = dom.header.getBoundingClientRect();
       state.headerHeight = Math.ceil(headerRect.height);
@@ -162,30 +161,26 @@
     const currentHeight = window.innerHeight;
     const heightDiff = state.lastViewportHeight - currentHeight;
 
-    // Threshold: 100px = minimum keyboard size
     const MIN_THRESHOLD = 100;
     const isKeyboardOpen = heightDiff > MIN_THRESHOLD;
 
     if (isKeyboardOpen && !state.keyboardOpen) {
-      // Keyboard just opened
       state.keyboardOpen = true;
       state.keyboardHeight = heightDiff;
 
       log(`✓ Keyboard OPENED (height: ${heightDiff}px)`);
       onKeyboardOpen();
     } else if (!isKeyboardOpen && state.keyboardOpen) {
-      // Keyboard just closed
       state.keyboardOpen = false;
       state.keyboardHeight = 0;
 
       log("✓ Keyboard CLOSED");
       onKeyboardClose();
     } else if (isKeyboardOpen && state.keyboardOpen) {
-      // Keyboard already open, but height might have changed
       state.keyboardHeight = heightDiff;
       updateCSSVariables();
       adjustLayout();
-      eliminateGap(); // Continuous gap monitoring
+      eliminateGap();
     }
 
     state.lastViewportHeight = currentHeight;
@@ -199,11 +194,9 @@
     updateCSSVariables();
     adjustLayout();
 
-    // Scroll to bottom after layout settles
     requestAnimationFrame(() => {
       setTimeout(() => {
         scrollToBottom();
-        // Check for and eliminate any remaining gaps
         setTimeout(() => eliminateGap(), 100);
       }, 50);
     });
@@ -220,7 +213,6 @@
 
   /**
    * Adjust layout when keyboard is open
-   * THIS IS WHERE WE ELIMINATE GAPS!
    */
   function adjustLayout() {
     if (!dom.chatContainer || !dom.chatInput) return;
@@ -233,37 +225,34 @@
       getComputedStyle(root).getPropertyValue("--safe-area-bottom") || "0"
     );
 
-    // Use getBoundingClientRect for more accurate measurements
     const headerRect = dom.header ? dom.header.getBoundingClientRect() : { height: 0 };
     const inputRect = dom.chatInput.getBoundingClientRect();
     
     const headerHeight = headerRect.height || state.headerHeight;
     const inputHeight = inputRect.height || state.inputHeight;
 
-    // Fix input at bottom with full width
     dom.chatInput.style.position = "fixed";
     dom.chatInput.style.bottom = "0";
     dom.chatInput.style.left = "0";
     dom.chatInput.style.right = "0";
     dom.chatInput.style.zIndex = "9999";
-    dom.chatInput.style.transform = "translateZ(0)"; // Hardware acceleration
+    dom.chatInput.style.transform = "translateZ(0)";
     dom.chatInput.style.paddingBottom = "max(8px, env(safe-area-inset-bottom))";
     dom.chatInput.style.width = "100%";
     dom.chatInput.style.boxSizing = "border-box";
 
-    // Calculate exact available height accounting for all elements
+    // Calculate exact available height accounting for all elements with a strict 2px gap
     const totalViewport = window.innerHeight;
     const topSpace = headerHeight + safeAreaTop;
-    const bottomSpace = inputHeight + safeAreaBottom + 8; // +8px buffer
+    const bottomSpace = inputHeight + safeAreaBottom + 2; 
     
     const availableHeight = totalViewport - topSpace - bottomSpace;
 
-    // Apply to chat container
     dom.chatContainer.style.position = "relative";
     dom.chatContainer.style.height = `${Math.max(0, availableHeight)}px`;
     dom.chatContainer.style.overflowY = "auto";
     dom.chatContainer.style.overflowX = "hidden";
-    dom.chatContainer.style.WebkitOverflowScrolling = "touch"; // iOS momentum
+    dom.chatContainer.style.WebkitOverflowScrolling = "touch";
     dom.chatContainer.style.willChange = "scroll-position";
     dom.chatContainer.style.flexShrink = "0";
     dom.chatContainer.style.paddingBottom = "0";
@@ -294,7 +283,7 @@
   }
 
   /**
-   * Detect and eliminate gaps between chat and input on phones
+   * Detect and maintain exactly a 2px gap between chat and input on phones
    */
   function eliminateGap() {
     if (!dom.chatContainer || !dom.chatInput || !state.keyboardOpen) return;
@@ -302,23 +291,20 @@
     const containerRect = dom.chatContainer.getBoundingClientRect();
     const inputRect = dom.chatInput.getBoundingClientRect();
 
-    // Check for gap between container bottom and input top
-    const gap = inputRect.top - containerRect.bottom;
+    // Calculate the current actual gap
+    const currentGap = inputRect.top - containerRect.bottom;
+    const targetGap = 2; // Keep exactly 2px of breathing room
+    
+    // Determine how far off we are from the target 2px
+    const error = currentGap - targetGap;
 
-    if (gap > 2) {
-      // There's a visible gap, reduce container height to eliminate it
+    // Use a 0.5px tolerance threshold to prevent infinite layout jitter loops
+    if (Math.abs(error) > 0.5) {
       const currentHeight = parseFloat(getComputedStyle(dom.chatContainer).height);
-      const newHeight = currentHeight - gap;
+      const newHeight = currentHeight + error;
 
       dom.chatContainer.style.height = `${Math.max(0, newHeight)}px`;
-      log(`Gap detected: ${gap}px, adjusted container height to ${newHeight}px`);
-    } else if (gap < -2) {
-      // Container is overlapping input, increase height slightly
-      const currentHeight = parseFloat(getComputedStyle(dom.chatContainer).height);
-      const newHeight = currentHeight - gap;
-
-      dom.chatContainer.style.height = `${Math.max(0, newHeight)}px`;
-      log(`Overlap detected: ${gap}px, adjusted container height to ${newHeight}px`);
+      log(`Gap adjusted. Current: ${currentGap.toFixed(1)}px -> Target: ${targetGap}px (New height: ${newHeight.toFixed(1)}px)`);
     }
   }
 
@@ -339,7 +325,6 @@
    */
   function handleInputFocus() {
     log("Input focused");
-    // Keyboard detection will handle the rest
   }
 
   /**
@@ -347,17 +332,16 @@
    */
   function handleInputBlur() {
     log("Input blurred");
-    // Keyboard detection will handle the rest
   }
 
   /**
-   * Handle window resize (main keyboard detection trigger)
+   * Handle window resize
    */
   function handleWindowResize() {
     measureHeights();
     detectKeyboard();
     if (state.keyboardOpen) {
-      eliminateGap(); // Check for gaps on resize
+      eliminateGap();
     }
   }
 
@@ -366,27 +350,24 @@
    */
   function handleOrientationChange() {
     log("Orientation changed");
-    state.lastViewportHeight = window.innerHeight; // Reset baseline
+    state.lastViewportHeight = window.innerHeight;
 
     setTimeout(() => {
       measureHeights();
       detectKeyboard();
-    }, 300); // Wait for rotation animation
+    }, 300);
   }
 
   /**
    * Setup all event listeners
    */
   function setupEventListeners() {
-    // Input events
     dom.messageInput.addEventListener("focus", handleInputFocus, { passive: true });
     dom.messageInput.addEventListener("blur", handleInputBlur, { passive: true });
 
-    // Window events
     window.addEventListener("resize", handleWindowResize, { passive: true });
     window.addEventListener("orientationchange", handleOrientationChange, { passive: true });
 
-    // Visual viewport (more reliable)
     if (window.visualViewport) {
       window.visualViewport.addEventListener(
         "resize",
@@ -395,14 +376,13 @@
           updateCSSVariables();
           if (state.keyboardOpen) {
             adjustLayout();
-            eliminateGap(); // Check for gaps on every viewport change
+            eliminateGap();
           }
         },
         { passive: true }
       );
     }
 
-    // Prevent double-tap zoom
     let lastTouchTime = 0;
     document.addEventListener(
       "touchstart",
@@ -447,7 +427,6 @@
   function init() {
     log("Initializing keyboard handler...");
 
-    // Wait for DOM
     if (!cacheDOM()) {
       log("Elements not ready, retrying in 100ms...");
       setTimeout(init, 100);
@@ -461,24 +440,17 @@
     setupEventListeners();
     setupResizeObserver();
 
-    // Initial CSS update
     updateCSSVariables();
 
     log("✅ Keyboard handler ready (optimized for all phones)");
   }
 
-  /**
-   * Start initialization when DOM is ready
-   */
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
   } else {
     init();
   }
 
-  /**
-   * Public API
-   */
   window.KeyboardHandler = {
     isOpen: () => state.keyboardOpen,
     getKeyboardHeight: () => state.keyboardHeight,
