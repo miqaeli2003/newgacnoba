@@ -1,9 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
-<script>(function(s){s.dataset.zone='11337565',s.src='https://n6wxm.com/vignette.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>
-  
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>GAICANI — ანონიმური ჩათი უცნობებთან</title>
@@ -37,7 +34,6 @@
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="games.css" />
   <link rel="stylesheet" href="auth.css" />
-  <link rel="stylesheet" href="style-MOBILE-FIX.css" />
   <style>
     /* ── Registered-user top-bar cleanup ───────────────────────────────
        Hide ინტ., 🎮, 🚩, ✏️ from the bar — they live in the ⋮ menu.
@@ -51,13 +47,21 @@
 <body>
   <div class="top-bar">
     <div class="left-side">
-      <a href="/" class="site-name" id="logoHomeBtn" onclick="goToWelcome(); return false;">⌂</a>
+      <a href="/" class="site-name" id="logoHomeBtn" onclick="goToWelcome(); return false;">GAICANI</a>
       <div id="onlineCount"></div>
       <div id="partnerNameDisplay" class="partner-name-display"></div>
       <button id="addFriendIconBtn" class="add-friend-icon-btn" style="display:none" title="მეგობრობის მოთხოვნის გაგზავნა">➕</button>
       <div id="userNameDisplay" class="user-name-display" style="display:none"></div>
+    </div>
+    <div class="right-side">
+      <button id="myPageBtn" class="my-page-btn" style="display:none" onclick="window.location.href='/dashboard.html'">👤 ჩემი გვერდი</button>
+      <button class="interests-btn" id="interestsBtn" style="display:none"><span class="btn-icon btn-icon--int">ინტ.</span><span class="btn-label">ინტ</span></button>
+      <button class="change-name-btn" id="changeNameBtn"><span class="btn-icon">✏️</span><span class="btn-label">სახელის შეცვლა</span></button>
+      <button class="report-button" id="reportBtn" disabled><span class="btn-icon">🚩</span><span class="btn-label">რეპორტი</span></button>
+      <button class="block-button" id="blockBtn" disabled><span class="btn-icon">🚫</span><span class="btn-label">ბლოკი</span></button>
+      <button class="next-button" id="nextBtn"><span class="btn-icon">🔎</span><span class="btn-label">ძებნა</span></button>
 
-      <!-- Three-dots menu for registered users — placed right next to the user's own name -->
+      <!-- Three-dots menu for registered users -->
       <div class="reg-menu-container">
         <button class="reg-menu-btn" id="regMenuBtn" style="display:none" title="მენიუ">⋮</button>
         <div class="reg-menu-dropdown" id="regMenuDropdown" style="display:none">
@@ -85,14 +89,6 @@
         </div>
       </div>
     </div>
-    <div class="right-side">
-      <button id="myPageBtn" class="my-page-btn" style="display:none" onclick="window.location.href='/dashboard.html'">👤 ჩემი გვერდი</button>
-      <button class="interests-btn" id="interestsBtn" style="display:none"><span class="btn-icon btn-icon--int">ინტ.</span><span class="btn-label">ინტ</span></button>
-      <button class="change-name-btn" id="changeNameBtn"><span class="btn-icon">✏️</span><span class="btn-label">სახელის შეცვლა</span></button>
-      <button class="report-button" id="reportBtn" disabled><span class="btn-icon">🚩</span><span class="btn-label">რეპორტი</span></button>
-      <button class="block-button" id="blockBtn" disabled><span class="btn-icon">🚫</span><span class="btn-label">ბლოკი</span></button>
-      <button class="next-button" id="nextBtn"><span class="btn-icon">🔎</span><span class="btn-label">ძებნა</span></button>
-    </div>
   </div>
 
   <!-- Partner registered banner — shows when both users in chat are registered -->
@@ -113,6 +109,11 @@
       <div class="gif-placeholder" id="gifLoading">✨ Loading trending GIFs...</div>
     </div>
     <div class="gif-powered">Powered by Tenor</div>
+  </div>
+
+  <!-- Typing indicator lives OUTSIDE the chat scroll area — always bottom-left -->
+  <div id="typingIndicator" class="typing-indicator" style="display:none">
+    <span></span><span></span><span></span>
   </div>
 
   <div class="chat-input">
@@ -362,6 +363,5 @@
   <script src="script.js"></script>
   <script src="games.js"></script>
   <script src="auth-client.js"></script>
-  <script src="keyboard-handler.js"></script>
 </body>
 </html>
