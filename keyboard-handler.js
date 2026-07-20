@@ -123,11 +123,23 @@
   }
 
   /**
-   * Measure header and input heights
+   * Measure header and input heights using getBoundingClientRect for accuracy
    */
   function measureHeights() {
-    state.headerHeight = dom.header ? dom.header.offsetHeight : 0;
-    state.inputHeight = dom.chatInput ? dom.chatInput.offsetHeight : 0;
+    // Use getBoundingClientRect for more reliable measurements on phones
+    if (dom.header) {
+      const headerRect = dom.header.getBoundingClientRect();
+      state.headerHeight = Math.ceil(headerRect.height);
+    } else {
+      state.headerHeight = 0;
+    }
+
+    if (dom.chatInput) {
+      const inputRect = dom.chatInput.getBoundingClientRect();
+      state.inputHeight = Math.ceil(inputRect.height);
+    } else {
+      state.inputHeight = 0;
+    }
 
     log(`Heights: header=${state.headerHeight}px, input=${state.inputHeight}px`);
   }
@@ -173,6 +185,7 @@
       state.keyboardHeight = heightDiff;
       updateCSSVariables();
       adjustLayout();
+      eliminateGap(); // Continuous gap monitoring
     }
 
     state.lastViewportHeight = currentHeight;
@@ -188,7 +201,11 @@
 
     // Scroll to bottom after layout settles
     requestAnimationFrame(() => {
-      setTimeout(() => scrollToBottom(), 50);
+      setTimeout(() => {
+        scrollToBottom();
+        // Check for and eliminate any remaining gaps
+        setTimeout(() => eliminateGap(), 100);
+      }, 50);
     });
   }
 
@@ -212,8 +229,18 @@
     const safeAreaTop = parseInt(
       getComputedStyle(root).getPropertyValue("--safe-area-top") || "0"
     );
+    const safeAreaBottom = parseInt(
+      getComputedStyle(root).getPropertyValue("--safe-area-bottom") || "0"
+    );
 
-    // Fix input at bottom
+    // Use getBoundingClientRect for more accurate measurements
+    const headerRect = dom.header ? dom.header.getBoundingClientRect() : { height: 0 };
+    const inputRect = dom.chatInput.getBoundingClientRect();
+    
+    const headerHeight = headerRect.height || state.headerHeight;
+    const inputHeight = inputRect.height || state.inputHeight;
+
+    // Fix input at bottom with full width
     dom.chatInput.style.position = "fixed";
     dom.chatInput.style.bottom = "0";
     dom.chatInput.style.left = "0";
@@ -221,18 +248,28 @@
     dom.chatInput.style.zIndex = "9999";
     dom.chatInput.style.transform = "translateZ(0)"; // Hardware acceleration
     dom.chatInput.style.paddingBottom = "max(8px, env(safe-area-inset-bottom))";
+    dom.chatInput.style.width = "100%";
+    dom.chatInput.style.boxSizing = "border-box";
 
-    // Calculate chat container height to fill remaining space
+    // Calculate exact available height accounting for all elements
     const totalViewport = window.innerHeight;
-    const availableHeight = totalViewport - state.headerHeight - state.inputHeight - safeAreaTop;
+    const topSpace = headerHeight + safeAreaTop;
+    const bottomSpace = inputHeight + safeAreaBottom + 8; // +8px buffer
+    
+    const availableHeight = totalViewport - topSpace - bottomSpace;
 
+    // Apply to chat container
+    dom.chatContainer.style.position = "relative";
     dom.chatContainer.style.height = `${Math.max(0, availableHeight)}px`;
     dom.chatContainer.style.overflowY = "auto";
+    dom.chatContainer.style.overflowX = "hidden";
     dom.chatContainer.style.WebkitOverflowScrolling = "touch"; // iOS momentum
-    dom.chatContainer.style.willChange = "transform";
+    dom.chatContainer.style.willChange = "scroll-position";
     dom.chatContainer.style.flexShrink = "0";
+    dom.chatContainer.style.paddingBottom = "0";
+    dom.chatContainer.style.marginBottom = "0";
 
-    log(`Layout adjusted: chat-height=${availableHeight}px`);
+    log(`Layout adjusted: top=${topSpace}px, bottom=${bottomSpace}px, chat-height=${availableHeight}px`);
   }
 
   /**
@@ -254,6 +291,35 @@
     dom.chatContainer.style.flexShrink = "1";
 
     log("Layout restored to normal");
+  }
+
+  /**
+   * Detect and eliminate gaps between chat and input on phones
+   */
+  function eliminateGap() {
+    if (!dom.chatContainer || !dom.chatInput || !state.keyboardOpen) return;
+
+    const containerRect = dom.chatContainer.getBoundingClientRect();
+    const inputRect = dom.chatInput.getBoundingClientRect();
+
+    // Check for gap between container bottom and input top
+    const gap = inputRect.top - containerRect.bottom;
+
+    if (gap > 2) {
+      // There's a visible gap, reduce container height to eliminate it
+      const currentHeight = parseFloat(getComputedStyle(dom.chatContainer).height);
+      const newHeight = currentHeight - gap;
+
+      dom.chatContainer.style.height = `${Math.max(0, newHeight)}px`;
+      log(`Gap detected: ${gap}px, adjusted container height to ${newHeight}px`);
+    } else if (gap < -2) {
+      // Container is overlapping input, increase height slightly
+      const currentHeight = parseFloat(getComputedStyle(dom.chatContainer).height);
+      const newHeight = currentHeight - gap;
+
+      dom.chatContainer.style.height = `${Math.max(0, newHeight)}px`;
+      log(`Overlap detected: ${gap}px, adjusted container height to ${newHeight}px`);
+    }
   }
 
   /**
@@ -290,6 +356,9 @@
   function handleWindowResize() {
     measureHeights();
     detectKeyboard();
+    if (state.keyboardOpen) {
+      eliminateGap(); // Check for gaps on resize
+    }
   }
 
   /**
@@ -326,6 +395,7 @@
           updateCSSVariables();
           if (state.keyboardOpen) {
             adjustLayout();
+            eliminateGap(); // Check for gaps on every viewport change
           }
         },
         { passive: true }
