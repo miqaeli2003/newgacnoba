@@ -123,7 +123,7 @@
       // No visualViewport support at all — fall back to a focus-based guess.
       const isOpen = document.activeElement === messageInputElement;
       updateKeyboardState(isOpen);
-      ();
+      adjustInputPosition();
     }
   }
 
@@ -137,7 +137,7 @@
     // Keyboard open = visual viewport meaningfully smaller than layout viewport
     updateKeyboardState(ratio < 0.85);
     updateAppHeight();
-    ();
+    adjustInputPosition();
   }
 
   // ── App Height Fallback ─────────────────────────────────────────────
@@ -153,7 +153,7 @@
   function handleOrientationChange() {
     log(`Orientation changed to ${window.orientation}`);
     setTimeout(() => {
-      ();
+      adjustInputPosition();
       scrollToBottom();
     }, 200); // Wait for rotation animation
   }
@@ -182,7 +182,7 @@
   }
 
   // ── Adjust Input Position ─────────────────────────────────────────────
-  function () {
+  function adjustInputPosition() {
     if (!chatInputElement) return;
 
     const chatInput = chatInputElement;
@@ -330,7 +330,7 @@
   window.KeyboardHandler = {
     isOpen: () => keyboardOpen,
     scrollToBottom: scrollToBottom,
-    adjustPosition: ,
+    adjustPosition: adjustInputPosition,
   };
 
   log("Keyboard handler ready");
