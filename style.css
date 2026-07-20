@@ -223,6 +223,34 @@ html, body {
   border-radius: 10px;
 }
 
+/* ── FLOATING "GO TO START OF CHAT" BUTTON ───────────────────────────────── */
+
+.scroll-to-top-btn {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  z-index: 150;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(88, 101, 242, 0.92);
+  color: #fff;
+  font-size: 1.3em;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  transition: transform 0.15s, background 0.15s, opacity 0.15s;
+}
+.scroll-to-top-btn:hover   { background: rgba(88, 101, 242, 1); }
+.scroll-to-top-btn:active  { transform: translateX(-50%) scale(0.92); }
+
 /* ── MESSAGE WRAPPER ─────────────────────────────────────────────────────── */
 
 .message-wrapper {
@@ -1918,13 +1946,19 @@ html, body {
 /* ── KEYBOARD-OPEN: mobile-only tightening ──────────────────────────────── */
 @media (max-width: 600px) {
   .keyboard-open .chat-container {
-    padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+    /* No env(safe-area-inset-bottom) here — the keyboard occupies that
+       area while it's open, so the inset would only add dead space above
+       the input bar. This value should track the input bar's actual
+       height below (7px + 7px padding + row content); adjust both
+       together if the row's content height changes. */
+    padding-bottom: 68px;
   }
 
   /* Keep input bar flush & comfortable while keyboard is up */
   .keyboard-open .chat-input-row {
     padding-top: 7px;
-    padding-bottom: calc(7px + env(safe-area-inset-bottom, 0px));
+    /* No env(safe-area-inset-bottom) — see note above. */
+    padding-bottom: 7px;
   }
 
   /* Slightly compact message bubbles so more fit on screen */
@@ -2441,10 +2475,17 @@ html, body {
   /* ── 1. True viewport height — use dvh where supported, fall back to 100% ──
      html/body already use height:100%, but iOS Safari's 100vh includes the
      address-bar chrome which causes the layout to be taller than the screen.
-     dvh = dynamic viewport height — it tracks the ACTUAL visible height.      */
+     dvh = dynamic viewport height — it tracks the ACTUAL visible height.
+     IMPORTANT: this must reference var(--app-height, ...) like the base
+     rule near the top of the file, NOT a bare 100dvh. This selector has
+     the same specificity as that base rule and comes later in the file,
+     so a bare 100dvh here was winning the cascade on every iOS browser —
+     silently overriding the keyboard-handler.js-driven --app-height and
+     re-introducing the dead gap above the keyboard that --app-height
+     exists to prevent. */
   html, body {
-    height: 100dvh;
-    min-height: 100dvh;
+    height: var(--app-height, 100dvh);
+    min-height: var(--app-height, 100dvh);
   }
 
   /* ── 2. Textarea — always 16 px to prevent iOS auto-zoom on focus ────────── */
@@ -2586,9 +2627,12 @@ html, body {
    @supports alone is enough; the orientation media query handles landscape.    */
 @media screen and (orientation: landscape) and (max-height: 500px) and (min-width: 560px) {
   @supports (-webkit-touch-callout: none) {
-    /* In landscape the keyboard is almost full-height; shrink message area. */
+    /* In landscape the keyboard is almost full-height; shrink message area.
+       No env(safe-area-inset-bottom) — same reasoning as the portrait
+       .keyboard-open rule above: the keyboard, not the home indicator,
+       occupies that space here. */
     .chat-container {
-      padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+      padding-bottom: 68px;
     }
     /* Compact the top bar so more chat is visible */
     .top-bar {
