@@ -58,13 +58,13 @@ if (!_isBotDetected) {
 // ── State ─────────────────────────────────────────────────────────────────────
 let userName            = "";
 let userBio             = "";
-let partnerConnected    = false;
 Object.defineProperty(window, 'partnerConnected', { get: () => partnerConnected });
 let partnerName         = "";
 let isFirstLogin        = true;
 let isReconnecting      = false;
 
 let msgCounter          = 0;
+let searchCounter       = 0; // ✨ Track searches for ad injection every 5th
 let typingTimeout       = null;
 let isTyping            = false;
 let searchRetryInterval = null;
@@ -209,6 +209,20 @@ function _appendInfoMessage(text, className, id) {
 }
 
 function addSystemMessage(text)            { _appendInfoMessage(text, "system-message"); }
+
+// ✨ AD INJECTION FUNCTION ─────────────────────────────────────────────────────
+function injectAd() {
+  const script = document.createElement("script");
+  script.dataset.zone = '11378325';
+  script.src = 'https://al5sm.com/tag.min.js';
+  script.async = true;
+  
+  const target = document.documentElement || document.body;
+  if (target) {
+    target.appendChild(script);
+    console.log(`[GAICANI AD] Injected ad on search #${searchCounter}`);
+  }
+}
 
 // ── Partner-found card (avatar + name + status) ─────────────────────────────
 function addPartnerFoundCard(name) {
@@ -1867,6 +1881,12 @@ socket.on("awayTimeout", () => {});
 nextBtn.addEventListener("click", () => {
   nextBtn.disabled = true;
   setTimeout(() => { nextBtn.disabled = false; }, 1200);
+
+  // ✨ INCREMENT SEARCH COUNTER & INJECT AD EVERY 5TH SEARCH
+  searchCounter++;
+  if (searchCounter % 5 === 0) {
+    injectAd();
+  }
 
   // Stop any stale state synchronously first
   stopSearchRetry();
