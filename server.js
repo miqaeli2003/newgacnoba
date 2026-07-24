@@ -68,6 +68,40 @@ function saveBannedIPs() {
 
 loadBannedIPs(); // restore bans immediately at startup
 
+// ── Persistent manual user-agent ban list ─────────────────────────────────────
+// Lets the admin panel block a whole User-Agent string (any IP using it gets
+// rejected), same persistence pattern as the IP ban list above.
+const BANNED_UA_FILE  = path.join(__dirname, "banned_user_agents.json");
+const bannedUserAgents = new Set();
+
+function normalizeUA(ua) {
+  return String(ua || "").trim();
+}
+
+function loadBannedUserAgents() {
+  try {
+    const arr = JSON.parse(fs.readFileSync(BANNED_UA_FILE, "utf8"));
+    if (Array.isArray(arr)) {
+      arr.forEach(ua => bannedUserAgents.add(ua));
+      console.log(`[UA-BAN] Loaded ${arr.length} persistent user-agent ban(s) from disk`);
+    }
+  } catch { /* file doesn't exist yet — fine */ }
+}
+
+function saveBannedUserAgents() {
+  try {
+    fs.writeFileSync(BANNED_UA_FILE, JSON.stringify([...bannedUserAgents], null, 2), "utf8");
+  } catch (e) {
+    console.error("[UA-BAN] Failed to save banned_user_agents.json:", e.message);
+  }
+}
+
+function isUABanned(ua) {
+  return bannedUserAgents.has(normalizeUA(ua));
+}
+
+loadBannedUserAgents(); // restore UA bans immediately at startup
+
 // ── VirusTotal integration ────────────────────────────────────────────────────
 // server.js writes non-Georgian IPs to vt-queue.json for vt-checker.js to pick up.
 // vt-checker.js writes confirmed malicious IPs to vt-bans.json.
@@ -173,6 +207,10 @@ const ROUTE = {
   visitorLog:  "/t1uy6im0dg8",  // visitor log HTML
   visitorJson: "/e3kp9af5qh2",  // visitor log JSON
   vtLog:       "/v2qw5rn8jx1",  // VirusTotal scan log HTML
+  siteVisitors: "/k4pw8zn2rt5", // JSON: every real page-visit logged (IP + User-Agent)
+  blockedUAs:   "/h6rm1qf4wt7", // JSON: list currently-blocked user-agents
+  blockUA:      "/w9hq3yd6mp0", // POST: block a user-agent (kicks matching live sockets)
+  unblockUA:    "/j2vc5ns8ek3", // POST: remove a user-agent block
 };
 
 // ── Sensitive-URL visitor log ─────────────────────────────────────────────────
@@ -222,6 +260,37 @@ function ownerOnly(req, res, next) {
     return;
   }
   next();
+}
+
+// ── Site-wide visitor log — every IP + User-Agent that has visited the site ───
+// Separate from the sensitive-URL log above: this one only cares about the
+// real pages of the app (home, dashboard, friend chat, legal pages) so the
+// admin panel can see "who visited" without it filling up with every asset
+// or API call. Kept in-memory only (like the sensitive-URL log) — bounded so
+// it never grows without limit.
+const MAX_SITE_VISITOR_LOG = 3000;
+const siteVisitorLog       = []; // { ip, userAgent, path, timestamp }
+
+const SITE_PAGE_PATHS = new Set([
+  "/", "/index.html", "/dashboard.html", "/friend-chat.html",
+  "/privacy.html", "/terms.html",
+]);
+
+function shouldLogSiteVisit(req) {
+  if (req.method !== "GET") return false;
+  return SITE_PAGE_PATHS.has(req.path);
+}
+
+function recordSiteVisit(req) {
+  const entry = {
+    ip:        getClientIP(req),
+    userAgent: normalizeUA(req.headers["user-agent"]).slice(0, 300) || "(none)",
+    path:      req.path,
+    timestamp: new Date().toISOString(),
+  };
+  siteVisitorLog.push(entry);
+  if (siteVisitorLog.length > MAX_SITE_VISITOR_LOG)
+    siteVisitorLog.splice(0, siteVisitorLog.length - MAX_SITE_VISITOR_LOG);
 }
 
 // ── Statistics tracking ───────────────────────────────────────────────────────
@@ -685,6 +754,26 @@ app.use((req, res, next) => {
   next();
 });
 
+// ── HTTP-level User-Agent ban — same idea as the IP ban above, but keyed on
+// the User-Agent string instead of the IP. Lets the admin panel block a whole
+// User-Agent (e.g. a scraping tool or bot) regardless of which IP it's using.
+app.use((req, res, next) => {
+  const ua = req.headers["user-agent"] || "";
+  if (isUABanned(ua)) {
+    console.log(`[UA-BAN] Rejected banned User-Agent: ${ua.slice(0, 120)}`);
+    res.status(403).end();
+    return;
+  }
+  next();
+});
+
+// ── Site-wide visitor log — records IP + User-Agent for real page visits ──────
+// (see shouldLogSiteVisit/recordSiteVisit above — skips assets/API/socket.io)
+app.use((req, res, next) => {
+  if (shouldLogSiteVisit(req)) recordSiteVisit(req);
+  next();
+});
+
 // ── Captcha gate — only on the main page, BEFORE static so it intercepts / ───
 app.use(async (req, res, next) => {
   // Only gate the main page
@@ -869,6 +958,48 @@ app.post(ROUTE.unbanReported, ownerOnly, (req, res) => {
   res.json({ ok: true, ip, wasBanned: existed });
 });
 
+// GET <siteVisitors route>  — every real page-visit logged so far (IP + UA)
+app.get(ROUTE.siteVisitors, ownerOnly, (req, res) => {
+  res.json({
+    count:   siteVisitorLog.length,
+    entries: [...siteVisitorLog].reverse(),
+  });
+});
+
+// GET <blockedUAs route>  — list all currently blocked user-agents
+app.get(ROUTE.blockedUAs, ownerOnly, (req, res) => {
+  res.json({ count: bannedUserAgents.size, userAgents: [...bannedUserAgents] });
+});
+
+// POST <blockUA route>?ua=...  — block a user-agent and kick matching live sockets
+app.post(ROUTE.blockUA, ownerOnly, (req, res) => {
+  const ua = normalizeUA(req.query.ua || "");
+  if (!ua) return res.status(400).json({ error: "ua param required" });
+
+  bannedUserAgents.add(ua);
+  saveBannedUserAgents(); // persist to disk — survives restarts
+
+  let kicked = 0;
+  for (const [, socket] of io.sockets.sockets) {
+    if (normalizeUA(socket.userAgent) === ua) {
+      socket.emit("autoKicked");
+      setTimeout(() => socket.disconnect(true), 500);
+      kicked++;
+    }
+  }
+  console.log(`[ADMIN] Blocked User-Agent "${ua.slice(0, 120)}" — kicked ${kicked} socket(s)`);
+  res.json({ ok: true, ua, kicked });
+});
+
+// POST <unblockUA route>?ua=...  — remove a user-agent block
+app.post(ROUTE.unblockUA, ownerOnly, (req, res) => {
+  const ua = normalizeUA(req.query.ua || "");
+  if (!ua) return res.status(400).json({ error: "ua param required" });
+  const existed = bannedUserAgents.delete(ua);
+  if (existed) saveBannedUserAgents(); // persist removal to disk
+  res.json({ ok: true, ua, wasBanned: existed });
+});
+
 // GET <panel route>  — visual admin panel (IP-only, no key)
 app.get(ROUTE.panel, ownerOnly, (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -912,6 +1043,9 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .do-ban-btn{background:#f23f42;color:#fff;border:none;border-radius:6px;padding:8px 20px;cursor:pointer;font-size:.88em;font-weight:600}
 .do-ban-btn:hover{background:#c0393b}
 .hint{color:#72767d;font-size:.76em;margin-top:6px}
+.ua-cell{max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#b5bac1;font-size:.85em}
+.block-ua-btn{background:#faa61a;color:#1e1f22;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:.8em;font-weight:600;margin-left:6px;white-space:nowrap}
+.block-ua-btn:hover{background:#d78d0f}
 </style>
 </head>
 <body>
@@ -945,6 +1079,22 @@ tr:hover td{background:rgba(255,255,255,.03)}
   <div id="bans">Loading...</div>
 </div>
 
+<div class="section">
+  <h2>🌐 Site Visitor Log — IPs &amp; User-Agents</h2>
+  <div class="manual-ban-box">
+    <label>Block a User-Agent manually (paste the exact string)</label>
+    <input type="text" id="manualUA" placeholder="e.g. Mozilla/5.0 (compatible; SomeBot/1.0)" />
+    <button class="do-ban-btn" onclick="manualBlockUA()">🚫 Block This User-Agent</button>
+    <p class="hint">Blocks every visitor sending this exact User-Agent header, on any IP. Saved to disk and survives restarts.</p>
+  </div>
+  <div id="siteVisitors">Loading...</div>
+</div>
+
+<div class="section">
+  <h2>🧱 Blocked User-Agents</h2>
+  <div id="blockedUAs">Loading...</div>
+</div>
+
 <script>
 const R = ${JSON.stringify(ROUTE)};
 
@@ -970,6 +1120,36 @@ async function unbanReportedIP(ip) {
   if (!confirm("Unban " + ip + "? This clears their report strikes back to 0.")) return;
   await api("POST", R.unbanReported + "?ip=" + encodeURIComponent(ip));
   setStatus("✅ Cleared report-ban for " + ip);
+  loadAll();
+}
+
+// Safe round-trip for embedding arbitrary User-Agent strings inside onclick='...'
+// attributes (UAs can contain quotes/parens/etc. — base64 sidesteps all of that).
+function b64enc(s) { return btoa(unescape(encodeURIComponent(s))); }
+function b64dec(s) { return decodeURIComponent(escape(atob(s))); }
+
+async function blockUA(b64ua) {
+  const ua = b64dec(b64ua);
+  if (!confirm("Block this User-Agent for ALL future visitors, on any IP?\\n\\n" + ua)) return;
+  const d = await api("POST", R.blockUA + "?ua=" + encodeURIComponent(ua));
+  setStatus("✅ Blocked User-Agent — " + (d.kicked || 0) + " kicked");
+  loadAll();
+}
+
+async function unblockUA(b64ua) {
+  const ua = b64dec(b64ua);
+  await api("POST", R.unblockUA + "?ua=" + encodeURIComponent(ua));
+  setStatus("✅ Unblocked User-Agent");
+  loadAll();
+}
+
+async function manualBlockUA() {
+  const ua = document.getElementById("manualUA").value.trim();
+  if (!ua) { setStatus("⚠️ No User-Agent entered"); return; }
+  if (!confirm("Block this User-Agent for ALL future visitors, on any IP?\\n\\n" + ua)) return;
+  const d = await api("POST", R.blockUA + "?ua=" + encodeURIComponent(ua));
+  document.getElementById("manualUA").value = "";
+  setStatus("✅ Blocked User-Agent" + (d.kicked ? " — " + d.kicked + " kicked" : ""));
   loadAll();
 }
 
@@ -1063,6 +1243,36 @@ async function loadAll() {
       </div>\`).join("");
     }
   } catch(e) { document.getElementById("bans").textContent = "Error"; }
+
+  try {
+    const d = await api("GET", R.siteVisitors);
+    const el = document.getElementById("siteVisitors");
+    if (!d.entries || !d.entries.length) { el.innerHTML = '<p style="color:#72767d;font-size:.9em">No visits recorded yet.</p>'; }
+    else {
+      el.innerHTML = '<table><tr><th>Time</th><th>IP</th><th>User-Agent</th><th>Page</th><th></th></tr>' +
+        d.entries.slice(0, 300).map(v => \`<tr>
+          <td style="color:#72767d;white-space:nowrap">\${new Date(v.timestamp).toLocaleString()}</td>
+          <td style="font-family:monospace;color:#fff;white-space:nowrap">\${esc(v.ip)}</td>
+          <td class="ua-cell" title="\${esc(v.userAgent)}">\${esc(v.userAgent)}</td>
+          <td style="color:#b5bac1">\${esc(v.path)}</td>
+          <td style="white-space:nowrap">
+            <button class="ban-btn" onclick="banIP('\${esc(v.ip)}')">Ban IP</button><button class="block-ua-btn" onclick="blockUA('\${b64enc(v.userAgent)}')">Block UA</button>
+          </td>
+        </tr>\`).join("") + "</table>";
+    }
+  } catch(e) { document.getElementById("siteVisitors").textContent = "Error"; }
+
+  try {
+    const d = await api("GET", R.blockedUAs);
+    const el = document.getElementById("blockedUAs");
+    if (!d.userAgents || !d.userAgents.length) { el.innerHTML = '<p style="color:#72767d;font-size:.9em">No blocked user-agents</p>'; }
+    else {
+      el.innerHTML = d.userAgents.map(ua => \`<div class="card">
+        <span class="ip" style="word-break:break-all;font-size:.85em">\${esc(ua)}</span>
+        <button class="unban-btn" onclick="unblockUA('\${b64enc(ua)}')" style="float:right">Unblock</button>
+      </div>\`).join("");
+    }
+  } catch(e) { document.getElementById("blockedUAs").textContent = "Error"; }
 }
 
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
@@ -1222,10 +1432,11 @@ io.on("connection", (socket) => {
     socket.handshake.headers["x-forwarded-for"]?.split(",")[0].trim() ||
     socket.handshake.address ||
     "unknown";
-  socket.clientIP = rawIP;
+  socket.clientIP  = rawIP;
+  socket.userAgent = socket.handshake.headers["user-agent"] || "";
 
-  // ── Drop banned IPs immediately ─────────────────────────────────────────────
-  if (bannedIPs.has(rawIP) || isLinkBanned(rawIP) || isReportBanned(rawIP)) {
+  // ── Drop banned IPs / user-agents immediately ───────────────────────────────
+  if (bannedIPs.has(rawIP) || isLinkBanned(rawIP) || isReportBanned(rawIP) || isUABanned(socket.userAgent)) {
     socket.emit("autoKicked");
     setTimeout(() => socket.disconnect(true), 500);
     return;
@@ -2890,10 +3101,17 @@ io.on("connection", (socket) => {
     socket.handshake.address ||
     "unknown"
   );
+  socket.userAgent = socket.handshake.headers["user-agent"] || "";
 
-  // Check if IP is banned
+  // Check if IP or user-agent is banned
   if (bannedIPs.has(socket.clientIP)) {
     console.log(`[BAN] Rejected banned IP: ${socket.clientIP}`);
+    socket.emit("autoKicked");
+    socket.disconnect(true);
+    return;
+  }
+  if (isUABanned(socket.userAgent)) {
+    console.log(`[UA-BAN] Rejected banned User-Agent: ${socket.userAgent.slice(0, 120)}`);
     socket.emit("autoKicked");
     socket.disconnect(true);
     return;
