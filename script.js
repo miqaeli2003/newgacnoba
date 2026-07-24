@@ -1356,15 +1356,6 @@ function saveName() {
   if (!name)            { showNameError("შეიყვანეთ სახელი ..."); return; }
   if (name.length < 2)  { showNameError("სახელი უნდა შედგებოდეს მინიმუმ ორი სიმბოლოსგან!"); return; }
   if (name.length > 20) { showNameError("20 სიმბოლოზე მეტი ვერ იქნება სახელი ! "); return; }
-
-  // ── Google reCAPTCHA check ────────────────────────────────────────────────
-  let recaptchaToken = "";
-  try { recaptchaToken = (typeof grecaptcha !== "undefined") ? grecaptcha.getResponse() : ""; } catch (e) {}
-  if (!recaptchaToken) {
-    showNameError("გთხოვთ დაადასტუროთ რომ ბოტი არ ხართ (captcha) ✅");
-    return;
-  }
-
   clearNameError();
 
   // If socket isn't connected yet, don't freeze — show a clear error
@@ -1408,15 +1399,11 @@ function _doSetName(name) {
     _resetSaveBtn();
   }, 8000);
 
-  let recaptchaToken = "";
-  try { recaptchaToken = (typeof grecaptcha !== "undefined") ? grecaptcha.getResponse() : ""; } catch (e) {}
-
   socket.emit("setName", {
     name,
     token:     _challengeToken,
     powAnswer: _challengePow,
     webdriver: !!navigator.webdriver,
-    recaptchaToken,
   });
 }
 
