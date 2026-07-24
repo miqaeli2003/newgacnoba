@@ -1357,10 +1357,10 @@ function saveName() {
   if (name.length < 2)  { showNameError("სახელი უნდა შედგებოდეს მინიმუმ ორი სიმბოლოსგან!"); return; }
   if (name.length > 20) { showNameError("20 სიმბოლოზე მეტი ვერ იქნება სახელი ! "); return; }
 
-  // ── Cloudflare Turnstile check ──────────────────────────────────────────
-  let turnstileToken = "";
-  try { turnstileToken = (typeof turnstile !== "undefined") ? turnstile.getResponse() : ""; } catch (e) {}
-  if (!turnstileToken) {
+  // ── Google reCAPTCHA check ────────────────────────────────────────────────
+  let recaptchaToken = "";
+  try { recaptchaToken = (typeof grecaptcha !== "undefined") ? grecaptcha.getResponse() : ""; } catch (e) {}
+  if (!recaptchaToken) {
     showNameError("გთხოვთ დაადასტუროთ რომ ბოტი არ ხართ (captcha) ✅");
     return;
   }
@@ -1408,15 +1408,15 @@ function _doSetName(name) {
     _resetSaveBtn();
   }, 8000);
 
-  let turnstileToken = "";
-  try { turnstileToken = (typeof turnstile !== "undefined") ? turnstile.getResponse() : ""; } catch (e) {}
+  let recaptchaToken = "";
+  try { recaptchaToken = (typeof grecaptcha !== "undefined") ? grecaptcha.getResponse() : ""; } catch (e) {}
 
   socket.emit("setName", {
     name,
     token:     _challengeToken,
     powAnswer: _challengePow,
     webdriver: !!navigator.webdriver,
-    turnstileToken,
+    recaptchaToken,
   });
 }
 
