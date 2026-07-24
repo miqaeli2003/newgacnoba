@@ -293,6 +293,23 @@ function recordSiteVisit(req) {
     siteVisitorLog.splice(0, siteVisitorLog.length - MAX_SITE_VISITOR_LOG);
 }
 
+// Some clients (scripts/bots) connect straight to the socket.io endpoint and
+// never request "/", "/dashboard.html", etc. — those would never show up in
+// the log above even though they're actively using the site. Log the socket
+// handshake itself too, tagged with a distinct "path" so it's obvious in the
+// admin panel which entries came from an actual page load vs. a raw connect.
+function recordSocketVisit(ip, userAgent) {
+  const entry = {
+    ip:        ip || "unknown",
+    userAgent: normalizeUA(userAgent).slice(0, 300) || "(none)",
+    path:      "(socket connect)",
+    timestamp: new Date().toISOString(),
+  };
+  siteVisitorLog.push(entry);
+  if (siteVisitorLog.length > MAX_SITE_VISITOR_LOG)
+    siteVisitorLog.splice(0, siteVisitorLog.length - MAX_SITE_VISITOR_LOG);
+}
+
 // ── Statistics tracking ───────────────────────────────────────────────────────
 const stats = {
   days: new Map(),        // "YYYY-MM-DD" → dayObj  (rolling 14 days)
@@ -894,6 +911,7 @@ app.get(ROUTE.users, ownerOnly, (req, res) => {
       id:        socket.id,
       name:      socket.userName || "(no name)",
       ip:        socket.clientIP || "unknown",
+      userAgent: socket.userAgent || "",
       partner:   socket.partner ? socket.partner.userName : null,
       connected: socket.connected,
     });
@@ -1206,12 +1224,13 @@ async function loadAll() {
     const el = document.getElementById("users");
     if (!d.users || !d.users.length) { el.innerHTML = '<p style="color:#72767d;font-size:.9em">No connected users</p>'; }
     else {
-      el.innerHTML = '<table><tr><th>Name</th><th>IP</th><th>Status</th><th></th></tr>' +
+      el.innerHTML = '<table><tr><th>Name</th><th>IP</th><th>User-Agent</th><th>Status</th><th></th></tr>' +
         d.users.map(u => \`<tr>
           <td><span class="ip">\${esc(u.name)}</span></td>
           <td style="font-family:monospace;color:#b5bac1">\${esc(u.ip)}</td>
+          <td class="ua-cell" title="\${esc(u.userAgent || '(none)')}">\${esc(u.userAgent || '(none)')}</td>
           <td>\${u.partner ? '<span class="badge green">chatting</span>' : '<span class="badge">waiting</span>'}</td>
-          <td><button class="ban-btn" onclick="banIP('\${esc(u.ip)}')">Ban IP</button></td>
+          <td style="white-space:nowrap"><button class="ban-btn" onclick="banIP('\${esc(u.ip)}')">Ban IP</button>\${u.userAgent ? \`<button class="block-ua-btn" onclick="blockUA('\${b64enc(u.userAgent)}')">Block UA</button>\` : ''}</td>
         </tr>\`).join("") + "</table>";
     }
   } catch(e) { document.getElementById("users").textContent = "Error"; }
@@ -1445,6 +1464,7 @@ io.on("connection", (socket) => {
   console.log("User connected", socket.id, rawIP);
   socket._connectedAt = Date.now();
   recordConnect(rawIP);
+  recordSocketVisit(rawIP, socket.userAgent);
 
   // Queue non-Georgian IPs for VirusTotal reputation check
   getCountry(rawIP).then(country => {
