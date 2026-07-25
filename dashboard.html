@@ -223,6 +223,13 @@
       padding: 5px 9px; flex-shrink: 0;
     }
 
+    /* ── Pending friend requests ── */
+    .act-accept:hover { background: rgba(59,165,93,0.2); color: #3ba55d; }
+    .act-reject:hover { background: rgba(242,63,66,0.2); color: #f23f42; }
+    .pending-badge-alert {
+      background: #f23f42 !important; color: #fff !important;
+    }
+
     /* ── Toast ── */
     #toast-container {
       position: fixed; bottom: 24px; left: 50%;
@@ -363,6 +370,15 @@
 
     <!-- Start Chat -->
     <a href="/" class="btn-start-chat">🔎 შემთხვევითი ჩატის დაწყება</a>
+
+    <!-- Incoming friend requests — hidden until there are entries -->
+    <div class="section" id="pendingSection" style="display:none">
+      <div class="section-label">
+        📨 მეგობრობის მოთხოვნები
+        <span class="section-badge pending-badge-alert" id="pendingCount">0</span>
+      </div>
+      <div class="friends-list" id="pendingList"></div>
+    </div>
 
     <!-- Friends -->
     <div class="section" id="friendsSection">
@@ -520,6 +536,7 @@
           authUser.pendingRequests = pendingRequests || [];
         }
         renderFriends(friends || []);
+        renderPendingRequests(pendingRequests || []);
         fetchUnreadFriends();
         socket.emit("users:listOnline");
       });
@@ -527,6 +544,16 @@
       socket.on("auth:invalid", () => {
         clearAuth();
         window.location.href = "/";
+      });
+
+      // ── Someone just sent me a friend request — show it live ──────────────
+      socket.on("friend:incomingRequest", ({ fromUsername }) => {
+        if (!authUser || !fromUsername) return;
+        const lc = fromUsername.toLowerCase();
+        if (!authUser.pendingRequests) authUser.pendingRequests = [];
+        if (!authUser.pendingRequests.includes(lc)) authUser.pendingRequests.push(lc);
+        renderPendingRequests(authUser.pendingRequests);
+        showToast(`📨 ${esc(fromUsername)}-მ გამოგიგზავნა მეგობრობის მოთხოვნა`);
       });
 
       // ── Who's online right now — for the "add friend" list ────────────────
@@ -745,6 +772,55 @@
           showToast(`📨 მეგობრობის მოთხოვნა გაიგზავნა ${esc(uname)}-სთვის`);
         });
       });
+    }
+
+    /* ── Render incoming friend requests (accept / reject) ─────────── */
+    function renderPendingRequests(requests) {
+      const wrap = document.getElementById("pendingSection");
+      const list = document.getElementById("pendingList");
+      const cnt  = document.getElementById("pendingCount");
+      if (!wrap || !list) return;
+
+      const reqs = requests || [];
+      if (cnt) cnt.textContent = reqs.length;
+      wrap.style.display = reqs.length ? "" : "none";
+
+      if (!reqs.length) { list.innerHTML = ""; return; }
+
+      list.innerHTML = reqs.map(u => `
+        <div class="friend-item" data-friend="${esc(u)}">
+          <div class="friend-avatar">${esc(u).charAt(0).toUpperCase()}</div>
+          <span class="friend-name">${esc(u)}</span>
+          <div class="friend-actions">
+            <button class="act-btn act-accept" data-f="${esc(u)}" title="დადასტურება">✓</button>
+            <button class="act-btn act-reject" data-f="${esc(u)}" title="უარყოფა">✕</button>
+          </div>
+        </div>`).join("");
+
+      function removeFromPending(fname) {
+        if (!authUser) return;
+        const lc = fname.toLowerCase();
+        authUser.pendingRequests = (authUser.pendingRequests || []).filter(u => u.toLowerCase() !== lc);
+        renderPendingRequests(authUser.pendingRequests);
+      }
+
+      list.querySelectorAll(".act-accept").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const fname = btn.dataset.f;
+          socket?.emit("friend:accept", { fromUsername: fname });
+          removeFromPending(fname);
+        });
+      });
+
+      list.querySelectorAll(".act-reject").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const fname = btn.dataset.f;
+          socket?.emit("friend:decline", { fromUsername: fname });
+          removeFromPending(fname);
+        });
+      });
+
+      paintFriendAvatars(reqs, list);
     }
 
     /* ── Render blocked list ─────────────────────────────────────── */
