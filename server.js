@@ -1098,14 +1098,13 @@ tr:hover td{background:rgba(255,255,255,.03)}
 </div>
 
 <div class="section">
-  <h2>🌐 Site Visitor Log — IPs &amp; User-Agents</h2>
+  <h2>🌐 Block a User-Agent</h2>
   <div class="manual-ban-box">
     <label>Block a User-Agent manually (paste the exact string)</label>
     <input type="text" id="manualUA" placeholder="e.g. Mozilla/5.0 (compatible; SomeBot/1.0)" />
     <button class="do-ban-btn" onclick="manualBlockUA()">🚫 Block This User-Agent</button>
     <p class="hint">Blocks every visitor sending this exact User-Agent header, on any IP. Saved to disk and survives restarts.</p>
   </div>
-  <div id="siteVisitors">Loading...</div>
 </div>
 
 <div class="section">
@@ -1262,24 +1261,6 @@ async function loadAll() {
       </div>\`).join("");
     }
   } catch(e) { document.getElementById("bans").textContent = "Error"; }
-
-  try {
-    const d = await api("GET", R.siteVisitors);
-    const el = document.getElementById("siteVisitors");
-    if (!d.entries || !d.entries.length) { el.innerHTML = '<p style="color:#72767d;font-size:.9em">No visits recorded yet.</p>'; }
-    else {
-      el.innerHTML = '<table><tr><th>Time</th><th>IP</th><th>User-Agent</th><th>Page</th><th></th></tr>' +
-        d.entries.slice(0, 300).map(v => \`<tr>
-          <td style="color:#72767d;white-space:nowrap">\${new Date(v.timestamp).toLocaleString()}</td>
-          <td style="font-family:monospace;color:#fff;white-space:nowrap">\${esc(v.ip)}</td>
-          <td class="ua-cell" title="\${esc(v.userAgent)}">\${esc(v.userAgent)}</td>
-          <td style="color:#b5bac1">\${esc(v.path)}</td>
-          <td style="white-space:nowrap">
-            <button class="ban-btn" onclick="banIP('\${esc(v.ip)}')">Ban IP</button><button class="block-ua-btn" onclick="blockUA('\${b64enc(v.userAgent)}')">Block UA</button>
-          </td>
-        </tr>\`).join("") + "</table>";
-    }
-  } catch(e) { document.getElementById("siteVisitors").textContent = "Error"; }
 
   try {
     const d = await api("GET", R.blockedUAs);
@@ -1464,7 +1445,6 @@ io.on("connection", (socket) => {
   console.log("User connected", socket.id, rawIP);
   socket._connectedAt = Date.now();
   recordConnect(rawIP);
-  recordSocketVisit(rawIP, socket.userAgent);
 
   // Queue non-Georgian IPs for VirusTotal reputation check
   getCountry(rawIP).then(country => {
