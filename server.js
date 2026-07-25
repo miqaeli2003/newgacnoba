@@ -2634,7 +2634,7 @@ function getOnlineRegisteredUsers(excludeLc) {
     if (lc === excludeLc) continue;
     const u = registeredUsers.get(lc);
     if (!u) continue;
-    list.push({ username: u.username, avatar: u.avatar || null });
+    list.push({ username: u.username, avatar: u.avatar || null, bio: u.bio || "" });
   }
   list.sort((a, b) => a.username.localeCompare(b.username));
   return list;
@@ -2683,7 +2683,8 @@ function _saveAuthUsersToDisk() {
       createdAt: u.createdAt,
       friends: u.friends || [],
       pendingRequests: u.pendingRequests || [],
-      avatar: u.avatar || DEFAULT_AVATAR
+      avatar: u.avatar || DEFAULT_AVATAR,
+      bio: u.bio || ""
     };
   }
   try {
@@ -2785,7 +2786,8 @@ app.post("/api/auth/register", authLimiter, express.json({ limit: "5kb" }), (req
     createdAt: new Date().toISOString(),
     friends: [],
     pendingRequests: [],
-    avatar: chosenAvatar
+    avatar: chosenAvatar,
+    bio: ""
   };
 
   registeredUsers.set(lc, user);
@@ -2795,7 +2797,7 @@ app.post("/api/auth/register", authLimiter, express.json({ limit: "5kb" }), (req
   const token = authToken();
   authTokens.set(token, { usernameLower: lc, expiry: Date.now() + AUTH_TOKEN_TTL });
 
-  res.status(201).json({ success: true, token, username: user.username, avatar: user.avatar });
+  res.status(201).json({ success: true, token, username: user.username, avatar: user.avatar, bio: user.bio });
 });
 
 // GET /api/auth/avatars — list the predefined avatar options
@@ -2826,6 +2828,30 @@ app.post("/api/auth/avatar", express.json({ limit: "1kb" }), (req, res) => {
   res.json({ success: true, avatar: user.avatar });
 });
 
+// POST /api/auth/bio — change the logged-in user's interests/bio (shown next to
+// their name in the dashboard's online-users list)
+app.post("/api/auth/bio", express.json({ limit: "1kb" }), (req, res) => {
+  const token = req.headers.authorization?.replace("Bearer ", "") || req.body?.token;
+  const { bio } = req.body || {};
+
+  if (!token) return res.status(401).json({ error: "No token" });
+  const entry = authTokens.get(token);
+  if (!entry || Date.now() >= entry.expiry) {
+    authTokens.delete(token);
+    return res.status(401).json({ error: "Token expired" });
+  }
+  if (typeof bio !== "string")
+    return res.status(400).json({ error: "არასწორი ინტერესები" });
+
+  const user = registeredUsers.get(entry.usernameLower);
+  if (!user) return res.status(401).json({ error: "User not found" });
+
+  user.bio = bio.slice(0, 60).replace(/<[^>]*>/g, "").trim();
+  saveAuthUsers();
+
+  res.json({ success: true, bio: user.bio });
+});
+
 // POST /api/auth/login
 app.post("/api/auth/login", authLimiter, express.json({ limit: "5kb" }), (req, res) => {
   const { username, password } = req.body || {};
@@ -2846,7 +2872,8 @@ app.post("/api/auth/login", authLimiter, express.json({ limit: "5kb" }), (req, r
     username: user.username,
     friends: user.friends || [],
     pendingRequests: user.pendingRequests || [],
-    avatar: user.avatar || DEFAULT_AVATAR
+    avatar: user.avatar || DEFAULT_AVATAR,
+    bio: user.bio || ""
   });
 });
 
@@ -2876,7 +2903,8 @@ app.post("/api/auth/verify", express.json({ limit: "1kb" }), (req, res) => {
     username: user.username,
     friends: user.friends || [],
     pendingRequests: user.pendingRequests || [],
-    avatar: user.avatar || DEFAULT_AVATAR
+    avatar: user.avatar || DEFAULT_AVATAR,
+    bio: user.bio || ""
   });
 });
 
@@ -3163,7 +3191,7 @@ io.on("connection", (socket) => {
     onlineRegSockets.get(entry.usernameLower).add(socket.id);
 
     socket.join(`user:${entry.usernameLower}`);
-    socket.emit("auth:authenticated", { username: user.username, friends: user.friends || [], pendingRequests: user.pendingRequests || [] });
+    socket.emit("auth:authenticated", { username: user.username, friends: user.friends || [], pendingRequests: user.pendingRequests || [], avatar: user.avatar || DEFAULT_AVATAR, bio: user.bio || "" });
     console.log(`[AUTH] ${user.username} logged in`);
     io.emit("users:onlineChanged"); // let dashboards know the online list may have changed
   });
@@ -3191,7 +3219,7 @@ io.on("connection", (socket) => {
     if (!onlineRegSockets.has(entry.usernameLower)) onlineRegSockets.set(entry.usernameLower, new Set());
     onlineRegSockets.get(entry.usernameLower).add(socket.id);
     socket.join(`user:${entry.usernameLower}`);
-    socket.emit("auth:authenticated", { username: user.username, friends: user.friends || [], pendingRequests: user.pendingRequests || [] });
+    socket.emit("auth:authenticated", { username: user.username, friends: user.friends || [], pendingRequests: user.pendingRequests || [], avatar: user.avatar || DEFAULT_AVATAR, bio: user.bio || "" });
     console.log(`[AUTH] ${user.username} logged in via auth:token`);
     io.emit("users:onlineChanged"); // let dashboards know the online list may have changed
   });

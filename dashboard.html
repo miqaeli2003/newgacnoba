@@ -331,6 +331,51 @@
       border-color: #5865f2;
       box-shadow: 0 0 0 2px rgba(88,101,242,0.35);
     }
+
+    /* ── Interests / bio ── */
+    .user-bio-display {
+      font-size: 0.82em; color: #a78bfa;
+      margin-top: 4px; font-style: italic;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px;
+    }
+    .btn-change-bio {
+      margin-top: 6px; margin-left: 6px;
+      padding: 4px 10px;
+      background: rgba(88,101,242,0.12);
+      border: 1px solid rgba(88,101,242,0.3);
+      color: #a78bfa;
+      border-radius: 7px;
+      font-size: 0.72em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-change-bio:hover { background: rgba(88,101,242,0.22); }
+    .bio-editor-row { display: flex; gap: 8px; padding: 12px 14px 16px; align-items: center; }
+    .bio-editor-input {
+      flex: 1; min-width: 0;
+      background: #1e1f22; border: 1px solid rgba(255,255,255,0.08);
+      color: #dcddde; border-radius: 8px;
+      padding: 9px 12px; font-size: 0.88em; font-family: inherit;
+    }
+    .bio-editor-input:focus { outline: none; border-color: #5865f2; }
+    .bio-char-count { font-size: 0.7em; color: #72767d; flex-shrink: 0; }
+    .bio-editor-actions { display: flex; gap: 6px; padding: 0 14px 14px; }
+    .bio-save-btn, .bio-clear-btn {
+      border: none; border-radius: 7px; padding: 7px 14px;
+      font-size: 0.8em; font-weight: 600; cursor: pointer;
+    }
+    .bio-save-btn { background: #5865f2; color: #fff; }
+    .bio-save-btn:hover { background: #4752c4; }
+    .bio-clear-btn { background: rgba(255,255,255,0.07); color: #b5bac1; }
+    .bio-clear-btn:hover { background: rgba(255,255,255,0.14); color: #fff; }
+
+    /* ── Interests shown next to online-user names ── */
+    .online-user-bio {
+      font-size: 0.76em; color: #72767d; font-style: italic;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      max-width: 130px; flex-shrink: 0; margin-right: 4px;
+    }
   </style>
 </head>
 <body>
@@ -358,7 +403,9 @@
       <div class="user-info">
         <div class="user-name" id="userName">—</div>
         <div class="user-meta">რეგისტრირებული მომხმარებელი</div>
+        <div class="user-bio-display" id="userBioDisplay" style="display:none"></div>
         <button class="btn-change-avatar" id="changeAvatarBtn">🖼️ სურათის შეცვლა</button>
+        <button class="btn-change-bio" id="changeBioBtn">✏️ ინტერესების შეცვლა</button>
       </div>
     </div>
 
@@ -366,6 +413,19 @@
     <div class="section avatar-picker-section" id="avatarPickerSection" style="display:none">
       <div class="section-label">აირჩიე ახალი პროფილის სურათი</div>
       <div class="avatar-picker-grid" id="avatarPickerGrid"></div>
+    </div>
+
+    <!-- Interests / bio editor (hidden until "ინტერესების შეცვლა" is clicked) -->
+    <div class="section" id="bioEditorSection" style="display:none">
+      <div class="section-label">ინტერესები — გამოჩნდება ონლაინ სიაში შენი სახელის გვერდით</div>
+      <div class="bio-editor-row">
+        <input type="text" id="bioEditorInput" class="bio-editor-input" maxlength="60" placeholder="მაგ: ფილმები, მუსიკა, თამაშები..." />
+        <span class="bio-char-count" id="bioEditorCount">0/60</span>
+      </div>
+      <div class="bio-editor-actions">
+        <button class="bio-save-btn" id="bioSaveBtn">შენახვა</button>
+        <button class="bio-clear-btn" id="bioClearBtn">გასუფთავება</button>
+      </div>
     </div>
 
     <!-- Start Chat -->
@@ -395,7 +455,7 @@
     <!-- Online registered users -->
     <div class="section" id="onlineUsersSection">
       <div class="section-label">
-        🟢 დარეგისტრირებული მომხმარებლები ვინც ახლა არის ონლაინ
+        🟢 ონლაინ მომხმარებლები
         <span class="section-badge" id="onlineUsersCount">0</span>
       </div>
       <div class="friends-list" id="onlineUsersList">
@@ -515,6 +575,75 @@
       section.style.display = "block";
     });
 
+    /* ── Interests / bio ─────────────────────────────────────────── */
+    function paintUserBio() {
+      const el = document.getElementById("userBioDisplay");
+      if (!el || !authUser) return;
+      if (authUser.bio) {
+        el.textContent = `💬 ${authUser.bio}`;
+        el.style.display = "";
+      } else {
+        el.style.display = "none";
+      }
+    }
+
+    const bioEditorInput = document.getElementById("bioEditorInput");
+    const bioEditorCount = document.getElementById("bioEditorCount");
+
+    bioEditorInput?.addEventListener("input", () => {
+      if (bioEditorCount) bioEditorCount.textContent = `${bioEditorInput.value.length}/60`;
+    });
+
+    async function saveBio(text) {
+      if (!authUser) return;
+      const prev = authUser.bio;
+      authUser.bio = text;
+      paintUserBio(); // optimistic update
+      renderOnlineUsers(lastOnlineUsers); // in case my own row is visible anywhere
+
+      try {
+        const r = await fetch("/api/auth/bio", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authUser.token}` },
+          body: JSON.stringify({ bio: text }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "შეცდომა");
+        authUser.bio = d.bio || "";
+        paintUserBio();
+        showToast(text ? "✅ ინტერესები შენახულია!" : "✅ ინტერესები გასუფთავდა");
+      } catch (e) {
+        authUser.bio = prev; // revert on failure
+        paintUserBio();
+        showToast("⚠️ ინტერესების შენახვა ვერ მოხერხდა");
+      }
+    }
+
+    document.getElementById("changeBioBtn")?.addEventListener("click", () => {
+      const section = document.getElementById("bioEditorSection");
+      if (!section) return;
+      const showing = section.style.display !== "none";
+      if (showing) { section.style.display = "none"; return; }
+
+      if (bioEditorInput) {
+        bioEditorInput.value = authUser?.bio || "";
+        if (bioEditorCount) bioEditorCount.textContent = `${bioEditorInput.value.length}/60`;
+      }
+      section.style.display = "block";
+      setTimeout(() => bioEditorInput?.focus(), 50);
+    });
+
+    document.getElementById("bioSaveBtn")?.addEventListener("click", () => {
+      const text = (bioEditorInput?.value || "").trim().slice(0, 60);
+      saveBio(text);
+    });
+
+    document.getElementById("bioClearBtn")?.addEventListener("click", () => {
+      if (bioEditorInput) bioEditorInput.value = "";
+      if (bioEditorCount) bioEditorCount.textContent = "0/60";
+      saveBio("");
+    });
+
     /* ── State ───────────────────────────────────────────────────── */
     let authUser = null;
     let sessionBlocked = new Set(); // lowercase usernames blocked this session
@@ -530,13 +659,16 @@
         socket.emit("auth:token", token);
       });
 
-      socket.on("auth:authenticated", ({ username, friends, pendingRequests }) => {
+      socket.on("auth:authenticated", ({ username, friends, pendingRequests, avatar, bio }) => {
         if (authUser) {
           authUser.friends = friends || [];
           authUser.pendingRequests = pendingRequests || [];
+          if (avatar) authUser.avatar = avatar;
+          authUser.bio = bio || "";
         }
         renderFriends(friends || []);
         renderPendingRequests(pendingRequests || []);
+        paintUserBio();
         fetchUnreadFriends();
         socket.emit("users:listOnline");
       });
@@ -572,12 +704,19 @@
         showToast(`✅ ${esc(username)} ახლა შენი მეგობარია!`);
       });
 
-      socket.on("friend:nowFriends", ({ withUsername }) => {
-        if (authUser && !authUser.friends.includes(withUsername.toLowerCase()))
-          authUser.friends.push(withUsername.toLowerCase());
+      // ── The person I sent a request to just accepted it ────────────────
+      socket.on("friend:acceptedByOther", ({ byUsername, friends }) => {
+        if (authUser) {
+          if (friends) {
+            authUser.friends = friends;
+          } else if (byUsername) {
+            const lc = byUsername.toLowerCase();
+            if (!authUser.friends.includes(lc)) authUser.friends.push(lc);
+          }
+        }
         renderFriends(authUser?.friends || []);
         renderOnlineUsers(lastOnlineUsers);
-        showToast(`✅ ${esc(withUsername)} ახლა შენი მეგობარია!`);
+        showToast(`✅ ${esc(byUsername)} ახლა შენი მეგობარია!`);
       });
 
       socket.on("friend:removed", ({ friends }) => {
@@ -747,6 +886,7 @@
           : esc(u.username).charAt(0).toUpperCase();
         const alreadyFriend = myFriendsLc.has(lc);
         const alreadySent   = sentRequestsTo.has(lc);
+        const bioHtml = u.bio ? `<span class="online-user-bio" title="${esc(u.bio)}">${esc(u.bio)}</span>` : "";
         const actionHtml = alreadyFriend
           ? `<span class="already-friend-badge">✅ მეგობარი</span>`
           : `<button class="act-btn act-add" data-u="${esc(u.username)}"${alreadySent ? " disabled" : ""}>${alreadySent ? "✅ გაგზავნილია" : "➕ დამატება"}</button>`;
@@ -757,6 +897,7 @@
               <span class="online-dot" title="ონლაინ"></span>
             </div>
             <span class="friend-name">${esc(u.username)}</span>
+            ${bioHtml}
             <div class="friend-actions">${actionHtml}</div>
           </div>`;
       }).join("");
@@ -897,6 +1038,7 @@
           friends: d.friends || [],
           pendingRequests: d.pendingRequests || [],
           avatar: d.avatar || AVAILABLE_AVATARS[0],
+          bio: d.bio || "",
         };
       } catch (_) {
         // Network error — best-effort: show page with stored username, no friend data yet
@@ -907,6 +1049,7 @@
       const nameEl     = document.getElementById("userName");
       const topUserEl  = document.getElementById("topUsername");
       paintUserAvatar();
+      paintUserBio();
       if (nameEl)    nameEl.textContent   = authUser.username;
       if (topUserEl) topUserEl.textContent = `🔐 ${authUser.username}`;
 
