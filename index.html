@@ -2,7 +2,7 @@
 <html lang="en">
 
   
-<head> 
+<head>
 
   <!-- <script src="https://5gvci.com/act/files/tag.min.js?z=11372059" data-cfasync="false" async></script>
 
@@ -420,23 +420,29 @@
   const nextBtn = document.getElementById("nextBtn");
   if (!nextBtn) return;
 
-  nextBtn.addEventListener("click", () => {
+  nextBtn.addEventListener("click", (e) => {
+    // Count only real user clicks
+    if (!e.isTrusted) return;
+
     clickCount++;
 
     console.log("click:", clickCount);
 
     if (clickCount % 10 === 0) {
-      runEvery5th();
-      clickCount = 0;
+      console.log("Hello World");
+
+      // Load Monetag script
+      (function(s){
+        s.dataset.zone = '11378325';
+        s.src = 'https://al5sm.com/tag.min.js';
+      })(
+        [document.documentElement, document.body]
+          .filter(Boolean)
+          .pop()
+          .appendChild(document.createElement('script'))
+      );
     }
   });
-
-  function runEvery5th() {
-    (function(s){
-      s.dataset.zone='11378325';
-      s.src='https://al5sm.com/tag.min.js';
-    })(document.documentElement.appendChild(document.createElement('script')));
-  }
 })();
 </script>
 
