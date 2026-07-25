@@ -2623,6 +2623,23 @@ const authTokens        = new Map(); // token → { usernameLower, expiry }
 const privateRooms      = new Map(); // roomId → { messages, createdAt, expiresAt }
 const onlineRegSockets  = new Map(); // lowerUsername → Set<socketId>
 
+// Returns { username, avatar } for every registered user who currently has at
+// least one live socket connected (i.e. actually online right now), excluding
+// the given username. Used to populate the "who's online" list in the
+// dashboard so registered users can find and add each other as friends.
+function getOnlineRegisteredUsers(excludeLc) {
+  const list = [];
+  for (const [lc, sockets] of onlineRegSockets) {
+    if (!sockets || sockets.size === 0) continue;
+    if (lc === excludeLc) continue;
+    const u = registeredUsers.get(lc);
+    if (!u) continue;
+    list.push({ username: u.username, avatar: u.avatar || null });
+  }
+  list.sort((a, b) => a.username.localeCompare(b.username));
+  return list;
+}
+
 // ── Crypto helpers ────────────────────────────────────────────────────────────
 function authHashPassword(pwd) {
   const salt = crypto.randomBytes(16).toString("hex");
@@ -3148,6 +3165,15 @@ io.on("connection", (socket) => {
     socket.join(`user:${entry.usernameLower}`);
     socket.emit("auth:authenticated", { username: user.username, friends: user.friends || [], pendingRequests: user.pendingRequests || [] });
     console.log(`[AUTH] ${user.username} logged in`);
+    io.emit("users:onlineChanged"); // let dashboards know the online list may have changed
+  });
+
+  // ── users:listOnline — who's online right now, for the dashboard ──────────
+  socket.on("users:listOnline", () => {
+    if (!socket._regUser) return;
+    socket.emit("users:onlineList", {
+      users: getOnlineRegisteredUsers(socket._regUser.usernameLower),
+    });
   });
 
   // ── auth:token — alias kept for backwards compat ─────────────────────────
@@ -3167,6 +3193,7 @@ io.on("connection", (socket) => {
     socket.join(`user:${entry.usernameLower}`);
     socket.emit("auth:authenticated", { username: user.username, friends: user.friends || [], pendingRequests: user.pendingRequests || [] });
     console.log(`[AUTH] ${user.username} logged in via auth:token`);
+    io.emit("users:onlineChanged"); // let dashboards know the online list may have changed
   });
 
   // ── auth:checkPartner — tell client if current partner is registered ──────
@@ -3631,7 +3658,10 @@ io.on("connection", (socket) => {
       const sockets = onlineRegSockets.get(socket._regUser.usernameLower);
       if (sockets) {
         sockets.delete(socket.id);
-        if (sockets.size === 0) onlineRegSockets.delete(socket._regUser.usernameLower);
+        if (sockets.size === 0) {
+          onlineRegSockets.delete(socket._regUser.usernameLower);
+          io.emit("users:onlineChanged"); // they just went fully offline
+        }
       }
     }
 

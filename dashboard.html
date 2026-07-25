@@ -199,6 +199,30 @@
     .blocked-name { color: #f23f42 !important; }
     .act-unblock:hover { background: rgba(59,165,93,0.2); color: #3ba55d; }
 
+    /* ── Online users list ── */
+    .online-dot {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: #3ba55d;
+      border: 2px solid #1e1f22;
+      position: absolute; bottom: -1px; right: -1px;
+      box-shadow: 0 0 0 1px rgba(59,165,93,0.4);
+    }
+    .friend-avatar-wrap { position: relative; flex-shrink: 0; }
+    .act-add {
+      background: rgba(59,165,93,0.14);
+      color: #3ba55d;
+      font-weight: 700;
+    }
+    .act-add:hover { background: rgba(59,165,93,0.26); }
+    .act-add:disabled {
+      opacity: 0.55; cursor: default;
+      background: rgba(255,255,255,0.06); color: #72767d;
+    }
+    .already-friend-badge {
+      font-size: 0.72em; color: #72767d;
+      padding: 5px 9px; flex-shrink: 0;
+    }
+
     /* ── Toast ── */
     #toast-container {
       position: fixed; bottom: 24px; left: 50%;
@@ -352,6 +376,17 @@
       </div>
     </div>
 
+    <!-- Online registered users -->
+    <div class="section" id="onlineUsersSection">
+      <div class="section-label">
+        🟢 ონლაინ მომხმარებლები
+        <span class="section-badge" id="onlineUsersCount">0</span>
+      </div>
+      <div class="friends-list" id="onlineUsersList">
+        <div class="empty-state">ახლა არავინაა ონლაინ.</div>
+      </div>
+    </div>
+
     <!-- Blocked (session) — hidden until there are entries -->
     <div class="section" id="blockedSection" style="display:none">
       <div class="section-label">
@@ -469,6 +504,8 @@
     let sessionBlocked = new Set(); // lowercase usernames blocked this session
     let socket = null;
     let unreadFromFriends = new Set(); // lowercase usernames with unread messages
+    let lastOnlineUsers = []; // cached [{username, avatar}] from the server
+    let sentRequestsTo = new Set(); // lowercase usernames we've sent a request to this session
 
     /* ── Socket setup ────────────────────────────────────────────── */
     function setupSocket(token) {
@@ -484,6 +521,7 @@
         }
         renderFriends(friends || []);
         fetchUnreadFriends();
+        socket.emit("users:listOnline");
       });
 
       socket.on("auth:invalid", () => {
@@ -491,9 +529,19 @@
         window.location.href = "/";
       });
 
+      // ── Who's online right now — for the "add friend" list ────────────────
+      socket.on("users:onlineList", ({ users }) => {
+        lastOnlineUsers = users || [];
+        renderOnlineUsers(lastOnlineUsers);
+      });
+
+      // Someone logged in/out somewhere on the site — refresh our list
+      socket.on("users:onlineChanged", () => socket.emit("users:listOnline"));
+
       socket.on("friend:accepted", ({ username, friends }) => {
         if (authUser) authUser.friends = friends || [];
         renderFriends(friends || []);
+        renderOnlineUsers(lastOnlineUsers);
         showToast(`✅ ${esc(username)} ახლა შენი მეგობარია!`);
       });
 
@@ -501,12 +549,14 @@
         if (authUser && !authUser.friends.includes(withUsername.toLowerCase()))
           authUser.friends.push(withUsername.toLowerCase());
         renderFriends(authUser?.friends || []);
+        renderOnlineUsers(lastOnlineUsers);
         showToast(`✅ ${esc(withUsername)} ახლა შენი მეგობარია!`);
       });
 
       socket.on("friend:removed", ({ friends }) => {
         if (authUser) authUser.friends = friends || [];
         renderFriends(friends || []);
+        renderOnlineUsers(lastOnlineUsers);
         showToast("✅ მეგობარი წაიშალა");
       });
 
@@ -516,6 +566,7 @@
             f => f.toLowerCase() !== byUsername.toLowerCase()
           );
           renderFriends(authUser.friends);
+          renderOnlineUsers(lastOnlineUsers);
         }
         showToast(`ℹ️ ${esc(byUsername)}-მ შენი მეგობრობა გაიუქმა`);
       });
@@ -646,6 +697,54 @@
           });
         })
         .catch(() => {});
+    }
+
+    /* ── Render online-users list (other registered users online now) ── */
+    function renderOnlineUsers(users) {
+      const list = document.getElementById("onlineUsersList");
+      const cnt  = document.getElementById("onlineUsersCount");
+      if (!list) return;
+
+      const myFriendsLc = new Set((authUser?.friends || []).map(f => f.toLowerCase()));
+      if (cnt) cnt.textContent = (users || []).length;
+
+      if (!users || !users.length) {
+        list.innerHTML = `<div class="empty-state">ახლა არავინაა ონლაინ.</div>`;
+        return;
+      }
+
+      list.innerHTML = users.map(u => {
+        const lc = u.username.toLowerCase();
+        const avatarHtml = u.avatar
+          ? `<img src="${AVATAR_DIR}${esc(u.avatar)}" alt="avatar" />`
+          : esc(u.username).charAt(0).toUpperCase();
+        const alreadyFriend = myFriendsLc.has(lc);
+        const alreadySent   = sentRequestsTo.has(lc);
+        const actionHtml = alreadyFriend
+          ? `<span class="already-friend-badge">✅ მეგობარი</span>`
+          : `<button class="act-btn act-add" data-u="${esc(u.username)}"${alreadySent ? " disabled" : ""}>${alreadySent ? "✅ გაგზავნილია" : "➕ დამატება"}</button>`;
+        return `
+          <div class="friend-item" data-online-user="${esc(u.username)}">
+            <div class="friend-avatar-wrap">
+              <div class="friend-avatar">${avatarHtml}</div>
+              <span class="online-dot" title="ონლაინ"></span>
+            </div>
+            <span class="friend-name">${esc(u.username)}</span>
+            <div class="friend-actions">${actionHtml}</div>
+          </div>`;
+      }).join("");
+
+      list.querySelectorAll(".act-add").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const uname = btn.dataset.u;
+          const lc = uname.toLowerCase();
+          sentRequestsTo.add(lc);
+          socket?.emit("friend:request", { toUsername: uname });
+          btn.disabled = true;
+          btn.textContent = "✅ გაგზავნილია";
+          showToast(`📨 მეგობრობის მოთხოვნა გაიგზავნა ${esc(uname)}-სთვის`);
+        });
+      });
     }
 
     /* ── Render blocked list ─────────────────────────────────────── */
