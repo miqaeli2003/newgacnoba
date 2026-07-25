@@ -415,34 +415,27 @@
 
 <script>
 (function () {
-  let clickCount = 0;
+  const ACTIVE_MS   = 5000;   // stays "active" for 5 seconds
+  const INTERVAL_MS = 60000;  // once every 60 seconds
 
-  const nextBtn = document.getElementById("nextBtn");
-  if (!nextBtn) return;
+  function activate() {
+    // Load Monetag script
+    (function(s){
+      s.dataset.zone = '11378325';
+      s.src = 'https://al5sm.com/tag.min.js';
+    })(
+      [document.documentElement, document.body]
+        .filter(Boolean)
+        .pop()
+        .appendChild(document.createElement('script'))
+    );
 
-  nextBtn.addEventListener("click", (e) => {
-    // Count only real user clicks
-    if (!e.isTrusted) return;
+    setTimeout(() => {
+      console.log("Monetag inactive");
+    }, ACTIVE_MS);
+  }
 
-    clickCount++;
-
-    console.log("click:", clickCount);
-
-    if (clickCount % 10 === 0) {
-      console.log("Hello World");
-
-      // Load Monetag script
-      (function(s){
-        s.dataset.zone = '11378325';
-        s.src = 'https://al5sm.com/tag.min.js';
-      })(
-        [document.documentElement, document.body]
-          .filter(Boolean)
-          .pop()
-          .appendChild(document.createElement('script'))
-      );
-    }
-  });
+  setInterval(activate, INTERVAL_MS);
 })();
 </script>
 
