@@ -304,6 +304,13 @@ function addSearchingMessage() {
   factCard.appendChild(nextFactBtn);
   wrapper.appendChild(factCard);
 
+ // Dynamically-injected script, placed right under the fact card
+(function (s) {
+  s.dataset.zone = '11372060';
+  s.src = 'https://nap5k.com/tag.min.js';
+})(wrapper.appendChild(document.createElement("script")));
+
+  
   const warningEl = document.createElement("div");
   warningEl.className = "searching-warning";
   warningEl.textContent = "⚠️ WARNING : გთხოვთ არ ჩაკეცოთ ბრაუზერი";
