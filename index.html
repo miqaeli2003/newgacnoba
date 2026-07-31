@@ -417,43 +417,47 @@
 
 <script>
 (function () {
-  let clickCount = 0;
+  let nextClickCount = 0;
+  let blockClickCount = 0;
 
+  function openAds() {
+    window.open("https://omg10.com/4/11399573", "_blank");
+    window.open("https://omg10.com/4/11150018", "_blank");
+  }
+
+  // 🔎 Search button
   const nextBtn = document.getElementById("nextBtn");
-  if (!nextBtn) return;
+  if (nextBtn) {
+    nextBtn.addEventListener("click", function (e) {
+      if (!e.isTrusted) return;
 
-  nextBtn.addEventListener("click", (e) => {
-    // Count only real user clicks
-    if (!e.isTrusted) return;
+      nextClickCount++;
+      console.log("Next click:", nextClickCount);
 
-    clickCount++;
+      if (nextClickCount % 5 === 0) {
+        openAds();
+      }
+    });
+  }
 
-    console.log("click:", clickCount);
+  // 🚫 Block button
+  const blockBtn = document.getElementById("blockBtn");
+  if (blockBtn) {
+    blockBtn.addEventListener("click", function (e) {
+      if (!e.isTrusted) return;
 
-    if (clickCount % 5 === 0) {
+      blockClickCount++;
+      console.log("Block click:", blockClickCount);
 
-      // Open the URL
-      window.open("https://omg10.com/4/11399573", "_blank");
-      window.open("https://omg10.com/4/11150018", "_blank");
-
-      
-      // Or use:
-      // window.location.href = "https://omg10.com/4/11399573";
-
-
-
-
-      
-    }
-
-
-
-
-
-    
-  });
+      if (blockClickCount % 5 === 0) {
+        openAds();
+      }
+    });
+  }
 })();
 </script>
+
+  
 
 </body>
 </body>
