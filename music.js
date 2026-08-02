@@ -218,9 +218,10 @@
     function createPlayerWidget(videoId, startAt) {
       removePlayerWidget();
 
+      const chat = el('chat');
       const widget = document.createElement('div');
       widget.id = 'musicWidget';
-      widget.className = 'music-widget';
+      widget.className = 'music-widget music-widget--inline';
       widget.innerHTML = `
         <div class="music-widget-header">
           <span class="music-widget-note">🎵 ერთად მოსმენა</span>
@@ -234,7 +235,16 @@
           </div>
         </div>
         <div id="musicPlayerMount" class="music-player-mount"></div>`;
-      document.body.appendChild(widget);
+
+      // Attach directly in the chat feed, at the point it was created —
+      // it stays there as the conversation continues instead of floating
+      // at a fixed spot on screen.
+      if (chat) {
+        chat.appendChild(widget);
+        chat.scrollTop = chat.scrollHeight;
+      } else {
+        document.body.appendChild(widget);
+      }
 
       el('musicWidgetClose').addEventListener('click', () => {
         socket.emit('music:stop');
