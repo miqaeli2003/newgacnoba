@@ -177,13 +177,25 @@
     });
 
     // ────────────────────────────────────────────────────────────
-    // 3. Session start → load YouTube IFrame API + player
+    // 3. Session start → load YouTube IFrame API + audio-only player,
+    //    scheduled to start playback at the same wall-clock moment
+    //    (startAt) on both ends.
     // ────────────────────────────────────────────────────────────
     socket.on('music:start', ({ videoId, hostId, startAt }) => {
-      session = { videoId, hostId };
-      appendSystemMessage('🎵 ერთად მოსმენა დაიწყო!');
-      loadYouTubeAPI(() => createPlayerWidget(videoId));
+      session = { videoId, hostId, startAt };
+      loadYouTubeAPI(() => createPlayerWidget(videoId, startAt));
+      fetchTitle(videoId);
     });
+
+    function fetchTitle(videoId) {
+      fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent('https://www.youtube.com/watch?v=' + videoId)}&format=json`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          const titleEl = el('musicWidgetTitle');
+          if (titleEl && d && d.title) titleEl.textContent = d.title;
+        })
+        .catch(() => {});
+    }
 
     function loadYouTubeAPI(cb) {
       if (ytApiReady && window.YT && window.YT.Player) return cb();
@@ -203,7 +215,7 @@
       document.head.appendChild(tag);
     }
 
-    function createPlayerWidget(videoId) {
+    function createPlayerWidget(videoId, startAt) {
       removePlayerWidget();
 
       const widget = document.createElement('div');
@@ -211,8 +223,15 @@
       widget.className = 'music-widget';
       widget.innerHTML = `
         <div class="music-widget-header">
-          <span class="music-widget-title">🎵 ერთად მოსმენა</span>
+          <span class="music-widget-note">🎵 ერთად მოსმენა</span>
           <button id="musicWidgetClose" class="music-widget-close" title="დასრულება">✕</button>
+        </div>
+        <div class="music-widget-body">
+          <button id="musicPlayPauseBtn" class="music-playpause-btn" disabled>⏳</button>
+          <div class="music-widget-info">
+            <div id="musicWidgetTitle" class="music-widget-title">იტვირთება...</div>
+            <div id="musicWidgetStatus" class="music-widget-status">დასინქრონება...</div>
+          </div>
         </div>
         <div id="musicPlayerMount" class="music-player-mount"></div>`;
       document.body.appendChild(widget);
@@ -222,18 +241,58 @@
         endSession('🎵 ერთად მოსმენა დასრულდა.');
       });
 
+      el('musicPlayPauseBtn').addEventListener('click', () => {
+        if (!player) return;
+        const state = player.getPlayerState();
+        if (state === YT.PlayerState.PLAYING) player.pauseVideo();
+        else player.playVideo();
+      });
+
       player = new YT.Player('musicPlayerMount', {
-        height: '113',
-        width: '200',
+        height: '1',
+        width: '1',
         videoId: videoId,
-        playerVars: { rel: 0, playsinline: 1 },
+        playerVars: { autoplay: 0, controls: 0, disablekb: 1, playsinline: 1 },
         events: {
+          onReady: () => scheduleSimultaneousStart(startAt),
           onStateChange: onPlayerStateChange,
         },
       });
     }
 
+    // Both sides call playVideo() at the same wall-clock time (startAt,
+    // sent by the server) so the track begins simultaneously instead of
+    // whichever client's player finished loading first.
+    function scheduleSimultaneousStart(startAt) {
+      const delay = Math.max(0, (startAt || Date.now()) - Date.now());
+      const statusEl = el('musicWidgetStatus');
+      if (statusEl) statusEl.textContent = 'იწყება...';
+      setTimeout(() => {
+        if (!player) return;
+        applyingRemote = true;
+        player.playVideo();
+        setTimeout(() => { applyingRemote = false; }, 400);
+      }, delay);
+    }
+
     function onPlayerStateChange(e) {
+      const btn = el('musicPlayPauseBtn');
+      const statusEl = el('musicWidgetStatus');
+
+      if (e.data === YT.PlayerState.PLAYING) {
+        if (btn) { btn.textContent = '⏸️'; btn.disabled = false; }
+        if (statusEl) statusEl.textContent = 'უკრავს';
+      } else if (e.data === YT.PlayerState.PAUSED) {
+        if (btn) { btn.textContent = '▶️'; btn.disabled = false; }
+        if (statusEl) statusEl.textContent = 'დაპაუზებულია';
+      } else if (e.data === YT.PlayerState.BUFFERING) {
+        if (statusEl) statusEl.textContent = 'იტვირთება...';
+      } else if (e.data === YT.PlayerState.ENDED) {
+        if (statusEl) statusEl.textContent = 'დასრულდა';
+      }
+
+      // Relay this state change to the partner so both stay paused/playing
+      // together — unless we're the one just applying a remote command.
       if (applyingRemote || !player) return;
       if (e.data === YT.PlayerState.PLAYING) {
         socket.emit('music:control', { action: 'play', time: player.getCurrentTime() });

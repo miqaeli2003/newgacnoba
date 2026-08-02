@@ -2206,7 +2206,7 @@ io.on("connection", (socket) => {
 
     // Small buffer so both clients have time to load the YouTube player
     // before starting playback in sync.
-    const payload = { videoId: cleanVideoId, hostId: toId, startAt: Date.now() + 1500 };
+    const payload = { videoId: cleanVideoId, hostId: toId, startAt: Date.now() + 3500 };
     requester.emit("music:start", payload);
     socket.emit("music:start", payload);
   });
