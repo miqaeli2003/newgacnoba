@@ -793,10 +793,12 @@
   function updateRegMenuVisibility() {
     const menuBtn = $("regMenuBtn");
     if (!menuBtn) return;
-    menuBtn.style.display = authUser ? "flex" : "none";
-    if (!authUser) closeRegMenu();
+    // Available to every user now (guest or registered) — gating happens
+    // when it's opened (must be actively chatting), not on visibility.
+    menuBtn.style.display = "flex";
 
-    // body.reg-user CSS hides ინტ., gameBtn, reportBtn, changeNameBtn via !important
+    // body.reg-user CSS shows the account-only items (Interests, My Page,
+    // Logout) inside the dropdown and hides ინტ. from the main bar.
     document.body.classList.toggle("reg-user", !!authUser);
   }
 
@@ -829,6 +831,14 @@
 
   document.addEventListener("click", () => closeRegMenu());
   $("regMenuBtn")?.addEventListener("click", toggleRegMenu);
+
+  // ✏️ Change Name — same modal the standalone button used to open
+  $("regMenuChangeName")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    closeRegMenu();
+    const btn = $("changeNameBtn");
+    if (btn) btn.click();
+  });
 
   // 🎮 Games
   $("regMenuGames")?.addEventListener("click", (e) => {

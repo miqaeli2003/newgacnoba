@@ -219,7 +219,7 @@
   order: 3;
 }
 .reg-menu-btn {
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   width: 32px;
@@ -286,6 +286,12 @@
 }
 .reg-menu-logout { color: #f23f42 !important; }
 .reg-menu-logout:hover { background: rgba(242,63,66,0.12) !important; }
+
+/* Items that only make sense for a registered account — hidden for
+   guests, shown once body has the reg-user class. */
+.reg-only-item { display: none; }
+body.reg-user .reg-only-item { display: flex; }
+body.reg-user .reg-menu-divider.reg-only-item { display: block; }
 
 /* ── Friend Request Notification ──────────────────────────────────────────── */
 #notif-container {

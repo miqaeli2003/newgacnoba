@@ -1,13 +1,11 @@
 /* ══════════════════════════════════════════════════════════════════
    music.js — "Listen Together" (synced YouTube) for GAICANI random chat
    ──────────────────────────────────────────────────────────────────
-   • Only registered (logged-in) users can SEND a listen-together
-     request (checked both client-side and server-side).
-   • Anyone can ACCEPT a request they receive.
+   • Available to every user — guest or registered.
+   • Anyone can send AND accept a listen-together request.
    • Once accepted, both sides load the same YouTube video and stay
      in sync (play / pause / seek relayed over the socket).
    Depends on: socket.io (window.socket, set in script.js)
-              window.gaicaniAuthUser (set in auth-client.js)
    ══════════════════════════════════════════════════════════════════ */
 
 (function () {
@@ -36,13 +34,6 @@
     let pendingInviteVideoId = null;
     let applyingRemote = false;   // guard to avoid echo loops
     let requestSentAt  = 0;
-
-    // ────────────────────────────────────────────────────────────
-    // Registered-user check
-    // ────────────────────────────────────────────────────────────
-    function isRegistered() {
-      return !!(window.gaicaniAuthUser && window.gaicaniAuthUser.token);
-    }
 
     // ────────────────────────────────────────────────────────────
     // 1. "Send request" modal — reached via the ⋮ menu (Games-style)
@@ -87,10 +78,6 @@
     }
 
     function openRequestModal() {
-      if (!isRegistered()) {
-        showToastFallback('🎵 მუსიკის გაზიარება მხოლოდ რეგისტრირებულ მომხმარებლებს შეუძლიათ.');
-        return;
-      }
       if (!window.partnerConnected) {
         showToastFallback('🎵 მუსიკა ხელმისაწვდომია მხოლოდ ჩატის დროს.');
         return;

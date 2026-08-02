@@ -2169,13 +2169,12 @@ io.on("connection", (socket) => {
   });
 
   // ════════════════════════════════════════════════════════════════
-  //  SYNCED MUSIC (YouTube) — registered users only can send a request
+  //  SYNCED MUSIC (YouTube) — available to every user
   // ════════════════════════════════════════════════════════════════
 
   // Send a "listen together" request to the current partner.
-  // Only registered (logged-in) users may initiate this.
+  // Available to every user — guest or registered.
   socket.on("music:request", ({ url }) => {
-    if (!socket._regUser) return;               // must be a registered user
     if (!socket.partner || socket.partner._isGhost) return;
 
     const videoId = extractYouTubeId(url);
@@ -2187,7 +2186,7 @@ io.on("connection", (socket) => {
     socket.partner.emit("music:invite", {
       videoId,
       fromId:   socket.id,
-      fromName: socket._regUser.username,
+      fromName: socket._regUser ? socket._regUser.username : (socket.userName || "პარტნიორი"),
     });
   });
 
