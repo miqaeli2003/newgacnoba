@@ -72,7 +72,7 @@
             <span>🎵 ერთად მოსმენა</span>
             <button id="musicModalClose" class="music-modal-close">✕</button>
           </div>
-          <p class="music-modal-hint">ჩასვით YouTube ბმული — მოწინააღმდეგეს გაეგზავნება მოთხოვნა.</p>
+          <p class="music-modal-hint">ჩასვით YouTube ბმული — პარტნიორს გაეგზავნება მოთხოვნა.</p>
           <input type="text" id="musicUrlInput" class="music-url-input"
                  placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" />
           <div class="music-modal-error" id="musicModalError" style="display:none"></div>
