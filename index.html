@@ -93,8 +93,9 @@
       <div id="userNameDisplay" class="user-name-display" style="display:none"></div>
 
       <!-- Three-dots menu — available to every user (guest or registered).
-           Change Name / Games / Music / Report always show here; My Page,
-           Interests and Logout only apply once you're registered. -->
+           Change Name / Games / Report always show here; My Page,
+           Interests and Logout only apply once you're registered.
+           (🎵 Music lives in the main bar now, next to ინტ.) -->
       <div class="reg-menu-container">
         <button class="reg-menu-btn" id="regMenuBtn" title="მენიუ">⋮</button>
         <div class="reg-menu-dropdown" id="regMenuDropdown" style="display:none">
@@ -105,10 +106,6 @@
           <button class="reg-menu-item" id="regMenuGames" data-action="games">
             <span class="reg-menu-icon">🎮</span>
             <span class="reg-menu-label">Games</span>
-          </button>
-          <button class="reg-menu-item" id="regMenuMusic" data-action="music">
-            <span class="reg-menu-icon">🎵</span>
-            <span class="reg-menu-label">მუსიკა</span>
           </button>
           <button class="reg-menu-item" id="regMenuReport" data-action="report">
             <span class="reg-menu-icon">🚩</span>
@@ -133,6 +130,7 @@
     <div class="right-side">
       <button id="myPageBtn" class="my-page-btn" style="display:none" onclick="window.location.href='/dashboard.html'">👤 ჩემი გვერდი</button>
       <button class="interests-btn" id="interestsBtn" style="display:none"><span class="btn-icon btn-icon--int">ინტ.</span><span class="btn-label">ინტ</span></button>
+      <button class="music-btn" id="musicBtn" disabled title="მუსიკის მოსმენა ერთად"><span class="btn-icon">🎵</span><span class="btn-label">მუსიკა</span></button>
       <button class="change-name-btn" id="changeNameBtn"><span class="btn-icon">✏️</span><span class="btn-label">სახელის შეცვლა</span></button>
       <button class="report-button" id="reportBtn" disabled><span class="btn-icon">🚩</span><span class="btn-label">რეპორტი</span></button>
       <button class="block-button" id="blockBtn" disabled><span class="btn-icon">🚫</span><span class="btn-label">ბლოკი</span></button>

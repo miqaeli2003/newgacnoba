@@ -858,21 +858,6 @@
     }
   });
 
-  // 🎵 Music — opens the "listen together" request modal (registered users only)
-  $("regMenuMusic")?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    closeRegMenu();
-    if (!window.partnerConnected) {
-      showToast("🎵 მუსიკა მხოლოდ ჩატის დროს ხელმისაწვდომია");
-      return;
-    }
-    if (typeof window._openMusicRequest === "function") {
-      window._openMusicRequest();
-    } else {
-      showToast("🎵 ვერ ჩაიტვირთა — სცადეთ თავიდან");
-    }
-  });
-
   // 🎮 Games Interests — opens the bio/interests popup for sharing gaming preferences
   $("regMenuGameInt")?.addEventListener("click", () => {
     closeRegMenu();

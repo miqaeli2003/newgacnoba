@@ -2,6 +2,29 @@
    music.css — "Listen Together" (synced YouTube) for GAICANI
    ══════════════════════════════════════════════════════════════════ */
 
+/* ── Top-bar button ─────────────────────────────────────────────── */
+.music-btn {
+  background: rgba(88, 101, 242, 0.16);
+  border: 1px solid rgba(88, 101, 242, 0.4);
+  color: #dcddde;
+  cursor: pointer;
+  font-size: 0.85em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  transition: background 0.15s, transform 0.1s;
+  flex-shrink: 0;
+}
+.music-btn:hover:not(:disabled)  { background: rgba(88, 101, 242, 0.3); }
+.music-btn:active:not(:disabled) { transform: scale(0.95); }
+.music-btn:disabled              { opacity: 0.4; cursor: not-allowed; }
+
+@media (max-width: 600px) {
+  .music-btn .btn-label { display: none; }
+}
+
 /* ── Request modal ─────────────────────────────────────────────── */
 .music-modal {
   position: fixed;

@@ -36,8 +36,30 @@
     let requestSentAt  = 0;
 
     // ────────────────────────────────────────────────────────────
-    // 1. "Send request" modal — reached via the ⋮ menu (Games-style)
+    // 1. "Send request" — reached via the 🎵 button in the top bar
     // ────────────────────────────────────────────────────────────
+    function bindMusicButton() {
+      const btn = el('musicBtn');
+      if (btn) btn.addEventListener('click', openRequestModal);
+    }
+
+    function setMusicBtnEnabled(on) {
+      const btn = el('musicBtn');
+      if (btn) btn.disabled = !on;
+    }
+    socket.on('partnerFound',       () => setMusicBtnEnabled(true));
+    socket.on('partnerRestored',    () => setMusicBtnEnabled(true));
+    socket.on('partnerReconnected', () => setMusicBtnEnabled(true));
+    socket.on('partnerDisconnected',() => setMusicBtnEnabled(false));
+    socket.on('youWereBlocked',     () => setMusicBtnEnabled(false));
+    socket.on('queuePosition',      () => setMusicBtnEnabled(false));
+    socket.on('partnerReconnecting',() => setMusicBtnEnabled(false));
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', bindMusicButton);
+    } else {
+      bindMusicButton();
+    }
     function createRequestModal() {
       if (el('musicRequestModal')) return;
       const modal = document.createElement('div');
