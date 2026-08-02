@@ -1,0 +1,194 @@
+/* ══════════════════════════════════════════════════════════════════
+   music.css — "Listen Together" (synced YouTube) for GAICANI
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Request modal ─────────────────────────────────────────────── */
+.music-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  background: rgba(0,0,0,0.55);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.music-modal-box {
+  background: #2b2d31;
+  border-radius: 14px;
+  padding: 20px 18px;
+  width: 100%;
+  max-width: 360px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+.music-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.02em;
+  margin-bottom: 10px;
+}
+
+.music-modal-close {
+  background: rgba(255,255,255,0.08);
+  border: none;
+  color: #b5bac1;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+.music-modal-close:hover { background: rgba(255,255,255,0.16); color: #fff; }
+
+.music-modal-hint {
+  color: #96989d;
+  font-size: 0.82em;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+
+.music-url-input {
+  width: 100%;
+  padding: 11px 13px;
+  background: #1e1f22;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 9px;
+  color: #dcddde;
+  font-size: 0.92em;
+  font-family: inherit;
+  margin-bottom: 8px;
+}
+.music-url-input:focus {
+  outline: none;
+  border-color: rgba(88,101,242,0.55);
+}
+
+.music-modal-error {
+  color: #f23f42;
+  font-size: 0.8em;
+  margin-bottom: 8px;
+}
+
+.music-send-btn {
+  width: 100%;
+  padding: 12px;
+  background: #5865f2;
+  color: #fff;
+  border: none;
+  border-radius: 9px;
+  font-weight: 700;
+  font-size: 0.94em;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.music-send-btn:hover { background: #4752c4; }
+
+/* ── Invite bar (mirrors game-invite-bar styling) ─────────────────── */
+.music-invite-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(88,101,242,0.12);
+  border: 1px solid rgba(88,101,242,0.35);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 0 0 8px;
+  flex-wrap: wrap;
+}
+
+.music-invite-text {
+  color: #dcddde;
+  font-size: 0.86em;
+  line-height: 1.4;
+}
+.music-invite-text strong { color: #fff; }
+
+.music-invite-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.music-invite-accept,
+.music-invite-decline {
+  border: none;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 0.82em;
+  font-weight: 700;
+  cursor: pointer;
+}
+.music-invite-accept  { background: #3ba55d; color: #fff; }
+.music-invite-accept:hover  { background: #359452; }
+.music-invite-decline { background: rgba(242,63,66,0.15); color: #f23f42; }
+.music-invite-decline:hover { background: rgba(242,63,66,0.25); }
+
+/* ── Floating player widget ────────────────────────────────────── */
+.music-widget {
+  position: fixed;
+  right: 12px;
+  bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+  z-index: 9500;
+  width: 200px;
+  background: #2b2d31;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 34px rgba(0,0,0,0.45);
+  animation: musicWidgetIn 0.22s ease both;
+}
+
+@keyframes musicWidgetIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.music-widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 6px 10px;
+  background: rgba(88,101,242,0.14);
+}
+
+.music-widget-title {
+  color: #fff;
+  font-size: 0.76em;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.music-widget-close {
+  background: rgba(255,255,255,0.1);
+  border: none;
+  color: #dcddde;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  font-size: 0.75em;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.music-widget-close:hover { background: rgba(242,63,66,0.35); color: #fff; }
+
+.music-player-mount {
+  width: 200px;
+  height: 113px;
+  background: #000;
+  line-height: 0;
+}
+
+@media (max-width: 600px) {
+  .music-widget {
+    right: 8px;
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    width: 170px;
+  }
+  .music-player-mount { width: 170px; height: 96px; }
+}

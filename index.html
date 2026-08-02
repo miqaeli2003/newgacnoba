@@ -42,6 +42,7 @@
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="games.css" />
   <link rel="stylesheet" href="auth.css" />
+  <link rel="stylesheet" href="music.css" />
   <link rel="stylesheet" href="style-MOBILE-FIX.css" />
   <style>
     /* ── Registered-user top-bar cleanup ───────────────────────────────
@@ -95,6 +96,10 @@
           <button class="reg-menu-item" id="regMenuGames" data-action="games">
             <span class="reg-menu-icon">🎮</span>
             <span class="reg-menu-label">Games</span>
+          </button>
+          <button class="reg-menu-item" id="regMenuMusic" data-action="music">
+            <span class="reg-menu-icon">🎵</span>
+            <span class="reg-menu-label">მუსიკა</span>
           </button>
           <button class="reg-menu-item" id="regMenuReport" data-action="report">
             <span class="reg-menu-icon">🚩</span>
@@ -402,6 +407,7 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
   <script src="games.js"></script>
+  <script src="music.js"></script>
   <script src="auth-client.js"></script>
   <script src="keyboard-handler.js"></script>
 
@@ -409,7 +415,7 @@
 
 <script src="/keyboard-handler.js"></script>
 
-<!-- <script>
+<script>
 (function () {
   let nextClickCount = 0;
   let blockClickCount = 0;
@@ -449,7 +455,7 @@
     });
   }
 })();
-</script> -->
+</script>
 
   
 

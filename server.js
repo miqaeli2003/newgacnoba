@@ -1420,6 +1420,39 @@ function cleanupGameForSocket(socketId) {
   cleanupGame(game);
 }
 
+// Pull a plain 11-char video ID out of any common YouTube URL shape
+// (watch?v=, youtu.be/, shorts/, embed/, music.youtube.com/watch?v=), or
+// accept a bare 11-char ID directly. Returns null if nothing valid found.
+function extractYouTubeId(input) {
+  if (!input || typeof input !== "string") return null;
+  const str = input.trim();
+
+  if (/^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
+
+  try {
+    const u = new URL(str);
+    const host = u.hostname.replace(/^www\./, "").replace(/^music\./, "");
+
+    if (host === "youtu.be") {
+      const id = u.pathname.split("/").filter(Boolean)[0];
+      return /^[a-zA-Z0-9_-]{11}$/.test(id) ? id : null;
+    }
+
+    if (host === "youtube.com" || host === "m.youtube.com") {
+      if (u.searchParams.get("v") && /^[a-zA-Z0-9_-]{11}$/.test(u.searchParams.get("v"))) {
+        return u.searchParams.get("v");
+      }
+      const parts = u.pathname.split("/").filter(Boolean);
+      if ((parts[0] === "shorts" || parts[0] === "embed" || parts[0] === "live") && parts[1]) {
+        return /^[a-zA-Z0-9_-]{11}$/.test(parts[1]) ? parts[1] : null;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 // ── Socket handlers ───────────────────────────────────────────────────────────
 io.on("connection", (socket) => {
   // ── Capture real IP (works behind proxies like nginx/Render/Railway) ────────
@@ -2135,6 +2168,61 @@ io.on("connection", (socket) => {
     if (target && !target._isGhost) target.emit("game:invite", { gameType, fromId: socket.id, isRematch: true });
   });
 
+  // ════════════════════════════════════════════════════════════════
+  //  SYNCED MUSIC (YouTube) — registered users only can send a request
+  // ════════════════════════════════════════════════════════════════
+
+  // Send a "listen together" request to the current partner.
+  // Only registered (logged-in) users may initiate this.
+  socket.on("music:request", ({ url }) => {
+    if (!socket._regUser) return;               // must be a registered user
+    if (!socket.partner || socket.partner._isGhost) return;
+
+    const videoId = extractYouTubeId(url);
+    if (!videoId) {
+      socket.emit("music:error", { message: "არასწორი YouTube ბმული." });
+      return;
+    }
+
+    socket.partner.emit("music:invite", {
+      videoId,
+      fromId:   socket.id,
+      fromName: socket._regUser.username,
+    });
+  });
+
+  // Accept or decline a music invite
+  socket.on("music:response", ({ accepted, toId, videoId }) => {
+    const requester = io.sockets.sockets.get(toId);
+    if (!requester) return;
+
+    if (!accepted) {
+      requester.emit("music:declined");
+      return;
+    }
+
+    const cleanVideoId = extractYouTubeId(videoId) || (typeof videoId === "string" ? videoId.slice(0, 20) : null);
+    if (!cleanVideoId) return;
+
+    // Small buffer so both clients have time to load the YouTube player
+    // before starting playback in sync.
+    const payload = { videoId: cleanVideoId, hostId: toId, startAt: Date.now() + 1500 };
+    requester.emit("music:start", payload);
+    socket.emit("music:start", payload);
+  });
+
+  // Relay play/pause/seek actions between the two listeners
+  socket.on("music:control", ({ action, time }) => {
+    if (!socket.partner || socket.partner._isGhost) return;
+    if (!["play", "pause", "seek"].includes(action)) return;
+    socket.partner.emit("music:control", { action, time });
+  });
+
+  // Either side can end the shared listening session
+  socket.on("music:stop", () => {
+    if (socket.partner && !socket.partner._isGhost) socket.partner.emit("music:stop");
+  });
+
   // Tab-away events disabled — no action taken when user hides browser tab
 
   // ── Disconnect ───────────────────────────────────────────────────────────
@@ -2161,7 +2249,10 @@ io.on("connection", (socket) => {
       partner.lastPartnerSocketId = socket.id;
       partner.hasReportedLast = false;
       partner.partner         = null;
-      if (partner.connected) partner.emit("partnerDisconnected", { name });
+      if (partner.connected) {
+        partner.emit("partnerDisconnected", { name });
+        partner.emit("music:stop");
+      }
 
       if (socket.userName) {
         const timeout = setTimeout(() => {
