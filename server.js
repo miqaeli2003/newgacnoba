@@ -804,18 +804,13 @@ app.use(async (req, res, next) => {
   // Already passed captcha
   if (hasCaptchaCookie(req)) return next();
 
-  // Check geo
-  const country = await getCountry(ip);
-  if (country === "GE") {
-    // Georgian IP — set cookie and pass through silently
-    setCaptchaCookie(res, ip);
-    return next();
-  }
-
-  // Non-Georgian — show captcha page instead of index.html
-  newChallenge(ip);
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.status(200).send(captchaPageHTML(ip, null));
+  // Geo-gate disabled — all IPs (Georgian and non-Georgian) now pass
+  // straight through instead of hitting the captcha page. The
+  // getCountry()/captcha helper functions are left in place above in
+  // case you want to re-enable the gate later; they're just not called
+  // from here anymore.
+  setCaptchaCookie(res, ip);
+  return next();
 });
 
 // POST /captcha-verify — check submitted answer (also before static)
