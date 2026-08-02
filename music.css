@@ -151,21 +151,23 @@
 .music-invite-decline { background: rgba(242,63,66,0.15); color: #f23f42; }
 .music-invite-decline:hover { background: rgba(242,63,66,0.25); }
 
-/* ── Player widget — inline in the chat feed ───────────────────── */
-.music-widget--inline {
+/* ── Player widget — fixed, always on screen ───────────────────── */
+.music-widget {
+  position: fixed;
+  right: 12px;
+  bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+  z-index: 9500;
   width: 240px;
-  max-width: 82%;
-  margin: 6px auto 14px;
   background: #2b2d31;
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 4px 18px rgba(0,0,0,0.28);
+  box-shadow: 0 10px 34px rgba(0,0,0,0.45);
   animation: musicWidgetIn 0.22s ease both;
 }
 
 @keyframes musicWidgetIn {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -253,9 +255,13 @@
   pointer-events: none;
 }
 
+/* Fixed position and size on every screen — deliberately NOT
+   reshaped or repositioned per breakpoint, so it always looks and
+   sits the same place regardless of what's happening in the chat. */
 @media (max-width: 600px) {
-  .music-widget--inline {
-    width: 100%;
-    max-width: 92%;
+  .music-widget {
+    right: 8px;
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    width: 210px;
   }
 }
