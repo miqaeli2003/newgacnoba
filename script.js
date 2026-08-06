@@ -281,28 +281,22 @@ function addSearchingMessage() {
   searchText.textContent = "ვეძებთ ახალ პარტნიორს... 🔎";
   wrapper.appendChild(searchText);
 
-  // Fact card
-  const factCard       = document.createElement("div");
-  factCard.className   = "fact-card";
+  // Ad card (replaces the old random-fact card)
+  const adCard       = document.createElement("div");
+  adCard.className   = "ad-card";
 
-  const factLabel       = document.createElement("span");
-  factLabel.className   = "fact-label";
-  factLabel.textContent = "💡 Random Fact";
+  const adImg     = document.createElement("img");
+  adImg.className = "ad-card-img";
+  adImg.src       = "/reklama.png";
+  adImg.alt       = "რეკლამა";
 
-  const factText       = document.createElement("span");
-  factText.className   = "fact-text";
-  factText.textContent = "...";
+  const adCaption       = document.createElement("span");
+  adCaption.className   = "ad-card-caption";
+  adCaption.textContent = "რეკლამისთვის მოგვწერეთ gaicanionline@gmail.com";
 
-  // Arrow button — bottom-right corner
-  const nextFactBtn       = document.createElement("button");
-  nextFactBtn.className   = "fact-next-btn";
-  nextFactBtn.title       = "სხვა ფაქტი";
-  nextFactBtn.textContent = "→";
-
-  factCard.appendChild(factLabel);
-  factCard.appendChild(factText);
-  factCard.appendChild(nextFactBtn);
-  wrapper.appendChild(factCard);
+  adCard.appendChild(adImg);
+  adCard.appendChild(adCaption);
+  wrapper.appendChild(adCard);
 
 
   
@@ -313,35 +307,6 @@ function addSearchingMessage() {
 
   chat.appendChild(wrapper);
   scheduleScroll();
-
-  function loadFact() {
-    nextFactBtn.classList.add("spinning");
-    fetch("/api/random-fact")
-      .then(r => r.json())
-      .then(data => {
-        if (data.fact) {
-          // Fade out → swap text → fade in
-          factText.style.transition = "opacity 0.15s";
-          factText.style.opacity    = "0";
-          setTimeout(() => {
-            factText.textContent      = data.fact;
-            factText.style.opacity    = "1";
-          }, 150);
-        }
-      })
-      .catch(() => {
-        factText.textContent = "ფაქტი ვერ ჩაიტვირთა 😕";
-      })
-      .finally(() => {
-        nextFactBtn.classList.remove("spinning");
-      });
-  }
-
-  // Load initial fact
-  loadFact();
-
-  // Arrow click → load next fact
-  nextFactBtn.addEventListener("click", loadFact);
 }
 
 function addMessage(text, isYou, messageId, replyToData) {
