@@ -3,6 +3,23 @@ const http       = require("http");
 const { Server } = require("socket.io");
 const path       = require("path");
 const fs         = require("fs");
+
+// ── Persistent data directory ───────────────────────────────────────────────
+// On Render, mount a Disk at this path (Dashboard → your service → Disks →
+// Add Disk → mount path /var/data) so these files survive redeploys/restarts.
+// Locally (no disk mounted) it just falls back to the project folder.
+const DATA_DIR = process.env.DATA_DIR || "/var/data";
+try {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+} catch (e) {
+  console.error(`[DATA] Could not create/access ${DATA_DIR}, falling back to __dirname:`, e.message);
+}
+const dataDirUsable = fs.existsSync(DATA_DIR) && (() => {
+  try { fs.accessSync(DATA_DIR, fs.constants.W_OK); return true; }
+  catch { return false; }
+})();
+const DATA_PATH = dataDirUsable ? DATA_DIR : __dirname;
+console.log(`[DATA] Persistent files will be stored in: ${DATA_PATH}`);
 const crypto     = require("crypto");
 const compression   = require("compression");
 const rateLimit     = require("express-rate-limit");
@@ -45,7 +62,7 @@ function getClientIP(req) {
 // ── Persistent manual ban list ────────────────────────────────────────────────
 // Manual bans (via admin panel) survive server restarts — stored in banned_ips.json
 // Auto-bans (link-strike, report) are still in-memory only.
-const BANNED_IPS_FILE = path.join(__dirname, "banned_ips.json");
+const BANNED_IPS_FILE = path.join(DATA_PATH, "banned_ips.json");
 const bannedIPs       = new Set();
 
 function loadBannedIPs() {
@@ -71,7 +88,7 @@ loadBannedIPs(); // restore bans immediately at startup
 // ── Persistent manual user-agent ban list ─────────────────────────────────────
 // Lets the admin panel block a whole User-Agent string (any IP using it gets
 // rejected), same persistence pattern as the IP ban list above.
-const BANNED_UA_FILE  = path.join(__dirname, "banned_user_agents.json");
+const BANNED_UA_FILE  = path.join(DATA_PATH, "banned_user_agents.json");
 const bannedUserAgents = new Set();
 
 function normalizeUA(ua) {
@@ -107,8 +124,8 @@ loadBannedUserAgents(); // restore UA bans immediately at startup
 // vt-checker.js writes confirmed malicious IPs to vt-bans.json.
 // We watch that file and load new bans automatically — no restart needed.
 
-const VT_QUEUE_FILE = path.join(__dirname, "vt-queue.json");
-const VT_BANS_FILE  = path.join(__dirname, "vt-bans.json");
+const VT_QUEUE_FILE = path.join(DATA_PATH, "vt-queue.json");
+const VT_BANS_FILE  = path.join(DATA_PATH, "vt-bans.json");
 const VT_QUEUE_MAX  = 500;
 const VT_THRESHOLD  = 3; // must match vt-checker.js
 
@@ -2607,7 +2624,7 @@ app.get(ROUTE.visitorJson, ownerOnly, (req, res) => {
 
 // ── VirusTotal scan log dashboard ─────────────────────────────────────────────
 app.get(ROUTE.vtLog, ownerOnly, (req, res) => {
-  const log     = (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, "vt-log.json"), "utf8")); } catch { return []; } })();
+  const log     = (() => { try { return JSON.parse(fs.readFileSync(path.join(DATA_PATH, "vt-log.json"), "utf8")); } catch { return []; } })();
   const queue   = (() => { try { return JSON.parse(fs.readFileSync(VT_QUEUE_FILE, "utf8")); } catch { return []; } })();
   const vtBans  = (() => { try { return JSON.parse(fs.readFileSync(VT_BANS_FILE,  "utf8")); } catch { return []; } })();
   const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
@@ -2697,8 +2714,8 @@ const AVAILABLE_AVATARS = [
 ];
 const DEFAULT_AVATAR = AVAILABLE_AVATARS[0];
 
-const USERS_FILE        = path.join(__dirname, "registered_users.json");
-const PRIV_MSGS_FILE    = path.join(__dirname, "private_messages.json");
+const USERS_FILE        = path.join(DATA_PATH, "registered_users.json");
+const PRIV_MSGS_FILE    = path.join(DATA_PATH, "private_messages.json");
 const PRIVATE_MSG_TTL   = 12 * 60 * 60 * 1000; // 12 h — auto-delete
 const AUTH_TOKEN_TTL    = 7  * 24 * 60 * 60 * 1000; // 7 days
 

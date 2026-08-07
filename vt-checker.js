@@ -26,14 +26,29 @@
 const fs   = require("fs");
 const path = require("path");
 
+// ── Persistent data directory (must match server.js's DATA_DIR) ─────────────
+// This process reads/writes the SAME vt-*.json files server.js uses, so they
+// have to live in the same place — the mounted Render disk at /var/data.
+const DATA_DIR = process.env.DATA_DIR || "/var/data";
+try {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+} catch (e) {
+  console.error(`[VT] Could not create/access ${DATA_DIR}, falling back to __dirname:`, e.message);
+}
+const dataDirUsable = fs.existsSync(DATA_DIR) && (() => {
+  try { fs.accessSync(DATA_DIR, fs.constants.W_OK); return true; }
+  catch { return false; }
+})();
+const DATA_PATH = dataDirUsable ? DATA_DIR : __dirname;
+
 // ── Config ────────────────────────────────────────────────────────────────────
 const VT_API_KEY     = process.env.VT_API_KEY || "";
 const VT_THRESHOLD   = 3;       // ban if malicious + suspicious > this
 const CHECK_INTERVAL = 16000;   // ms between VT requests (free tier: 4/min)
-const QUEUE_FILE     = path.join(__dirname, "vt-queue.json");
-const BANS_FILE      = path.join(__dirname, "vt-bans.json");
-const LOG_FILE       = path.join(__dirname, "vt-log.json");
-const CHECKED_FILE   = path.join(__dirname, "vt-checked.json");
+const QUEUE_FILE     = path.join(DATA_PATH, "vt-queue.json");
+const BANS_FILE      = path.join(DATA_PATH, "vt-bans.json");
+const LOG_FILE       = path.join(DATA_PATH, "vt-log.json");
+const CHECKED_FILE   = path.join(DATA_PATH, "vt-checked.json");
 const MAX_LOG        = 500;     // keep last N log entries
 
 if (!VT_API_KEY) {
