@@ -10,7 +10,7 @@
   
   
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />  
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>GAICANI — ანონიმური ჩათი უცნობებთან</title>
   <meta name="description" content="GAICANI — უფასო ანონიმური ჩათი საქართველოში. გაიცანით შემთხვევით შერჩეული უცნობი ადამიანები, ესაუბრეთ ტექსტში, გააზიარეთ საერთო ინტერესები და იპოვეთ ახალი მეგობრები ანონიმურად, რეგისტრაციის გარეშე." />
   <meta name="keywords" content="ანონიმური ჩათი, ჩათი უცნობებთან, GAICANI, გაიცანი, random chat, omegle georgia, ქართული ჩათი" />
@@ -134,9 +134,9 @@
       <button class="change-name-btn" id="changeNameBtn"><span class="btn-icon">✏️</span><span class="btn-label">სახელის შეცვლა</span></button>
       <button class="report-button" id="reportBtn" disabled><span class="btn-icon">🚩</span><span class="btn-label">რეპორტი</span></button>
       <button class="block-button" id="blockBtn" disabled><span class="btn-icon">🚫</span><span class="btn-label">ბლოკი</span></button>
-      <!-- <span class="press-counter" id="blockBtnCounter" style="display:none">4/1</span> -->
+      <span class="press-counter" id="blockBtnCounter" style="display:none">4/1</span>
       <button class="next-button" id="nextBtn"><span class="btn-icon">🔎</span><span class="btn-label">ძებნა</span></button>
-      <!-- <span class="press-counter" id="nextBtnCounter" style="display:none">4/1</span> -->
+      <span class="press-counter" id="nextBtnCounter" style="display:none">4/1</span>
     </div>
   </div>
 
@@ -284,7 +284,7 @@
       <div id="auth-section-signup" style="display:none">
         <p style="text-align:center;color:#b5bac1;font-size:.85em;margin:0 0 16px;">
           დაარეგისტრირე სახელი — მხოლოდ შენ შეძლებ მის გამოყენებას.<br>
-          მეგობრებს ჩატის დროს Private message გაუგზავნე.
+          მეგობრებს ჩატის დროს Private Message გაუგზავნე.
         </p>
         <div class="auth-form-group">
           <input id="signup-username" class="auth-input" type="text"
@@ -372,7 +372,7 @@
         <div class="dash-user-info">
           <div class="dash-username" id="dashUsername">—</div>
           <div class="dash-user-meta">რეგისტრირებული მომხმარებელი</div>
-          <button class="dash-change-avatar-btn" id="dashChangeAvatarBtn">🖼️  სურათის შეცვლა</button>
+          <button class="dash-change-avatar-btn" id="dashChangeAvatarBtn">🖼️ სურათის შეცვლა</button>
         </div>
       </div>
 
@@ -401,7 +401,7 @@
 
       <!-- Blocked users (session) section -->
       <div class="dash-section" id="dashBlockedSection" style="display:none">
-        <div class="dash-section-label">🚫 დაბლოკილი  (სესია) <span id="dashBlockedCount" class="dash-badge">0</span></div>
+        <div class="dash-section-label">🚫 დაბლოკილი (სესია) <span id="dashBlockedCount" class="dash-badge">0</span></div>
         <div id="dash-blocked-list" class="dash-friends-list"></div>
       </div>
     </div>
@@ -443,7 +443,7 @@
       nextClickCount++;
       console.log("Next click:", nextClickCount);
 
-      if (nextClickCount % 10 === 0) {
+      if (nextClickCount % 4 === 0) {
         openAds();
       }
     });
@@ -458,7 +458,7 @@
       blockClickCount++;
       console.log("Block click:", blockClickCount);
 
-      if (blockClickCount % 10 === 0) {
+      if (blockClickCount % 4 === 0) {
         openAds();
       }
     });
