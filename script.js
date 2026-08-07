@@ -87,6 +87,8 @@ const sendBtn        = document.getElementById("sendBtn");
 const nextBtn        = document.getElementById("nextBtn");
 const scrollToTopBtn = document.getElementById("scrollToTopBtn");
 const blockBtn       = document.getElementById("blockBtn");
+const nextBtnCounter  = document.getElementById("nextBtnCounter");
+const blockBtnCounter = document.getElementById("blockBtnCounter");
 const reportBtn      = document.getElementById("reportBtn");
 const changeNameBtn  = document.getElementById("changeNameBtn");
 const interestsBtn   = document.getElementById("interestsBtn");
@@ -1866,7 +1868,20 @@ socket.on("awayTimeout", () => {});
 
 // ── Button handlers ───────────────────────────────────────────────────────────
 
+// Press-counter badges: shows "4/1" → "4/2" → "4/3" → "4/4", then resets.
+const PRESS_COUNTER_MAX = 4;
+let nextBtnPressCount  = 0;
+let blockBtnPressCount = 0;
+
+function bumpPressCounter(counterEl, currentCount) {
+  currentCount = currentCount >= PRESS_COUNTER_MAX ? 1 : currentCount + 1;
+  counterEl.textContent = `${PRESS_COUNTER_MAX}/${currentCount}`;
+  counterEl.style.display = "inline-block";
+  return currentCount;
+}
+
 nextBtn.addEventListener("click", () => {
+  nextBtnPressCount = bumpPressCounter(nextBtnCounter, nextBtnPressCount);
   nextBtn.disabled = true;
   setTimeout(() => { nextBtn.disabled = false; }, 1200);
 
@@ -1895,7 +1910,10 @@ blockBtn.addEventListener("click", () => {
   const confirmed = confirm(
     `Block "${targetName}"? თქვენ ვეღარ შეხვდებით ამ იუზერს ბლოკის შემდეგ. 😡 `
   );
-  if (confirmed) socket.emit("blockUser", { targetName });
+  if (confirmed) {
+    blockBtnPressCount = bumpPressCounter(blockBtnCounter, blockBtnPressCount);
+    socket.emit("blockUser", { targetName });
+  }
 });
 
 reportBtn.addEventListener("click", () => {
