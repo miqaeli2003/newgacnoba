@@ -1711,6 +1711,7 @@ socket.on("partnerDisconnected", (data) => {
 
     document.getElementById("blockOfferBtn").addEventListener("click", () => {
       offerEl.remove();
+      blockBtnPressCount = bumpPressCounter(blockBtnCounter, blockBtnPressCount);
       socket.emit("blockUser", { targetName: lastPartnerName });
     });
 
