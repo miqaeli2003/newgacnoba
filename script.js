@@ -1480,6 +1480,7 @@ socket.on("nameAccepted", (acceptedName) => {
     clearChat();
     // Do NOT auto-search — user must press the Search button manually
     addSystemMessage("🔎 ძებნის დასაწყებად დააჭირეთ ღილაკს");
+    addSystemMessage("ბლოკისა და ძებნის ღილაკებზე მოცემული რიცხვები 🔴🔵 მიუთითებს, რამდენი კლიკი დაგრჩათ რეკლამის გამოჩენამდე. ბოდიშს გიხდით შექმნილი დისკომფორტისთვის.");
   } else if (isReconnecting) {
     isReconnecting = false;
     _reconnectNameRetries = 0; // reset retry counter on success
