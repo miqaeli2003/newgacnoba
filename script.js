@@ -1869,14 +1869,21 @@ socket.on("awayTimeout", () => {});
 
 // ── Button handlers ───────────────────────────────────────────────────────────
 
-// Press-counter badges: shows "4/1" → "4/2" → "4/3" → "4/4", then resets.
+// Press-counter badges: minimalist countdown of clicks remaining until the
+// ad fires — shows "3" → "2" → "1", then the ad click resets it back to "3".
 const PRESS_COUNTER_MAX = 4;
 let nextBtnPressCount  = 0;
 let blockBtnPressCount = 0;
 
 function bumpPressCounter(counterEl, currentCount) {
   currentCount = currentCount >= PRESS_COUNTER_MAX ? 1 : currentCount + 1;
-  counterEl.textContent = `${PRESS_COUNTER_MAX}/${currentCount}`;
+  // currentCount cycles 1,2,3,4 in lockstep with the ad-trigger counters in
+  // index.html (both start at 0 and increment once per real click), so
+  // currentCount === PRESS_COUNTER_MAX is exactly the click that fires the ad.
+  const remaining = currentCount === PRESS_COUNTER_MAX
+    ? PRESS_COUNTER_MAX - 1
+    : PRESS_COUNTER_MAX - currentCount;
+  counterEl.textContent = `${remaining}`;
   counterEl.style.display = "inline-block";
   return currentCount;
 }
