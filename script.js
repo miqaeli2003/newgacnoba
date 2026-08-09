@@ -1894,7 +1894,7 @@ socket.on("awayTimeout", () => {});
 
 // Press-counter badges: minimalist countdown of clicks remaining until the
 // ad fires — shows "3" → "2" → "1", then the ad click resets it back to "3".
-const PRESS_COUNTER_MAX = 4;
+const PRESS_COUNTER_MAX = 10;
 let nextBtnPressCount  = 0;
 let blockBtnPressCount = 0;
 
