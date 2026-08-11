@@ -808,6 +808,33 @@ app.use((req, res, next) => {
   next();
 });
 
+// ── Blocked-country page ────────────────────────────────────────────────────
+function blockedCountryHTML() {
+  return `<!DOCTYPE html>
+<html lang="ka">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>GAICANI</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%;background:#1e1f22;display:flex;align-items:center;justify-content:center;font-family:"Segoe UI",Arial,sans-serif}
+.box{background:#2b2d31;border-radius:16px;padding:36px 28px;max-width:420px;width:92%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+.logo{font-size:1.8em;font-weight:900;color:#fff;letter-spacing:1px;margin-bottom:14px}
+.msg{color:#dcddde;font-size:1.05em;line-height:1.6;margin-bottom:8px}
+.sub{color:#72767d;font-size:.85em;line-height:1.5;margin-top:14px}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="logo">GAICANI</div>
+  <p class="msg">ეს სერვისი ხელმისაწვდომია მხოლოდ საქართველოს ტერიტორიაზე.</p>
+  <p class="sub">This service is only available within Georgia.</p>
+</div>
+</body>
+</html>`;
+}
+
 // ── Captcha gate — only on the main page, BEFORE static so it intercepts / ───
 app.use(async (req, res, next) => {
   // Only gate the main page
@@ -818,14 +845,18 @@ app.use(async (req, res, next) => {
   // Owner always passes
   if (OWNER_IPS.has(ip)) return next();
 
-  // Already passed captcha
+  // Already passed the geo-check (cookie set on a prior GE visit)
   if (hasCaptchaCookie(req)) return next();
 
-  // Geo-gate disabled — all IPs (Georgian and non-Georgian) now pass
-  // straight through instead of hitting the captcha page. The
-  // getCountry()/captcha helper functions are left in place above in
-  // case you want to re-enable the gate later; they're just not called
-  // from here anymore.
+  // Geo-gate: only Georgian IPs may access the site. Everyone else gets a
+  // static "not available in your region" page — no captcha, no bypass.
+  const country = await getCountry(ip);
+  if (country !== "GE") {
+    res.status(403);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(blockedCountryHTML());
+  }
+
   setCaptchaCookie(res, ip);
   return next();
 });
@@ -1485,6 +1516,18 @@ io.on("connection", (socket) => {
     socket.emit("autoKicked");
     setTimeout(() => socket.disconnect(true), 500);
     return;
+  }
+
+  // ── Geo-gate: only Georgian IPs may use the chat socket ─────────────────────
+  // The HTTP page gate blocks non-GE visitors from loading "/", but a direct
+  // socket.io connection would skip that check — so we re-verify here too.
+  if (!OWNER_IPS.has(rawIP)) {
+    getCountry(rawIP).then(country => {
+      if (country !== "GE") {
+        socket.emit("autoKicked");
+        setTimeout(() => socket.disconnect(true), 500);
+      }
+    });
   }
 
   console.log("User connected", socket.id, rawIP);
