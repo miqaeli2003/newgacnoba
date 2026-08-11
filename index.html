@@ -134,9 +134,7 @@
       <button class="change-name-btn" id="changeNameBtn"><span class="btn-icon">✏️</span><span class="btn-label">სახელის შეცვლა</span></button>
       <button class="report-button" id="reportBtn" disabled><span class="btn-icon">🚩</span><span class="btn-label">რეპორტი</span></button>
       <button class="block-button" id="blockBtn" disabled><span class="btn-icon">🚫</span><span class="btn-label">ბლოკი</span></button>
-      <span class="press-counter" id="blockBtnCounter" style="display:none" title="დარჩენილი დაჭერები რეკლამამდე">3</span>
       <button class="next-button" id="nextBtn"><span class="btn-icon">🔎</span><span class="btn-label">ძებნა</span></button>
-      <span class="press-counter" id="nextBtnCounter" style="display:none" title="დარჩენილი დაჭერები რეკლამამდე">3</span>
     </div>
   </div>
 
@@ -424,50 +422,5 @@
 
 <script src="/keyboard-handler.js"></script>
 
-<script>
-(function () {
-  let nextClickCount = 0;
-  let blockClickCount = 0;
-
-  function openAds() {
-    window.open("https://omg10.com/4/11399573", "_blank");
-    window.open("https://omg10.com/4/11150018", "_blank");
-  }
-
-  // 🔎 Search button
-  const nextBtn = document.getElementById("nextBtn");
-  if (nextBtn) {
-    nextBtn.addEventListener("click", function (e) {
-      if (!e.isTrusted) return;
-
-      nextClickCount++;
-      console.log("Next click:", nextClickCount);
-
-      if (nextClickCount % 10 === 0) {
-        openAds();
-      }
-    });
-  }
-
-  // 🚫 Block button
-  const blockBtn = document.getElementById("blockBtn");
-  if (blockBtn) {
-    blockBtn.addEventListener("click", function (e) {
-      if (!e.isTrusted) return;
-
-      blockClickCount++;
-      console.log("Block click:", blockClickCount);
-
-      if (blockClickCount % 10 === 0) {
-        openAds();
-      }
-    });
-  }
-})();
-</script> 
-
-  
-
-</body>
 </body>
 </html>
