@@ -325,8 +325,14 @@
       el('musicPlayPauseBtn').addEventListener('click', () => {
         if (!player) return;
         const state = player.getPlayerState();
-        if (state === YT.PlayerState.PLAYING) player.pauseVideo();
-        else player.playVideo();
+        if (state === YT.PlayerState.PLAYING) {
+          player.pauseVideo();
+        } else {
+          // This click is a fresh user gesture, so unmute here always
+          // succeeds even if the earlier synced-start unmute got blocked.
+          try { player.unMute(); player.setVolume(100); } catch (e) {}
+          player.playVideo();
+        }
       });
 
       player = new YT.Player('musicPlayerMount', {
@@ -351,9 +357,38 @@
       setTimeout(() => {
         if (!player) return;
         applyingRemote = true;
+        // Force sound on — the browser's autoplay-with-sound policy can
+        // silently mute playback here because this playVideo() call happens
+        // inside a setTimeout, disconnected from the click that opened the
+        // panel (no "fresh" user gesture at this exact moment).
+        try { player.unMute(); player.setVolume(100); } catch (e) {}
         player.playVideo();
-        setTimeout(() => { applyingRemote = false; }, 400);
+        setTimeout(() => {
+          applyingRemote = false;
+          maybeShowUnmuteHint();
+        }, 400);
       }, delay);
+    }
+
+    // If the browser still force-muted playback despite unMute(), show a
+    // small tappable hint — tapping IS a fresh user gesture, so it reliably
+    // unmutes even when the programmatic call above was ignored.
+    function maybeShowUnmuteHint() {
+      if (!player || typeof player.isMuted !== 'function') return;
+      const statusEl = el('musicWidgetStatus');
+      if (!player.isMuted()) return;
+      if (statusEl) {
+        statusEl.textContent = '🔇 დააჭირეთ ხმის ჩასართავად';
+        statusEl.style.cursor = 'pointer';
+        statusEl.onclick = () => {
+          try {
+            player.unMute();
+            player.setVolume(100);
+          } catch (e) {}
+          statusEl.style.cursor = '';
+          statusEl.onclick = null;
+        };
+      }
     }
 
     function onPlayerStateChange(e) {
@@ -362,7 +397,8 @@
 
       if (e.data === YT.PlayerState.PLAYING) {
         if (btn) { btn.textContent = '⏸️'; btn.disabled = false; }
-        if (statusEl) statusEl.textContent = 'უკრავს';
+        if (statusEl && !player.isMuted?.()) statusEl.textContent = 'უკრავს';
+        maybeShowUnmuteHint();
       } else if (e.data === YT.PlayerState.PAUSED) {
         if (btn) { btn.textContent = '▶️'; btn.disabled = false; }
         if (statusEl) statusEl.textContent = 'დაპაუზებულია';
