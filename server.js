@@ -939,51 +939,117 @@ app.get("/api/gifs", gifHttpLimiter, async (req, res) => {
   }
 });
 
+// ── Curated fallback playlist (no API key required) ────────────────────────
+// Used whenever YOUTUBE_API_KEY isn't set, and also as the list shown the
+// moment the music panel opens (before the user types anything to search).
+//
+// To add/replace songs: just paste a normal YouTube link as `url` — the
+// video ID is pulled out automatically with the same extractYouTubeId()
+// helper used everywhere else in this file. Thumbnails are generated from
+// the video ID directly (https://i.ytimg.com/vi/<id>/mqdefault.jpg), so no
+// API call is needed for this list to work.
+//
+// NOTE: these entries were picked as well-known, popular tracks, but they
+// haven't been live-verified against YouTube — a video could theoretically
+// be unavailable/region-locked. Swap in songs you've confirmed yourself if
+// you want a guaranteed-working list.
+const MUSIC_LIST = [
+  { url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", title: "Never Gonna Give You Up", channel: "Rick Astley" },
+  { url: "https://www.youtube.com/watch?v=9bZkp7q19f0", title: "Gangnam Style",             channel: "PSY" },
+  { url: "https://www.youtube.com/watch?v=kJQP7kiw5Fk", title: "Despacito",                 channel: "Luis Fonsi" },
+  { url: "https://www.youtube.com/watch?v=JGwWNGJdvx8", title: "Shape of You",               channel: "Ed Sheeran" },
+  { url: "https://www.youtube.com/watch?v=OPf0YbXqDm0", title: "Uptown Funk",                channel: "Mark Ronson ft. Bruno Mars" },
+  { url: "https://www.youtube.com/watch?v=RgKAFK5djSk", title: "See You Again",              channel: "Wiz Khalifa ft. Charlie Puth" },
+  { url: "https://www.youtube.com/watch?v=fJ9rUzIMcZQ", title: "Bohemian Rhapsody",          channel: "Queen" },
+  { url: "https://www.youtube.com/watch?v=YQHsXMglC9A", title: "Hello",                      channel: "Adele" },
+];
+
+const MUSIC_LIST_RESOLVED = MUSIC_LIST
+  .map(item => {
+    const videoId = extractYouTubeId(item.url);
+    return videoId ? {
+      videoId,
+      title:   item.title,
+      channel: item.channel,
+      thumb:   `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+    } : null;
+  })
+  .filter(Boolean);
+
 // ── Music search (powers the "Listen Together" search panel) ──────────────────
-// Replaces pasting a raw YouTube link: the client sends a text query here,
-// gets back a short list of matching videos, and the user taps one to send
-// the listen-together invite (see music:request below — unchanged).
+// Replaces pasting a raw YouTube link: the client gets a list back (either
+// the curated list above, or — if YOUTUBE_API_KEY is set — live YouTube
+// results/trending), and taps one to send the listen-together invite (see
+// music:request below — unchanged).
 //
 // Results are cached per query for 10 minutes since the free YouTube Data
 // API v3 quota (10,000 units/day) only allows ~100 search calls/day.
-const musicSearchCache     = new Map(); // query (lowercased) → { results, ts }
+const musicSearchCache       = new Map(); // query (lowercased, or "__browse__") → { results, ts }
 const MUSIC_SEARCH_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
-const musicSearchLimiter   = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
+const musicSearchLimiter     = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
 
 app.get("/api/music-search", musicSearchLimiter, async (req, res) => {
   const q = (req.query.q || "").trim().slice(0, 100);
-  if (!q) return res.json({ results: [] });
 
+  // No API key configured → always serve the curated list, filtered by
+  // query text when there is one.
   if (!YOUTUBE_API_KEY) {
-    return res.status(503).json({ error: "მუსიკის ძებნა ჯერ არ არის დაყენებული." });
+    if (!q) return res.json({ results: MUSIC_LIST_RESOLVED });
+    const qLower = q.toLowerCase();
+    const filtered = MUSIC_LIST_RESOLVED.filter(
+      item => item.title.toLowerCase().includes(qLower) || item.channel.toLowerCase().includes(qLower)
+    );
+    return res.json({ results: filtered });
   }
 
-  const cacheKey = q.toLowerCase();
+  const cacheKey = q ? q.toLowerCase() : "__browse__";
   const cached = musicSearchCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < MUSIC_SEARCH_CACHE_TTL) {
     return res.json({ results: cached.results });
   }
 
   try {
-    const endpoint = "https://www.googleapis.com/youtube/v3/search"
-      + `?part=snippet&type=video&videoEmbeddable=true&safeSearch=moderate&maxResults=10`
-      + `&q=${encodeURIComponent(q)}&key=${YOUTUBE_API_KEY}`;
-    const response = await fetch(endpoint, { signal: AbortSignal.timeout(6000) });
-    const data = await response.json();
+    let results;
 
-    if (!response.ok) {
-      console.error("YouTube search error:", response.status, data.error || data);
-      return res.status(502).json({ error: "ძებნა ვერ განხორციელდა." });
+    if (!q) {
+      // Panel just opened with no query yet — show trending music instead
+      // of an empty box.
+      const endpoint = "https://www.googleapis.com/youtube/v3/videos"
+        + `?part=snippet&chart=mostPopular&videoCategoryId=10&maxResults=10`
+        + `&regionCode=GE&key=${YOUTUBE_API_KEY}`;
+      const response = await fetch(endpoint, { signal: AbortSignal.timeout(6000) });
+      const data = await response.json();
+      if (!response.ok) {
+        console.error("YouTube trending error:", response.status, data.error || data);
+        return res.json({ results: MUSIC_LIST_RESOLVED }); // graceful fallback
+      }
+      results = (data.items || [])
+        .filter(it => it.id)
+        .map(it => ({
+          videoId: it.id,
+          title:   it.snippet?.title || "",
+          channel: it.snippet?.channelTitle || "",
+          thumb:   it.snippet?.thumbnails?.default?.url || `https://i.ytimg.com/vi/${it.id}/mqdefault.jpg`,
+        }));
+    } else {
+      const endpoint = "https://www.googleapis.com/youtube/v3/search"
+        + `?part=snippet&type=video&videoEmbeddable=true&safeSearch=moderate&maxResults=10`
+        + `&q=${encodeURIComponent(q)}&key=${YOUTUBE_API_KEY}`;
+      const response = await fetch(endpoint, { signal: AbortSignal.timeout(6000) });
+      const data = await response.json();
+      if (!response.ok) {
+        console.error("YouTube search error:", response.status, data.error || data);
+        return res.status(502).json({ error: "ძებნა ვერ განხორციელდა." });
+      }
+      results = (data.items || [])
+        .filter(it => it.id && it.id.videoId)
+        .map(it => ({
+          videoId: it.id.videoId,
+          title:   it.snippet?.title || "",
+          channel: it.snippet?.channelTitle || "",
+          thumb:   it.snippet?.thumbnails?.default?.url || it.snippet?.thumbnails?.medium?.url || "",
+        }));
     }
-
-    const results = (data.items || [])
-      .filter(it => it.id && it.id.videoId)
-      .map(it => ({
-        videoId: it.id.videoId,
-        title:   it.snippet?.title || "",
-        channel: it.snippet?.channelTitle || "",
-        thumb:   it.snippet?.thumbnails?.default?.url || it.snippet?.thumbnails?.medium?.url || "",
-      }));
 
     musicSearchCache.set(cacheKey, { results, ts: Date.now() });
     res.set("Cache-Control", "public, max-age=300");
@@ -993,6 +1059,7 @@ app.get("/api/music-search", musicSearchLimiter, async (req, res) => {
     res.status(502).json({ error: "ძებნა ვერ განხორციელდა." });
   }
 });
+
 
 app.get("/api/random-fact", (req, res) => {
   FACTS = loadLines("facts.txt");

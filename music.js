@@ -89,7 +89,8 @@
       searchInput.addEventListener('input', () => {
         clearTimeout(searchDebounce);
         const q = searchInput.value.trim();
-        if (q.length < 2) { el('musicSearchResults').innerHTML = ''; el('musicModalError').style.display = 'none'; return; }
+        if (!q) { runSearch(''); return; }
+        if (q.length < 2) { el('musicModalError').style.display = 'none'; return; }
         searchDebounce = setTimeout(() => runSearch(q), 400);
       });
 
@@ -171,8 +172,8 @@
       createRequestModal();
       el('musicModalError').style.display = 'none';
       el('musicSearchInput').value = '';
-      el('musicSearchResults').innerHTML = '';
       el('musicRequestModal').style.display = 'flex';
+      runSearch(''); // show the curated/trending list right away
       setTimeout(() => el('musicSearchInput')?.focus(), 50);
     }
     window._openMusicRequest = openRequestModal;
