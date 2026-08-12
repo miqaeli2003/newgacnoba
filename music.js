@@ -34,6 +34,7 @@
     let pendingInviteVideoId = null;
     let applyingRemote = false;   // guard to avoid echo loops
     let requestSentAt  = 0;
+    let audioUnlocked  = false;   // set true once a real gesture-tied play() has run
 
     // ────────────────────────────────────────────────────────────
     // 1. "Send request" — reached via the 🎵 button in the top bar
@@ -154,10 +155,60 @@
 
     function selectSong(videoId, title) {
       if (!videoId) return;
+      warmUpAudio(); // must run synchronously inside this click — see note above
       requestSentAt = Date.now();
       socket.emit('music:request', { url: videoId });
       closeRequestModal();
       appendSystemMessage(`⏳ მოთხოვნა გაიგზავნა: ${title || 'სიმღერა'}`);
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // Audio unlock: browsers only allow unmuted autoplay when play()
+    // is tied to a real user gesture. Our actual playback always starts
+    // later from a socket event (music:start / scheduleSimultaneousStart),
+    // which has no gesture attached, so it gets silently muted.
+    //
+    // Fix: run one tiny real (audible) play+pause synchronously inside
+    // the click that starts this flow — selecting a song, or accepting
+    // an invite. That single gesture-tied play "unlocks" audio playback
+    // on this page for the rest of the session in every major browser,
+    // so the later programmatic playVideo() call succeeds unmuted too.
+    // ────────────────────────────────────────────────────────────
+    let unlockPlayer = null;
+    function warmUpAudio() {
+      if (audioUnlocked) return;
+      loadYouTubeAPI(() => {
+        if (unlockPlayer) return; // already warming up
+        let mount = el('musicUnlockMount');
+        if (!mount) {
+          mount = document.createElement('div');
+          mount.id = 'musicUnlockMount';
+          mount.className = 'music-player-mount';
+          document.body.appendChild(mount);
+        }
+        try {
+          unlockPlayer = new YT.Player('musicUnlockMount', {
+            height: '1',
+            width: '1',
+            videoId: 'dQw4w9WgXcQ', // any playable video works — audio is barely heard before we pause it
+            playerVars: { autoplay: 1, controls: 0, disablekb: 1, playsinline: 1 },
+            events: {
+              onReady: (e) => {
+                try {
+                  e.target.unMute();
+                  e.target.setVolume(100);
+                  e.target.playVideo();
+                } catch (err) {}
+                setTimeout(() => {
+                  try { e.target.pauseVideo(); e.target.destroy(); } catch (err) {}
+                  unlockPlayer = null;
+                  audioUnlocked = true;
+                }, 150);
+              },
+            },
+          });
+        } catch (err) {}
+      });
     }
 
     function openRequestModal() {
@@ -218,6 +269,7 @@
       el('musicAcceptBtn').addEventListener('click', () => {
         if (expired) return;
         expired = true;
+        warmUpAudio(); // same unlock trick, tied to this real click
         bar.remove();
         socket.emit('music:response', { accepted: true, toId: fromId, videoId: pendingInviteVideoId });
       });
