@@ -35,6 +35,13 @@ const io     = new Server(server, {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const GIPHY_KEY           = process.env.GIPHY_KEY || "UFauF9jrzjxyDsxqXi7rVnfRdvmuMmsL";
+// Powers /api/music-search (in-site song search for "Listen Together").
+// Get a free key at https://console.cloud.google.com/ → enable "YouTube Data
+// API v3" → Credentials → API key. Free quota is 10,000 units/day; each
+// search costs 100 units (~100 searches/day), which is why results are
+// cached below. Without this set, the search box returns a friendly error
+// and the feature is simply unavailable — nothing else on the site breaks.
+const YOUTUBE_API_KEY     = process.env.YOUTUBE_API_KEY || "";
 const NAME_MIN           = 2;
 const NAME_MAX           = 20;
 const MSG_MAX            = 2000;
@@ -929,6 +936,61 @@ app.get("/api/gifs", gifHttpLimiter, async (req, res) => {
   } catch (err) {
     console.error("Giphy fetch failed:", err.message);
     res.status(502).json({ error: "Failed to fetch GIFs" });
+  }
+});
+
+// ── Music search (powers the "Listen Together" search panel) ──────────────────
+// Replaces pasting a raw YouTube link: the client sends a text query here,
+// gets back a short list of matching videos, and the user taps one to send
+// the listen-together invite (see music:request below — unchanged).
+//
+// Results are cached per query for 10 minutes since the free YouTube Data
+// API v3 quota (10,000 units/day) only allows ~100 search calls/day.
+const musicSearchCache     = new Map(); // query (lowercased) → { results, ts }
+const MUSIC_SEARCH_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const musicSearchLimiter   = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
+
+app.get("/api/music-search", musicSearchLimiter, async (req, res) => {
+  const q = (req.query.q || "").trim().slice(0, 100);
+  if (!q) return res.json({ results: [] });
+
+  if (!YOUTUBE_API_KEY) {
+    return res.status(503).json({ error: "მუსიკის ძებნა ჯერ არ არის დაყენებული." });
+  }
+
+  const cacheKey = q.toLowerCase();
+  const cached = musicSearchCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < MUSIC_SEARCH_CACHE_TTL) {
+    return res.json({ results: cached.results });
+  }
+
+  try {
+    const endpoint = "https://www.googleapis.com/youtube/v3/search"
+      + `?part=snippet&type=video&videoEmbeddable=true&safeSearch=moderate&maxResults=10`
+      + `&q=${encodeURIComponent(q)}&key=${YOUTUBE_API_KEY}`;
+    const response = await fetch(endpoint, { signal: AbortSignal.timeout(6000) });
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("YouTube search error:", response.status, data.error || data);
+      return res.status(502).json({ error: "ძებნა ვერ განხორციელდა." });
+    }
+
+    const results = (data.items || [])
+      .filter(it => it.id && it.id.videoId)
+      .map(it => ({
+        videoId: it.id.videoId,
+        title:   it.snippet?.title || "",
+        channel: it.snippet?.channelTitle || "",
+        thumb:   it.snippet?.thumbnails?.default?.url || it.snippet?.thumbnails?.medium?.url || "",
+      }));
+
+    musicSearchCache.set(cacheKey, { results, ts: Date.now() });
+    res.set("Cache-Control", "public, max-age=300");
+    res.json({ results });
+  } catch (err) {
+    console.error("YouTube search fetch failed:", err.message);
+    res.status(502).json({ error: "ძებნა ვერ განხორციელდა." });
   }
 });
 

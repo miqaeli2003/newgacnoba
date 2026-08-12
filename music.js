@@ -72,31 +72,91 @@
             <span>🎵 ერთად მოსმენა</span>
             <button id="musicModalClose" class="music-modal-close">✕</button>
           </div>
-          <p class="music-modal-hint">ჩასვით YouTube ბმული — პარტნიორს გაეგზავნება მოთხოვნა.</p>
-          <input type="text" id="musicUrlInput" class="music-url-input"
-                 placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" />
+          <p class="music-modal-hint">მოძებნეთ სიმღერა და დააჭირეთ მას — პარტნიორს გაეგზავნება მოთხოვნა.</p>
+          <input type="text" id="musicSearchInput" class="music-url-input"
+                 placeholder="სიმღერის დასახელება..." autocomplete="off" />
           <div class="music-modal-error" id="musicModalError" style="display:none"></div>
-          <button id="musicSendBtn" class="music-send-btn">🎵 გაგზავნა</button>
+          <div id="musicSearchResults" class="music-search-results"></div>
         </div>`;
       document.body.appendChild(modal);
 
       el('musicModalClose').addEventListener('click', closeRequestModal);
       modal.addEventListener('click', (e) => { if (e.target === modal) closeRequestModal(); });
 
-      el('musicSendBtn').addEventListener('click', () => {
-        const url = el('musicUrlInput').value.trim();
-        const err = el('musicModalError');
-        if (!url) { err.textContent = 'ჩასვით ბმული.'; err.style.display = 'block'; return; }
-        err.style.display = 'none';
-        requestSentAt = Date.now();
-        socket.emit('music:request', { url });
-        closeRequestModal();
-        appendSystemMessage('⏳ მუსიკის მოთხოვნა გაიგზავნა...');
+      const searchInput = el('musicSearchInput');
+      let searchDebounce = null;
+
+      searchInput.addEventListener('input', () => {
+        clearTimeout(searchDebounce);
+        const q = searchInput.value.trim();
+        if (q.length < 2) { el('musicSearchResults').innerHTML = ''; el('musicModalError').style.display = 'none'; return; }
+        searchDebounce = setTimeout(() => runSearch(q), 400);
       });
 
-      el('musicUrlInput').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') el('musicSendBtn').click();
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        clearTimeout(searchDebounce);
+        const q = searchInput.value.trim();
+        if (q.length >= 2) runSearch(q);
       });
+    }
+
+    let searchSeq = 0;
+    function runSearch(q) {
+      const mySeq = ++searchSeq;
+      const err = el('musicModalError');
+      const resultsEl = el('musicSearchResults');
+      err.style.display = 'none';
+      resultsEl.innerHTML = `<div class="music-search-loading">🔎 იძებნება...</div>`;
+
+      fetch(`/api/music-search?q=${encodeURIComponent(q)}`)
+        .then(r => r.json().then(data => ({ ok: r.ok, data })))
+        .then(({ ok, data }) => {
+          if (mySeq !== searchSeq) return; // superseded by a newer search
+          if (!ok) {
+            resultsEl.innerHTML = '';
+            err.textContent = data.error || 'ძებნა ვერ განხორციელდა.';
+            err.style.display = 'block';
+            return;
+          }
+          renderSearchResults(data.results || []);
+        })
+        .catch(() => {
+          if (mySeq !== searchSeq) return;
+          resultsEl.innerHTML = '';
+          err.textContent = 'ძებნა ვერ განხორციელდა.';
+          err.style.display = 'block';
+        });
+    }
+
+    function renderSearchResults(list) {
+      const resultsEl = el('musicSearchResults');
+      if (!list.length) {
+        resultsEl.innerHTML = `<div class="music-search-loading">შედეგი ვერ მოიძებნა.</div>`;
+        return;
+      }
+      resultsEl.innerHTML = list.map(item => `
+        <div class="music-result-item" data-video-id="${escapeHtml(item.videoId)}" data-title="${escapeHtml(item.title)}">
+          <img class="music-result-thumb" src="${escapeHtml(item.thumb)}" alt="" loading="lazy" />
+          <div class="music-result-info">
+            <div class="music-result-title">${escapeHtml(item.title)}</div>
+            <div class="music-result-channel">${escapeHtml(item.channel)}</div>
+          </div>
+        </div>`).join('');
+
+      resultsEl.querySelectorAll('.music-result-item').forEach(node => {
+        node.addEventListener('click', () => {
+          selectSong(node.dataset.videoId, node.dataset.title);
+        });
+      });
+    }
+
+    function selectSong(videoId, title) {
+      if (!videoId) return;
+      requestSentAt = Date.now();
+      socket.emit('music:request', { url: videoId });
+      closeRequestModal();
+      appendSystemMessage(`⏳ მოთხოვნა გაიგზავნა: ${title || 'სიმღერა'}`);
     }
 
     function openRequestModal() {
@@ -110,9 +170,10 @@
       }
       createRequestModal();
       el('musicModalError').style.display = 'none';
-      el('musicUrlInput').value = '';
+      el('musicSearchInput').value = '';
+      el('musicSearchResults').innerHTML = '';
       el('musicRequestModal').style.display = 'flex';
-      setTimeout(() => el('musicUrlInput')?.focus(), 50);
+      setTimeout(() => el('musicSearchInput')?.focus(), 50);
     }
     window._openMusicRequest = openRequestModal;
 
