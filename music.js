@@ -465,6 +465,15 @@
     // Both sides call playVideo() at the same wall-clock time (startAt,
     // sent by the server) so the track begins simultaneously instead of
     // whichever client's player finished loading first.
+    //
+    // On iOS Safari this programmatic call frequently never actually
+    // starts playback at all (not just muted — genuinely stuck), because
+    // YouTube's embed plays inside a cross-origin iframe, and iOS only
+    // allows JS to start audio in that iframe when the call happens with
+    // zero delay after a real tap. Our call always has some delay (socket
+    // round-trip + iframe load), so the gesture window has closed by then.
+    // There's no reliable JS-only workaround for that — the fix is to
+    // detect the stall and hand the person a real, visible tap.
     function scheduleSimultaneousStart(startAt) {
       const delay = Math.max(0, (startAt || Date.now()) - Date.now());
       const statusEl = el('musicWidgetStatus');
@@ -472,17 +481,41 @@
       setTimeout(() => {
         if (!player) return;
         applyingRemote = true;
-        // Force sound on — the browser's autoplay-with-sound policy can
-        // silently mute playback here because this playVideo() call happens
-        // inside a setTimeout, disconnected from the click that opened the
-        // panel (no "fresh" user gesture at this exact moment).
         try { player.unMute(); player.setVolume(100); } catch (e) {}
-        player.playVideo();
+        try { player.playVideo(); } catch (e) {}
         setTimeout(() => {
           applyingRemote = false;
           maybeShowUnmuteHint();
+          maybeShowTapToStart();
         }, 400);
       }, delay);
+    }
+
+    // Safety net for platforms (mainly iOS Safari) where the programmatic
+    // playVideo() above never actually starts playback — checked ~1.6s
+    // after we attempted to start. If we're still not PLAYING by then,
+    // surface the play/pause button as an obvious "tap to start" prompt.
+    // A direct tap on it fires the SAME click handler that already does
+    // unMute() + playVideo() synchronously — the one call pattern iOS
+    // reliably honors, since there's no delay between tap and the API call.
+    function maybeShowTapToStart() {
+      if (!player || typeof player.getPlayerState !== 'function') return;
+      const checkPlayer = player;
+      setTimeout(() => {
+        if (player !== checkPlayer) return; // session moved on / ended
+        let state;
+        try { state = player.getPlayerState(); } catch (e) { return; }
+        if (state === YT.PlayerState.PLAYING) return; // it worked, nothing to do
+
+        const btn = el('musicPlayPauseBtn');
+        const statusEl = el('musicWidgetStatus');
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = '▶️';
+          btn.classList.add('music-playpause-btn--pulse');
+        }
+        if (statusEl) statusEl.textContent = '👆 დააჭირეთ დასაწყებად';
+      }, 1600);
     }
 
     // If the browser still force-muted playback despite unMute(), show a
@@ -511,11 +544,11 @@
       const statusEl = el('musicWidgetStatus');
 
       if (e.data === YT.PlayerState.PLAYING) {
-        if (btn) { btn.textContent = '⏸️'; btn.disabled = false; }
+        if (btn) { btn.textContent = '⏸️'; btn.disabled = false; btn.classList.remove('music-playpause-btn--pulse'); }
         if (statusEl && !player.isMuted?.()) statusEl.textContent = 'უკრავს';
         maybeShowUnmuteHint();
       } else if (e.data === YT.PlayerState.PAUSED) {
-        if (btn) { btn.textContent = '▶️'; btn.disabled = false; }
+        if (btn) { btn.textContent = '▶️'; btn.disabled = false; btn.classList.remove('music-playpause-btn--pulse'); }
         if (statusEl) statusEl.textContent = 'დაპაუზებულია';
       } else if (e.data === YT.PlayerState.BUFFERING) {
         if (statusEl) statusEl.textContent = 'იტვირთება...';
