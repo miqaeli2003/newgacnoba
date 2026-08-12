@@ -210,6 +210,10 @@ function _appendInfoMessage(text, className, id) {
 }
 
 function addSystemMessage(text)            { _appendInfoMessage(text, "system-message"); }
+function addSystemHintMessage(text, extraClass) {
+  _appendInfoMessage(text, extraClass ? `system-message-hint ${extraClass}` : "system-message-hint");
+}
+function addSystemBigMessage(text)         { _appendInfoMessage(text, "system-message-big"); }
 
 // ── System message with an inline image (used for the press-counter hint) ──
 function addSystemImageMessage(imgSrc, altText) {
@@ -1498,6 +1502,9 @@ socket.on("nameAccepted", (acceptedName) => {
     clearChat();
     // Do NOT auto-search — user must press the Search button manually
     addSystemMessage("🔎 ძებნის დასაწყებად დააჭირეთ ღილაკს");
+    addSystemHintMessage("🎵 უკვე შეგიძლიათ მოუსმინოთ მუსიკას ერთდროულად რაც მთავარია კომფორტულად! 😌🎧", "system-message-hint--music");
+    addSystemHintMessage("თუ დარეგისტრირდებით შეძლებთ: ისევ ისარგებლოთ Random chat-ით ამჯერად თქვენი არჩეული ფოტოთი, მეგობრების დამატებას, რომლებსაც მიწერთ როცა გინდათ, ნახავთ ვინ არის ონლაინში და სხვა! 📸➕👀");
+    addSystemBigMessage("წარმატებები უცნაური მეგობრის პოვნაში 🍀🤪");
   } else if (isReconnecting) {
     isReconnecting = false;
     _reconnectNameRetries = 0; // reset retry counter on success

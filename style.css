@@ -738,6 +738,29 @@ html, body {
   margin: 4px 0;
 }
 
+/* ── Welcome hints shown before the first search (music + register + big line) ── */
+.system-message-hint {
+  text-align: center;
+  color: #b5bac1;
+  font-size: 0.85em;
+  line-height: 1.5;
+  margin: 4px auto 14px;
+  max-width: 320px;
+}
+
+.system-message-hint--music {
+  color: #7c84f8;
+}
+
+.system-message-big {
+  text-align: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.05em;
+  margin: 6px 0 16px;
+  letter-spacing: 0.01em;
+}
+
 /* ── BLOCK OFFER (shown after partner disconnects) ─────────────────────── */
 .block-offer {
   display: flex;
