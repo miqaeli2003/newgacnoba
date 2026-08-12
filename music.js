@@ -155,7 +155,7 @@
 
     function selectSong(videoId, title) {
       if (!videoId) return;
-      warmUpAudio(); // must run synchronously inside this click — see note above
+      warmUpAudio(videoId); // must run synchronously inside this click — see note above
       requestSentAt = Date.now();
       socket.emit('music:request', { url: videoId });
       closeRequestModal();
@@ -166,31 +166,45 @@
     // Audio unlock: browsers only allow unmuted autoplay when play()
     // is tied to a real user gesture. Our actual playback always starts
     // later from a socket event (music:start / scheduleSimultaneousStart),
-    // which has no gesture attached, so it gets silently muted.
+    // which has no gesture attached, so it gets silently muted or, on
+    // iOS Safari, never starts at all.
     //
-    // Fix: run one tiny real (audible) play+pause synchronously inside
-    // the click that starts this flow — selecting a song, or accepting
-    // an invite. That single gesture-tied play "unlocks" audio playback
-    // on this page for the rest of the session in every major browser,
-    // so the later programmatic playVideo() call succeeds unmuted too.
+    // iOS Safari is stricter than desktop browsers: it ties the unlock
+    // to the EXACT <video> element that received the gesture, not the
+    // page as a whole. So a throwaway "dummy" player created just to
+    // unlock audio, then destroyed and replaced by a fresh player later,
+    // does NOT work on iOS — the new player is treated as un-unlocked
+    // and playback silently stalls (stuck on "იტვირთება...").
+    //
+    // Fix: create the REAL player with the REAL videoId synchronously
+    // inside the click, and reuse that exact same instance later for
+    // the synced session — never destroy/recreate it in between.
     // ────────────────────────────────────────────────────────────
-    let unlockPlayer = null;
-    function warmUpAudio() {
-      if (audioUnlocked) return;
+    let prewarmedPlayer   = null;
+    let prewarmedVideoId  = null;
+
+    function warmUpAudio(videoId) {
+      if (!videoId) return;
+      if (prewarmedPlayer && prewarmedVideoId === videoId) return; // already warming this song
       loadYouTubeAPI(() => {
-        if (unlockPlayer) return; // already warming up
-        let mount = el('musicUnlockMount');
-        if (!mount) {
-          mount = document.createElement('div');
-          mount.id = 'musicUnlockMount';
-          mount.className = 'music-player-mount';
-          document.body.appendChild(mount);
+        // Tear down any previous prewarmed player for a different video
+        if (prewarmedPlayer) {
+          try { prewarmedPlayer.destroy(); } catch (err) {}
+          prewarmedPlayer = null;
         }
+        let mount = el('musicUnlockMount');
+        if (mount) mount.remove();
+        mount = document.createElement('div');
+        mount.id = 'musicUnlockMount';
+        mount.className = 'music-player-mount';
+        document.body.appendChild(mount);
+
+        prewarmedVideoId = videoId;
         try {
-          unlockPlayer = new YT.Player('musicUnlockMount', {
+          prewarmedPlayer = new YT.Player('musicUnlockMount', {
             height: '1',
             width: '1',
-            videoId: 'dQw4w9WgXcQ', // any playable video works — audio is barely heard before we pause it
+            videoId: videoId,
             playerVars: { autoplay: 1, controls: 0, disablekb: 1, playsinline: 1 },
             events: {
               onReady: (e) => {
@@ -199,9 +213,12 @@
                   e.target.setVolume(100);
                   e.target.playVideo();
                 } catch (err) {}
+                // Pause almost immediately — we're just proving to the
+                // browser this element is allowed to make sound. We do
+                // NOT destroy it: keeping the same element/instance alive
+                // is what makes the later programmatic play() work on iOS.
                 setTimeout(() => {
-                  try { e.target.pauseVideo(); e.target.destroy(); } catch (err) {}
-                  unlockPlayer = null;
+                  try { e.target.pauseVideo(); } catch (err) {}
                   audioUnlocked = true;
                 }, 150);
               },
@@ -269,7 +286,7 @@
       el('musicAcceptBtn').addEventListener('click', () => {
         if (expired) return;
         expired = true;
-        warmUpAudio(); // same unlock trick, tied to this real click
+        warmUpAudio(pendingInviteVideoId); // same unlock trick, tied to this real click
         bar.remove();
         socket.emit('music:response', { accepted: true, toId: fromId, videoId: pendingInviteVideoId });
       });
@@ -291,12 +308,24 @@
       }, 30000);
     }
 
+    function clearPrewarmedPlayer() {
+      if (prewarmedPlayer) {
+        try { prewarmedPlayer.destroy(); } catch (err) {}
+      }
+      prewarmedPlayer  = null;
+      prewarmedVideoId = null;
+      const mount = el('musicUnlockMount');
+      if (mount) mount.remove();
+    }
+
     socket.on('music:declined', () => {
       appendSystemMessage('❌ მუსიკის მოთხოვნა უარყოფილ იქნა.');
+      clearPrewarmedPlayer();
     });
 
     socket.on('music:error', ({ message }) => {
       showToastFallback('🎵 ' + (message || 'ვერ მოხერხდა.'));
+      clearPrewarmedPlayer();
     });
 
     // ────────────────────────────────────────────────────────────
@@ -356,8 +385,7 @@
             <div id="musicWidgetTitle" class="music-widget-title">იტვირთება...</div>
             <div id="musicWidgetStatus" class="music-widget-status">დასინქრონება...</div>
           </div>
-        </div>
-        <div id="musicPlayerMount" class="music-player-mount"></div>`;
+        </div>`;
 
       // Attach directly in the chat feed, at the point it was created —
       // it stays there as the conversation continues instead of floating
@@ -386,6 +414,41 @@
           player.playVideo();
         }
       });
+
+      // Reuse the player we already unlocked with a real gesture (see
+      // warmUpAudio) if it's for the same video — critical on iOS Safari,
+      // which requires the exact same <video> element that received the
+      // user gesture to still be the one calling play() later.
+      if (prewarmedPlayer && prewarmedVideoId === videoId) {
+        player = prewarmedPlayer;
+        prewarmedPlayer  = null;
+        prewarmedVideoId = null;
+
+        const mount = el('musicUnlockMount');
+        if (mount) {
+          mount.id = 'musicPlayerMount';
+          widget.appendChild(mount);
+        }
+
+        try { player.addEventListener('onStateChange', onPlayerStateChange); } catch (err) {}
+        scheduleSimultaneousStart(startAt);
+        return;
+      }
+
+      // Fallback (e.g. the other person didn't trigger warmUpAudio — this
+      // shouldn't normally happen since both selectSong and accept call it,
+      // but keep it so the feature still works even if unlock failed).
+      if (prewarmedPlayer) {
+        try { prewarmedPlayer.destroy(); } catch (err) {}
+        prewarmedPlayer = null;
+      }
+      const unlockMount = el('musicUnlockMount');
+      if (unlockMount) unlockMount.remove();
+
+      const mount = document.createElement('div');
+      mount.id = 'musicPlayerMount';
+      mount.className = 'music-player-mount';
+      widget.appendChild(mount);
 
       player = new YT.Player('musicPlayerMount', {
         height: '1',
@@ -501,6 +564,7 @@
       if (widget) widget.remove();
       if (player && player.destroy) { try { player.destroy(); } catch {} }
       player = null;
+      clearPrewarmedPlayer();
     }
 
     // Close the shared session whenever the chat partner goes away
