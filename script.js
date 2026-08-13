@@ -1502,7 +1502,7 @@ socket.on("nameAccepted", (acceptedName) => {
     clearChat();
     // Do NOT auto-search — user must press the Search button manually
     addSystemMessage("🔎 ძებნის დასაწყებად დააჭირეთ ღილაკს");
-    addSystemHintMessage("🎵 უკვე შეგიძლიათ მოუსმინოთ მუსიკას ერთდროულად რაც მთავარია კომფორტულად ,  აწ უკვე ყველა სოფთიდან :)   ისიამოვნეთ 😌🎧", "system-message-hint--music");
+    addSystemHintMessage("🎵 უკვე შეგიძლიათ მოუსმინოთ მუსიკას ერთდროულად რაც მთავარია კომფორტულად ,  აწ უკვე ყველა სოფთიდან :)   ისიამოვნეთ 😌🎧 ||     ჯერჯერობით მუსიკის დასერჩვის ფუნქცია დროის გარკვეულ მომენტებში იქნება მხოლოდ :(", "system-message-hint--music");
     addSystemHintMessage("თუ დარეგისტრირდებით შეძლებთ: ისევ ისარგებლოთ Random chat-ით ამჯერად თქვენი არჩეული ფოტოთი, მეგობრების დამატებას, რომლებსაც მიწერთ როცა გინდათ, ნახავთ ვინ არის ონლაინში და სხვა! 📸➕👀");
     addSystemBigMessage("წარმატებები უცნაური მეგობრის პოვნაში 🍀🤪");
   } else if (isReconnecting) {
