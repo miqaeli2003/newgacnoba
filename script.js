@@ -263,7 +263,7 @@ function addPartnerFoundCard(name) {
 
   // Load the partner's real profile picture if they're a registered user,
   // otherwise fall back to the default (unregistered) picture.
-  const DEFAULT_PARTNER_PIC = "https://raw.githubusercontent.com/miqaeli2003/newgacnoba/master/images%20(1).jpeg";
+  const DEFAULT_PARTNER_PIC = "/images%20(1).jpeg";
   fetch("/api/users/avatars", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
