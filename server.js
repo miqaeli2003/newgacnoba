@@ -25,6 +25,7 @@ const compression   = require("compression");
 const rateLimit     = require("express-rate-limit");
 
 const app    = express();
+app.set("trust proxy", 1); // behind Render's proxy — needed for express-rate-limit / IP detection
 const server = http.createServer(app);
 const io     = new Server(server, {
   pingTimeout:  120000, // 120 s — give mobile plenty of time
@@ -3702,7 +3703,9 @@ io.on("connection", (socket) => {
 
   // ── friendChat:photo — relay photo (base64) to friend ────────────────────
   socket.on("friendChat:photo", ({ toUsername, dataUrl }) => {
-    if (!socket._regUser || !toUsername || !dataUrl) return;
+    if (!socket._regUser || !toUsername || typeof dataUrl !== "string") return;
+    if (!dataUrl.startsWith("data:image/")) return;
+    if (dataUrl.length > 4 * 1024 * 1024) return; // same 4MB cap as random-chat photo
     const toLc   = String(toUsername).toLowerCase().trim();
     const myUser = registeredUsers.get(socket._regUser.usernameLower);
     if (!myUser || !(myUser.friends || []).includes(toLc)) return;
