@@ -1202,17 +1202,31 @@ app.get(ROUTE.bans, ownerOnly, (req, res) => {
   res.json({ count: bannedIPs.size, ips: [...bannedIPs] });
 });
 
-// GET <reported route>  — list IPs that hit 5 reports within 24h window
+// GET <reported route>  — list EVERY IP that has at least one report on file
+// (not just the ones that hit the 5-report auto-ban). Each entry says
+// whether it's currently auto-banned (from hitting the threshold) and/or
+// permanently banned (from a manual "Ban Forever" click), so the owner can
+// eyeball every report and decide to block or leave it as-is.
 app.get(ROUTE.reported, ownerOnly, (req, res) => {
   const now = Date.now();
   const result = [];
   for (const [ip, entry] of reportStrikes) {
-    if (!entry.bannedUntil) continue;
-    if (now >= entry.bannedUntil) continue;
-    const remainingMs  = entry.bannedUntil - now;
-    const remainingHrs = Math.ceil(remainingMs / (60 * 60 * 1000));
-    result.push({ ip, count: entry.count, remainingHrs, reasons: entry.reasons || [] });
+    const autoBanActive = !!(entry.bannedUntil && now < entry.bannedUntil);
+    const remainingHrs  = autoBanActive
+      ? Math.ceil((entry.bannedUntil - now) / (60 * 60 * 1000))
+      : null;
+    result.push({
+      ip,
+      count:          entry.count,
+      autoBanned:     autoBanActive,
+      remainingHrs,
+      permaBanned:    bannedIPs.has(ip),
+      reasons:        entry.reasons || [],
+      firstReportAt:  entry.firstReportAt ? new Date(entry.firstReportAt).toISOString() : null,
+    });
   }
+  // Most-reported first
+  result.sort((a, b) => b.count - a.count);
   res.json({ count: result.length, reported: result });
 });
 
@@ -1337,7 +1351,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
 </div>
 
 <div class="section">
-  <h2>🚩 Reported IPs (5+ reports, active ban)</h2>
+  <h2>🚩 All Reports (every IP with 1+ reports — 5 still auto-bans for 24h)</h2>
   <div id="reported">Loading...</div>
 </div>
 
@@ -1486,16 +1500,33 @@ async function loadAll() {
   try {
     const d = await api("GET", R.reported);
     const el = document.getElementById("reported");
-    if (!d.reported || !d.reported.length) { el.innerHTML = '<p style="color:#72767d;font-size:.9em">No reported IPs right now</p>'; }
+    if (!d.reported || !d.reported.length) { el.innerHTML = '<p style="color:#72767d;font-size:.9em">No reports on file</p>'; }
     else {
-      el.innerHTML = '<table><tr><th>IP</th><th>Reports</th><th>Reasons</th><th>Ban expires in</th><th></th></tr>' +
-        d.reported.map(r => \`<tr>
-          <td style="font-family:monospace;color:#fff">\${esc(r.ip)}</td>
-          <td><span style="color:#f23f42;font-weight:700">\${r.count}</span></td>
-          <td>\${reasonsHtml(r.reasons)}</td>
-          <td style="color:#72767d">\${r.remainingHrs}h</td>
-          <td><button class="unban-btn" onclick="unbanReportedIP('\${esc(r.ip)}')">✅ Unban</button></td>
-        </tr>\`).join("") + "</table>";
+      el.innerHTML = '<table><tr><th>IP</th><th>Reports</th><th>Reasons</th><th>Status</th><th></th></tr>' +
+        d.reported.map(r => {
+          let statusHtml;
+          if (r.permaBanned) statusHtml = '<span class="badge" style="background:rgba(242,63,66,.2);color:#f23f42">🔒 banned forever</span>';
+          else if (r.autoBanned) statusHtml = '<span class="badge" style="background:rgba(250,166,26,.2);color:#faa61a">⏱ auto-ban, ' + r.remainingHrs + 'h left</span>';
+          else statusHtml = '<span class="badge">' + r.count + '/5 — not blocked</span>';
+
+          let actionsHtml = '';
+          if (r.permaBanned) {
+            actionsHtml += \`<button class="unban-btn" onclick="unbanIP('\${esc(r.ip)}')">✅ Unban</button> \`;
+          } else {
+            actionsHtml += \`<button class="ban-btn" onclick="banIP('\${esc(r.ip)}')">🚫 Block</button> \`;
+          }
+          if (r.autoBanned) {
+            actionsHtml += \`<button class="unban-btn" onclick="unbanReportedIP('\${esc(r.ip)}')">Clear strikes</button>\`;
+          }
+
+          return \`<tr>
+            <td style="font-family:monospace;color:#fff">\${esc(r.ip)}</td>
+            <td><span style="color:#f23f42;font-weight:700">\${r.count}</span></td>
+            <td>\${reasonsHtml(r.reasons)}</td>
+            <td>\${statusHtml}</td>
+            <td style="white-space:nowrap">\${actionsHtml}</td>
+          </tr>\`;
+        }).join("") + "</table>";
     }
   } catch(e) { document.getElementById("reported").textContent = "Error"; }
 
