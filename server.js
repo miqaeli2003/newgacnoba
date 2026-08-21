@@ -3,11 +3,29 @@ const http       = require("http");
 const { Server } = require("socket.io");
 const path       = require("path");
 const fs         = require("fs");
+
+// ── Persistent data directory ───────────────────────────────────────────────
+// On Render, mount a Disk at this path (Dashboard → your service → Disks →
+// Add Disk → mount path /var/data) so these files survive redeploys/restarts.
+// Locally (no disk mounted) it just falls back to the project folder.
+const DATA_DIR = process.env.DATA_DIR || "/var/data";
+try {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+} catch (e) {
+  console.error(`[DATA] Could not create/access ${DATA_DIR}, falling back to __dirname:`, e.message);
+}
+const dataDirUsable = fs.existsSync(DATA_DIR) && (() => {
+  try { fs.accessSync(DATA_DIR, fs.constants.W_OK); return true; }
+  catch { return false; }
+})();
+const DATA_PATH = dataDirUsable ? DATA_DIR : __dirname;
+console.log(`[DATA] Persistent files will be stored in: ${DATA_PATH}`);
 const crypto     = require("crypto");
 const compression   = require("compression");
 const rateLimit     = require("express-rate-limit");
 
 const app    = express();
+app.set("trust proxy", 1); // behind Render's proxy — needed for express-rate-limit / IP detection
 const server = http.createServer(app);
 const io     = new Server(server, {
   pingTimeout:  120000, // 120 s — give mobile plenty of time
@@ -18,6 +36,13 @@ const io     = new Server(server, {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const GIPHY_KEY           = process.env.GIPHY_KEY || "UFauF9jrzjxyDsxqXi7rVnfRdvmuMmsL";
+// Powers /api/music-search (in-site song search for "Listen Together").
+// Get a free key at https://console.cloud.google.com/ → enable "YouTube Data
+// API v3" → Credentials → API key. Free quota is 10,000 units/day; each
+// search costs 100 units (~100 searches/day), which is why results are
+// cached below. Without this set, the search box returns a friendly error
+// and the feature is simply unavailable — nothing else on the site breaks.
+const YOUTUBE_API_KEY     = process.env.YOUTUBE_API_KEY || "";
 const NAME_MIN           = 2;
 const NAME_MAX           = 20;
 const MSG_MAX            = 2000;
@@ -45,7 +70,7 @@ function getClientIP(req) {
 // ── Persistent manual ban list ────────────────────────────────────────────────
 // Manual bans (via admin panel) survive server restarts — stored in banned_ips.json
 // Auto-bans (link-strike, report) are still in-memory only.
-const BANNED_IPS_FILE = path.join(__dirname, "banned_ips.json");
+const BANNED_IPS_FILE = path.join(DATA_PATH, "banned_ips.json");
 const bannedIPs       = new Set();
 
 function loadBannedIPs() {
@@ -71,7 +96,7 @@ loadBannedIPs(); // restore bans immediately at startup
 // ── Persistent manual user-agent ban list ─────────────────────────────────────
 // Lets the admin panel block a whole User-Agent string (any IP using it gets
 // rejected), same persistence pattern as the IP ban list above.
-const BANNED_UA_FILE  = path.join(__dirname, "banned_user_agents.json");
+const BANNED_UA_FILE  = path.join(DATA_PATH, "banned_user_agents.json");
 const bannedUserAgents = new Set();
 
 function normalizeUA(ua) {
@@ -107,8 +132,9 @@ loadBannedUserAgents(); // restore UA bans immediately at startup
 // vt-checker.js writes confirmed malicious IPs to vt-bans.json.
 // We watch that file and load new bans automatically — no restart needed.
 
-const VT_QUEUE_FILE = path.join(__dirname, "vt-queue.json");
-const VT_BANS_FILE  = path.join(__dirname, "vt-bans.json");
+const VT_QUEUE_FILE = path.join(DATA_PATH, "vt-queue.json");
+const VT_BANS_FILE  = path.join(DATA_PATH, "vt-bans.json");
+const STATS_FILE     = path.join(DATA_PATH, "stats.json");
 const VT_QUEUE_MAX  = 500;
 const VT_THRESHOLD  = 3; // must match vt-checker.js
 
@@ -381,16 +407,91 @@ function recordConnect(ip) {
     stats.peakOnline   = current;
     stats.peakOnlineAt = new Date().toISOString();
   }
+
+  statsDirty = true;
+  scheduleStatsSave();
+}
+
+// ── Stats persistence — survives redeploys/restarts, same pattern as auth/priv ──
+let statsDirty = false;
+let statsSaveTimer = null;
+const STATS_SAVE_DEBOUNCE_MS = 5000;
+
+function scheduleStatsSave() {
+  if (statsSaveTimer) return;
+  statsSaveTimer = setTimeout(() => {
+    if (statsDirty) _saveStatsToDisk();
+    statsSaveTimer = null;
+  }, STATS_SAVE_DEBOUNCE_MS);
+}
+
+function _saveStatsToDisk() {
+  const daysObj = {};
+  for (const [key, d] of stats.days) {
+    daysObj[key] = {
+      ips: [...d.ips],
+      sessions: d.sessions,
+      totalDurationMs: d.totalDurationMs,
+      chats: d.chats,
+      hours: d.hours.map(h => ({ ips: [...h.ips], sessions: h.sessions })),
+      peakOnline: d.peakOnline,
+      peakOnlineAt: d.peakOnlineAt,
+      newIPs: [...d.newIPs],
+    };
+  }
+  const out = {
+    days: daysObj,
+    allTimeIPs: [...stats.allTimeIPs],
+    peakOnline: stats.peakOnline,
+    peakOnlineAt: stats.peakOnlineAt,
+    serverStartedAt: stats.serverStartedAt,
+  };
+  try {
+    fs.writeFileSync(STATS_FILE, JSON.stringify(out), "utf8");
+    statsDirty = false;
+  } catch (e) {
+    console.error("[STATS] save failed:", e.message);
+    statsDirty = true;
+  }
+}
+
+function loadStats() {
+  try {
+    const obj = JSON.parse(fs.readFileSync(STATS_FILE, "utf8"));
+    for (const [key, d] of Object.entries(obj.days || {})) {
+      stats.days.set(key, {
+        ips: new Set(d.ips || []),
+        sessions: d.sessions || 0,
+        totalDurationMs: d.totalDurationMs || 0,
+        chats: d.chats || 0,
+        hours: (d.hours || Array.from({ length: 24 }, () => ({ ips: [], sessions: 0 })))
+          .map(h => ({ ips: new Set(h.ips || []), sessions: h.sessions || 0 })),
+        peakOnline: d.peakOnline || 0,
+        peakOnlineAt: d.peakOnlineAt || null,
+        newIPs: new Set(d.newIPs || []),
+      });
+    }
+    stats.allTimeIPs = new Set(obj.allTimeIPs || []);
+    stats.peakOnline = obj.peakOnline || 0;
+    stats.peakOnlineAt = obj.peakOnlineAt || null;
+    // serverStartedAt intentionally stays as "now" (this boot), not the saved value —
+    // uptime should reflect the current process, not accumulate across restarts.
+    console.log(`[STATS] Loaded ${stats.days.size} day(s), ${stats.allTimeIPs.size} all-time unique IP(s)`);
+  } catch { /* first run — no stats file yet */ }
 }
 
 function recordDisconnect(ip, connectedAtMs) {
   if (!connectedAtMs) return;
   const durMs = Date.now() - connectedAtMs;
   getOrCreateDay(todayKey()).totalDurationMs += durMs;
+  statsDirty = true;
+  scheduleStatsSave();
 }
 
 function recordChatStarted() {
   getOrCreateDay(todayKey()).chats++;
+  statsDirty = true;
+  scheduleStatsSave();
 }
 
 // ── Link-strike system ────────────────────────────────────────────────────────
@@ -791,6 +892,33 @@ app.use((req, res, next) => {
   next();
 });
 
+// ── Blocked-country page ────────────────────────────────────────────────────
+function blockedCountryHTML() {
+  return `<!DOCTYPE html>
+<html lang="ka">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>GAICANI</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%;background:#1e1f22;display:flex;align-items:center;justify-content:center;font-family:"Segoe UI",Arial,sans-serif}
+.box{background:#2b2d31;border-radius:16px;padding:36px 28px;max-width:420px;width:92%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+.logo{font-size:1.8em;font-weight:900;color:#fff;letter-spacing:1px;margin-bottom:14px}
+.msg{color:#dcddde;font-size:1.05em;line-height:1.6;margin-bottom:8px}
+.sub{color:#72767d;font-size:.85em;line-height:1.5;margin-top:14px}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="logo">GAICANI</div>
+  <p class="msg">ეს სერვისი ხელმისაწვდომია მხოლოდ საქართველოს ტერიტორიაზე.</p>
+  <p class="sub">This service is only available within Georgia.</p>
+</div>
+</body>
+</html>`;
+}
+
 // ── Captcha gate — only on the main page, BEFORE static so it intercepts / ───
 app.use(async (req, res, next) => {
   // Only gate the main page
@@ -801,21 +929,20 @@ app.use(async (req, res, next) => {
   // Owner always passes
   if (OWNER_IPS.has(ip)) return next();
 
-  // Already passed captcha
+  // Already passed the geo-check (cookie set on a prior GE visit)
   if (hasCaptchaCookie(req)) return next();
 
-  // Check geo
+  // Geo-gate: only Georgian IPs may access the site. Everyone else gets a
+  // static "not available in your region" page — no captcha, no bypass.
   const country = await getCountry(ip);
-  if (country === "GE") {
-    // Georgian IP — set cookie and pass through silently
-    setCaptchaCookie(res, ip);
-    return next();
+  if (country !== "GE") {
+    res.status(403);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(blockedCountryHTML());
   }
 
-  // Non-Georgian — show captcha page instead of index.html
-  newChallenge(ip);
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.status(200).send(captchaPageHTML(ip, null));
+  setCaptchaCookie(res, ip);
+  return next();
 });
 
 // POST /captcha-verify — check submitted answer (also before static)
@@ -888,6 +1015,128 @@ app.get("/api/gifs", gifHttpLimiter, async (req, res) => {
     res.status(502).json({ error: "Failed to fetch GIFs" });
   }
 });
+
+// ── Curated fallback playlist (no API key required) ────────────────────────
+// Used whenever YOUTUBE_API_KEY isn't set, and also as the list shown the
+// moment the music panel opens (before the user types anything to search).
+//
+// To add/replace songs: just paste a normal YouTube link as `url` — the
+// video ID is pulled out automatically with the same extractYouTubeId()
+// helper used everywhere else in this file. Thumbnails are generated from
+// the video ID directly (https://i.ytimg.com/vi/<id>/mqdefault.jpg), so no
+// API call is needed for this list to work.
+//
+// NOTE: these entries were picked as well-known, popular tracks, but they
+// haven't been live-verified against YouTube — a video could theoretically
+// be unavailable/region-locked. Swap in songs you've confirmed yourself if
+// you want a guaranteed-working list.
+const MUSIC_LIST = [
+  { url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", title: "Never Gonna Give You Up", channel: "Rick Astley" },
+  { url: "https://www.youtube.com/watch?v=9bZkp7q19f0", title: "Gangnam Style",             channel: "PSY" },
+  { url: "https://www.youtube.com/watch?v=kJQP7kiw5Fk", title: "Despacito",                 channel: "Luis Fonsi" },
+  { url: "https://www.youtube.com/watch?v=JGwWNGJdvx8", title: "Shape of You",               channel: "Ed Sheeran" },
+  { url: "https://www.youtube.com/watch?v=OPf0YbXqDm0", title: "Uptown Funk",                channel: "Mark Ronson ft. Bruno Mars" },
+  { url: "https://www.youtube.com/watch?v=RgKAFK5djSk", title: "See You Again",              channel: "Wiz Khalifa ft. Charlie Puth" },
+  { url: "https://www.youtube.com/watch?v=fJ9rUzIMcZQ", title: "Bohemian Rhapsody",          channel: "Queen" },
+  { url: "https://www.youtube.com/watch?v=YQHsXMglC9A", title: "Hello",                      channel: "Adele" },
+];
+
+const MUSIC_LIST_RESOLVED = MUSIC_LIST
+  .map(item => {
+    const videoId = extractYouTubeId(item.url);
+    return videoId ? {
+      videoId,
+      title:   item.title,
+      channel: item.channel,
+      thumb:   `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+    } : null;
+  })
+  .filter(Boolean);
+
+// ── Music search (powers the "Listen Together" search panel) ──────────────────
+// Replaces pasting a raw YouTube link: the client gets a list back (either
+// the curated list above, or — if YOUTUBE_API_KEY is set — live YouTube
+// results/trending), and taps one to send the listen-together invite (see
+// music:request below — unchanged).
+//
+// Results are cached per query for 10 minutes since the free YouTube Data
+// API v3 quota (10,000 units/day) only allows ~100 search calls/day.
+const musicSearchCache       = new Map(); // query (lowercased, or "__browse__") → { results, ts }
+const MUSIC_SEARCH_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const musicSearchLimiter     = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
+
+app.get("/api/music-search", musicSearchLimiter, async (req, res) => {
+  const q = (req.query.q || "").trim().slice(0, 100);
+
+  // No API key configured → always serve the curated list, filtered by
+  // query text when there is one.
+  if (!YOUTUBE_API_KEY) {
+    if (!q) return res.json({ results: MUSIC_LIST_RESOLVED });
+    const qLower = q.toLowerCase();
+    const filtered = MUSIC_LIST_RESOLVED.filter(
+      item => item.title.toLowerCase().includes(qLower) || item.channel.toLowerCase().includes(qLower)
+    );
+    return res.json({ results: filtered });
+  }
+
+  const cacheKey = q ? q.toLowerCase() : "__browse__";
+  const cached = musicSearchCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < MUSIC_SEARCH_CACHE_TTL) {
+    return res.json({ results: cached.results });
+  }
+
+  try {
+    let results;
+
+    if (!q) {
+      // Panel just opened with no query yet — show trending music instead
+      // of an empty box.
+      const endpoint = "https://www.googleapis.com/youtube/v3/videos"
+        + `?part=snippet&chart=mostPopular&videoCategoryId=10&maxResults=10`
+        + `&regionCode=GE&key=${YOUTUBE_API_KEY}`;
+      const response = await fetch(endpoint, { signal: AbortSignal.timeout(6000) });
+      const data = await response.json();
+      if (!response.ok) {
+        console.error("YouTube trending error:", response.status, data.error || data);
+        return res.json({ results: MUSIC_LIST_RESOLVED }); // graceful fallback
+      }
+      results = (data.items || [])
+        .filter(it => it.id)
+        .map(it => ({
+          videoId: it.id,
+          title:   it.snippet?.title || "",
+          channel: it.snippet?.channelTitle || "",
+          thumb:   it.snippet?.thumbnails?.default?.url || `https://i.ytimg.com/vi/${it.id}/mqdefault.jpg`,
+        }));
+    } else {
+      const endpoint = "https://www.googleapis.com/youtube/v3/search"
+        + `?part=snippet&type=video&videoEmbeddable=true&safeSearch=moderate&maxResults=10`
+        + `&q=${encodeURIComponent(q)}&key=${YOUTUBE_API_KEY}`;
+      const response = await fetch(endpoint, { signal: AbortSignal.timeout(6000) });
+      const data = await response.json();
+      if (!response.ok) {
+        console.error("YouTube search error:", response.status, data.error || data);
+        return res.status(502).json({ error: "ძებნა ვერ განხორციელდა." });
+      }
+      results = (data.items || [])
+        .filter(it => it.id && it.id.videoId)
+        .map(it => ({
+          videoId: it.id.videoId,
+          title:   it.snippet?.title || "",
+          channel: it.snippet?.channelTitle || "",
+          thumb:   it.snippet?.thumbnails?.default?.url || it.snippet?.thumbnails?.medium?.url || "",
+        }));
+    }
+
+    musicSearchCache.set(cacheKey, { results, ts: Date.now() });
+    res.set("Cache-Control", "public, max-age=300");
+    res.json({ results });
+  } catch (err) {
+    console.error("YouTube search fetch failed:", err.message);
+    res.status(502).json({ error: "ძებნა ვერ განხორციელდა." });
+  }
+});
+
 
 app.get("/api/random-fact", (req, res) => {
   FACTS = loadLines("facts.txt");
@@ -1425,6 +1674,39 @@ function cleanupGameForSocket(socketId) {
   cleanupGame(game);
 }
 
+// Pull a plain 11-char video ID out of any common YouTube URL shape
+// (watch?v=, youtu.be/, shorts/, embed/, music.youtube.com/watch?v=), or
+// accept a bare 11-char ID directly. Returns null if nothing valid found.
+function extractYouTubeId(input) {
+  if (!input || typeof input !== "string") return null;
+  const str = input.trim();
+
+  if (/^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
+
+  try {
+    const u = new URL(str);
+    const host = u.hostname.replace(/^www\./, "").replace(/^music\./, "");
+
+    if (host === "youtu.be") {
+      const id = u.pathname.split("/").filter(Boolean)[0];
+      return /^[a-zA-Z0-9_-]{11}$/.test(id) ? id : null;
+    }
+
+    if (host === "youtube.com" || host === "m.youtube.com") {
+      if (u.searchParams.get("v") && /^[a-zA-Z0-9_-]{11}$/.test(u.searchParams.get("v"))) {
+        return u.searchParams.get("v");
+      }
+      const parts = u.pathname.split("/").filter(Boolean);
+      if ((parts[0] === "shorts" || parts[0] === "embed" || parts[0] === "live") && parts[1]) {
+        return /^[a-zA-Z0-9_-]{11}$/.test(parts[1]) ? parts[1] : null;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 // ── Socket handlers ───────────────────────────────────────────────────────────
 io.on("connection", (socket) => {
   // ── Capture real IP (works behind proxies like nginx/Render/Railway) ────────
@@ -1440,6 +1722,18 @@ io.on("connection", (socket) => {
     socket.emit("autoKicked");
     setTimeout(() => socket.disconnect(true), 500);
     return;
+  }
+
+  // ── Geo-gate: only Georgian IPs may use the chat socket ─────────────────────
+  // The HTTP page gate blocks non-GE visitors from loading "/", but a direct
+  // socket.io connection would skip that check — so we re-verify here too.
+  if (!OWNER_IPS.has(rawIP)) {
+    getCountry(rawIP).then(country => {
+      if (country !== "GE") {
+        socket.emit("autoKicked");
+        setTimeout(() => socket.disconnect(true), 500);
+      }
+    });
   }
 
   console.log("User connected", socket.id, rawIP);
@@ -2140,6 +2434,60 @@ io.on("connection", (socket) => {
     if (target && !target._isGhost) target.emit("game:invite", { gameType, fromId: socket.id, isRematch: true });
   });
 
+  // ════════════════════════════════════════════════════════════════
+  //  SYNCED MUSIC (YouTube) — available to every user
+  // ════════════════════════════════════════════════════════════════
+
+  // Send a "listen together" request to the current partner.
+  // Available to every user — guest or registered.
+  socket.on("music:request", ({ url }) => {
+    if (!socket.partner || socket.partner._isGhost) return;
+
+    const videoId = extractYouTubeId(url);
+    if (!videoId) {
+      socket.emit("music:error", { message: "არასწორი YouTube ბმული." });
+      return;
+    }
+
+    socket.partner.emit("music:invite", {
+      videoId,
+      fromId:   socket.id,
+      fromName: socket._regUser ? socket._regUser.username : (socket.userName || "პარტნიორი"),
+    });
+  });
+
+  // Accept or decline a music invite
+  socket.on("music:response", ({ accepted, toId, videoId }) => {
+    const requester = io.sockets.sockets.get(toId);
+    if (!requester) return;
+
+    if (!accepted) {
+      requester.emit("music:declined");
+      return;
+    }
+
+    const cleanVideoId = extractYouTubeId(videoId) || (typeof videoId === "string" ? videoId.slice(0, 20) : null);
+    if (!cleanVideoId) return;
+
+    // Small buffer so both clients have time to load the YouTube player
+    // before starting playback in sync.
+    const payload = { videoId: cleanVideoId, hostId: toId, startAt: Date.now() + 3500 };
+    requester.emit("music:start", payload);
+    socket.emit("music:start", payload);
+  });
+
+  // Relay play/pause/seek actions between the two listeners
+  socket.on("music:control", ({ action, time }) => {
+    if (!socket.partner || socket.partner._isGhost) return;
+    if (!["play", "pause", "seek"].includes(action)) return;
+    socket.partner.emit("music:control", { action, time });
+  });
+
+  // Either side can end the shared listening session
+  socket.on("music:stop", () => {
+    if (socket.partner && !socket.partner._isGhost) socket.partner.emit("music:stop");
+  });
+
   // Tab-away events disabled — no action taken when user hides browser tab
 
   // ── Disconnect ───────────────────────────────────────────────────────────
@@ -2166,7 +2514,10 @@ io.on("connection", (socket) => {
       partner.lastPartnerSocketId = socket.id;
       partner.hasReportedLast = false;
       partner.partner         = null;
-      if (partner.connected) partner.emit("partnerDisconnected", { name });
+      if (partner.connected) {
+        partner.emit("partnerDisconnected", { name });
+        partner.emit("music:stop");
+      }
 
       if (socket.userName) {
         const timeout = setTimeout(() => {
@@ -2522,7 +2873,7 @@ app.get(ROUTE.visitorJson, ownerOnly, (req, res) => {
 
 // ── VirusTotal scan log dashboard ─────────────────────────────────────────────
 app.get(ROUTE.vtLog, ownerOnly, (req, res) => {
-  const log     = (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, "vt-log.json"), "utf8")); } catch { return []; } })();
+  const log     = (() => { try { return JSON.parse(fs.readFileSync(path.join(DATA_PATH, "vt-log.json"), "utf8")); } catch { return []; } })();
   const queue   = (() => { try { return JSON.parse(fs.readFileSync(VT_QUEUE_FILE, "utf8")); } catch { return []; } })();
   const vtBans  = (() => { try { return JSON.parse(fs.readFileSync(VT_BANS_FILE,  "utf8")); } catch { return []; } })();
   const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
@@ -2612,8 +2963,8 @@ const AVAILABLE_AVATARS = [
 ];
 const DEFAULT_AVATAR = AVAILABLE_AVATARS[0];
 
-const USERS_FILE        = path.join(__dirname, "registered_users.json");
-const PRIV_MSGS_FILE    = path.join(__dirname, "private_messages.json");
+const USERS_FILE        = path.join(DATA_PATH, "registered_users.json");
+const PRIV_MSGS_FILE    = path.join(DATA_PATH, "private_messages.json");
 const PRIVATE_MSG_TTL   = 12 * 60 * 60 * 1000; // 12 h — auto-delete
 const AUTH_TOKEN_TTL    = 7  * 24 * 60 * 60 * 1000; // 7 days
 
@@ -2741,6 +3092,7 @@ function savePrivateMsgs() {
 
 loadAuthUsers();
 loadPrivateMsgs();
+loadStats();
 
 // ── Scheduled cleanup ─────────────────────────────────────────────────────────
 setInterval(() => {
@@ -3428,7 +3780,9 @@ io.on("connection", (socket) => {
 
   // ── friendChat:photo — relay photo (base64) to friend ────────────────────
   socket.on("friendChat:photo", ({ toUsername, dataUrl }) => {
-    if (!socket._regUser || !toUsername || !dataUrl) return;
+    if (!socket._regUser || !toUsername || typeof dataUrl !== "string") return;
+    if (!dataUrl.startsWith("data:image/")) return;
+    if (dataUrl.length > 4 * 1024 * 1024) return; // same 4MB cap as random-chat photo
     const toLc   = String(toUsername).toLowerCase().trim();
     const myUser = registeredUsers.get(socket._regUser.usernameLower);
     if (!myUser || !(myUser.friends || []).includes(toLc)) return;
@@ -3726,6 +4080,7 @@ process.on('SIGTERM', () => {
   console.log('[SHUTDOWN] Flushing pending saves...');
   if (authUsersDirty) _saveAuthUsersToDisk();
   if (privMsgsDirty) _savePrivateMsgsToDisk();
+  if (statsDirty) _saveStatsToDisk();
   process.exit(0);
 });
 
@@ -3733,6 +4088,7 @@ process.on('SIGINT', () => {
   console.log('[SHUTDOWN] Flushing pending saves...');
   if (authUsersDirty) _saveAuthUsersToDisk();
   if (privMsgsDirty) _savePrivateMsgsToDisk();
+  if (statsDirty) _saveStatsToDisk();
   process.exit(0);
 });
 
