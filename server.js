@@ -278,92 +278,14 @@ function sensitiveUrlLogger(req, res, next) {
   next();
 }
 
-// Owner-only middleware — the owner IP always gets in; anyone else must have
-// logged in to the admin panel with the admin key first (see ADMIN_KEY /
-// adminSessions below), which sets a session cookie.
+// Owner-only middleware — only the owner IP may access the visitor log endpoint
 function ownerOnly(req, res, next) {
   const ip = getClientIP(req);
-  if (OWNER_IPS.has(ip) || hasValidAdminSession(req)) {
-    next();
+  if (!OWNER_IPS.has(ip)) {
+    res.status(403).send("Forbidden");
     return;
   }
-  res.status(403).send("Forbidden");
-}
-
-// ── Admin panel key-login (lets the owner reach the panel from any IP) ────────
-// The panel URL itself stays the same secret slug (ROUTE.panel) — this just
-// adds a key-gated login screen in front of it instead of the previous
-// hard IP allow-list. Sessions are simple random tokens kept in memory
-// (server restart logs everyone out, which is fine for this use case).
-const ADMIN_KEY = process.env.ADMIN_KEY || "Paroli123kp04501017!";
-const ADMIN_SESSION_COOKIE = "gaicani_admin";
-const adminSessions = new Map(); // token → { createdAt }
-const ADMIN_SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-
-function parseCookies(req) {
-  const header = req.headers.cookie || "";
-  const out = {};
-  header.split(";").forEach(pair => {
-    const idx = pair.indexOf("=");
-    if (idx === -1) return;
-    const k = pair.slice(0, idx).trim();
-    const v = pair.slice(idx + 1).trim();
-    if (k) out[k] = decodeURIComponent(v);
-  });
-  return out;
-}
-
-function hasValidAdminSession(req) {
-  const cookies = parseCookies(req);
-  const token = cookies[ADMIN_SESSION_COOKIE];
-  if (!token) return false;
-  const entry = adminSessions.get(token);
-  if (!entry) return false;
-  if (Date.now() - entry.createdAt > ADMIN_SESSION_MAX_AGE_MS) {
-    adminSessions.delete(token);
-    return false;
-  }
-  return true;
-}
-
-function createAdminSession(res) {
-  const token = crypto.randomBytes(32).toString("hex");
-  adminSessions.set(token, { createdAt: Date.now() });
-  res.setHeader("Set-Cookie",
-    `${ADMIN_SESSION_COOKIE}=${token}; Max-Age=${Math.floor(ADMIN_SESSION_MAX_AGE_MS / 1000)}; Path=/; HttpOnly; SameSite=Lax`
-  );
-}
-
-function adminLoginPageHtml(error) {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Admin Login</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#1e1f22;color:#dcddde;font-family:"Segoe UI",Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.box{background:#2b2d31;border-radius:12px;padding:32px 28px;width:100%;max-width:340px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
-h1{color:#fff;font-size:1.15em;margin-bottom:18px;text-align:center}
-input[type=password]{width:100%;background:#1e1f22;border:1px solid #3a3c40;border-radius:8px;color:#dcddde;font-size:.95em;padding:11px 13px;outline:none;margin-bottom:12px}
-input[type=password]:focus{border-color:#5865f2}
-button{width:100%;background:#5865f2;color:#fff;border:none;border-radius:8px;padding:11px;font-size:.92em;font-weight:700;cursor:pointer}
-button:hover{background:#4752c4}
-.err{color:#f23f42;font-size:.82em;margin-bottom:10px;text-align:center}
-</style>
-</head>
-<body>
-<div class="box">
-  <h1>🔒 Admin Login</h1>
-  ${error ? `<p class="err">${error}</p>` : ""}
-  <form method="POST">
-    <input type="password" name="key" placeholder="Admin key" autofocus required />
-    <button type="submit">Enter</button>
-  </form>
-</div>
-</body>
-</html>`;
+  next();
 }
 
 // ── Site-wide visitor log — every IP + User-Agent that has visited the site ───
@@ -1359,36 +1281,10 @@ app.post(ROUTE.unblockUA, ownerOnly, (req, res) => {
   res.json({ ok: true, ua, wasBanned: existed });
 });
 
-// GET <panel route>  — visual admin panel; shows a key-login screen first
-// unless the request is already from the owner IP or has a valid admin
-// session cookie from a previous successful login.
-app.get(ROUTE.panel, (req, res) => {
-  const ip = getClientIP(req);
-  if (!OWNER_IPS.has(ip) && !hasValidAdminSession(req)) {
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.send(adminLoginPageHtml());
-    return;
-  }
+// GET <panel route>  — visual admin panel (IP-only, no key)
+app.get(ROUTE.panel, ownerOnly, (req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.send(renderAdminPanelHtml());
-});
-
-// POST <panel route>  — submit the admin key to log in
-app.post(ROUTE.panel, (req, res) => {
-  const key = (req.body && req.body.key || "").toString();
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  if (key !== ADMIN_KEY) {
-    console.warn(`[ADMIN-LOGIN] Failed login attempt from IP ${getClientIP(req)}`);
-    res.status(401).send(adminLoginPageHtml("Incorrect key — try again"));
-    return;
-  }
-  createAdminSession(res);
-  console.log(`[ADMIN-LOGIN] Successful login from IP ${getClientIP(req)}`);
-  res.send(renderAdminPanelHtml());
-});
-
-function renderAdminPanelHtml() {
-  return `<!DOCTYPE html>
+  res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
