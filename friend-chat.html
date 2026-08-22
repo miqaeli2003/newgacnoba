@@ -209,6 +209,21 @@
       opacity: 0.7;
     }
 
+    .fc-meta-action-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1em;
+      line-height: 1;
+      padding: 2px 3px;
+      cursor: pointer;
+      opacity: 0.55;
+      transition: opacity 0.15s, color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .fc-meta-action-btn:hover  { opacity: 1; color: var(--accent-lt); }
+    .fc-meta-action-btn:active { transform: scale(0.9); }
+
     /* ── TYPING INDICATOR ── */
     /* Rendered as a real .fc-row/.fc-bubble in #fc-messages (see showTyping()),
        so it's pixel-identical to a real incoming message. Only the dots
@@ -821,7 +836,7 @@
       <div class="fc-name" id="fcName">...</div>
       <div class="fc-sub" id="fcSub">პირადი ჩატი</div>
     </div>
-    <div class="fc-expiry-badge">🕐 12 სთ ჩაშლა</div>
+    <div class="fc-expiry-badge">🕐 3 სთ ჩაშლა</div>
   </header>
 
   <!-- AUTH REQUIRED -->
@@ -844,7 +859,7 @@
   <div id="fc-empty">
     <div class="fc-empty-icon">💬</div>
     <div>დაიწყეთ საუბარი</div>
-    <small style="color:var(--muted);font-size:0.8em">შეტყობინებები ავტომატურად წაიშლება 12 საათში</small>
+    <small style="color:var(--muted);font-size:0.8em">შეტყობინებები ავტომატურად წაიშლება 3 საათში</small>
   </div>
 
   <!-- GAME INVITE BAR -->
@@ -873,6 +888,7 @@
     <button class="fc-extra-btn" id="fc-photo-btn" title="ფოტო">📷</button>
     <input type="file" id="fc-photo-input" accept="image/*">
     <button class="fc-extra-btn" id="fc-gif-btn" title="GIF">GIF</button>
+    <button class="fc-extra-btn" id="fc-game-btn" title="თამაშები">🎮</button>
     <button class="fc-extra-btn" id="fc-question-btn" title="შემთხვევითი კითხვა">?</button>
     <textarea id="fc-input" placeholder="შეტყობინება..." rows="1" maxlength="2000"></textarea>
     <span id="fc-char-count" class="fc-char-count"></span>
@@ -1184,17 +1200,48 @@
       }
     }
 
+    // Reply + react trigger buttons — inline in the meta row (see .fc-msg-actions
+    // CSS comment). These call the already-implemented setFCReplyTo() /
+    // showFCReactionPicker() functions, which previously had no UI hook.
+    if (msg.id) {
+      const replyBtn = document.createElement("button");
+      replyBtn.className = "fc-meta-action-btn";
+      replyBtn.title = "პასუხი";
+      replyBtn.textContent = "↩";
+      replyBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        let previewText;
+        if (msg.type === "photo")      previewText = "📷 ფოტო";
+        else if (msg.type === "gif")   previewText = "GIF";
+        else                            previewText = msg.text || "";
+        setFCReplyTo({
+          text:       previewText,
+          senderName: isMe ? myUsername : msg.from,
+          messageId:  msg.id,
+        });
+      });
+      meta.appendChild(replyBtn);
+
+      const reactBtn = document.createElement("button");
+      reactBtn.className = "fc-meta-action-btn";
+      reactBtn.title = "რეაქცია";
+      reactBtn.textContent = "🙂";
+      reactBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        showFCReactionPicker(reactBtn, msg.id);
+      });
+      meta.appendChild(reactBtn);
+    }
+
     wrap.appendChild(meta);
 
-    if (!isMedia) {
-      const reactionArea = document.createElement("div");
-      reactionArea.className = "fc-reaction-area";
-      wrap.appendChild(reactionArea);
-      if (msg.reactions) {
-        Object.entries(msg.reactions).forEach(([who, emoji]) => {
-          displayFCReaction(msg.id, emoji, who.toLowerCase() !== myUsername.toLowerCase(), reactionArea);
-        });
-      }
+    const reactionArea = document.createElement("div");
+    reactionArea.className = "fc-reaction-area";
+    wrap.appendChild(reactionArea);
+    if (msg.reactions) {
+      Object.entries(msg.reactions).forEach(([who, emoji]) => {
+        displayFCReaction(msg.id, emoji, who.toLowerCase() !== myUsername.toLowerCase(), reactionArea);
+      });
     }
 
     /* (seen indicator removed) */
