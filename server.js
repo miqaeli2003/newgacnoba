@@ -28,6 +28,27 @@ const rateLimit     = require("express-rate-limit");
 const app    = express();
 app.set("trust proxy", 1); // behind Render's proxy — needed for express-rate-limit / IP detection
 const server = http.createServer(app);
+
+// ── Global crash guards ─────────────────────────────────────────────────────
+// Without these, a SINGLE unhandled promise rejection anywhere in the app
+// (a fetch() that throws, a missed .catch(), etc.) terminates the entire
+// Node process immediately — this has been Node's default behavior since
+// v15. That's a very likely explanation for the "Application exited early"
+// crash messages in the Render log (a DIFFERENT failure mode than the
+// CPU/health-check timeout crashes, which are handled separately by the
+// flood-detection middleware below). These two handlers log the error
+// instead of letting one bad promise take the whole server down for
+// everyone connected.
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[UNHANDLED REJECTION]", reason instanceof Error ? reason.stack : reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[UNCAUGHT EXCEPTION]", err.stack || err);
+  // Deliberately NOT calling process.exit() here — for a chat app, staying
+  // up in a possibly-degraded state and logging the error is safer than an
+  // immediate hard crash that disconnects every single connected user.
+});
+
 const io     = new Server(server, {
   pingTimeout:  120000, // 120 s — give mobile plenty of time
   pingInterval: 25000,
@@ -1248,6 +1269,17 @@ const MUSIC_LIST_RESOLVED = MUSIC_LIST
 // API v3 quota (10,000 units/day) only allows ~100 search calls/day.
 const musicSearchCache       = new Map(); // query (lowercased, or "__browse__") → { results, ts }
 const MUSIC_SEARCH_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+// Without this, every unique search query ever typed stays in memory
+// forever (unlike geoCache/captchaChallenges, which already get swept).
+// Runs alongside the other periodic cleanups already in the file.
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of musicSearchCache) {
+    if (now - entry.ts > MUSIC_SEARCH_CACHE_TTL) musicSearchCache.delete(key);
+  }
+}, 5 * 60_000);
+
 // Music search hits the YouTube Data API (external quota, costs real $/limits
 // per Google) — tightened from 30/min to 15/min per IP.
 const musicSearchLimiter     = rateLimit({ windowMs: 60_000, max: 15, standardHeaders: true, legacyHeaders: false });
@@ -3267,17 +3299,38 @@ function getOnlineRegisteredUsers(excludeLc) {
 }
 
 // ── Crypto helpers ────────────────────────────────────────────────────────────
+// IMPORTANT: these use the ASYNC pbkdf2 (not pbkdf2Sync). On a small CPU
+// instance, a synchronous 100k-iteration hash blocks the entire Node event
+// loop for its full duration — meaning EVERY other request (chat messages,
+// health checks, everything) freezes while one password is being hashed.
+// A burst of login/register attempts (even within rate limits) could stack
+// these up and stall the whole server. The async version still uses the CPU,
+// but yields control back to the event loop instead of blocking it solid.
 function authHashPassword(pwd) {
-  const salt = crypto.randomBytes(16).toString("hex");
-  const hash = crypto.pbkdf2Sync(pwd, salt, 100000, 64, "sha512").toString("hex");
-  return `${salt}:${hash}`;
+  return new Promise((resolve, reject) => {
+    const salt = crypto.randomBytes(16).toString("hex");
+    crypto.pbkdf2(pwd, salt, 100000, 64, "sha512", (err, derivedKey) => {
+      if (err) return reject(err);
+      resolve(`${salt}:${derivedKey.toString("hex")}`);
+    });
+  });
 }
 function authVerifyPassword(pwd, stored) {
-  try {
-    const [salt, hash] = stored.split(":");
-    if (!salt || !hash) return false;
-    return crypto.pbkdf2Sync(pwd, salt, 100000, 64, "sha512").toString("hex") === hash;
-  } catch { return false; }
+  return new Promise((resolve) => {
+    try {
+      const [salt, hash] = (stored || "").split(":");
+      if (!salt || !hash) return resolve(false);
+      crypto.pbkdf2(pwd, salt, 100000, 64, "sha512", (err, derivedKey) => {
+        if (err) return resolve(false);
+        // Constant-time comparison — avoids leaking timing info about how
+        // many leading bytes matched.
+        const a = Buffer.from(derivedKey.toString("hex"));
+        const b = Buffer.from(hash);
+        if (a.length !== b.length) return resolve(false);
+        resolve(crypto.timingSafeEqual(a, b));
+      });
+    } catch { resolve(false); }
+  });
 }
 function authToken() { return crypto.randomBytes(32).toString("hex"); }
 function privRoomId(a, b) { return [a.toLowerCase(), b.toLowerCase()].sort().join("::"); }
@@ -3386,7 +3439,7 @@ setInterval(() => {
 const authLimiter = rateLimit({ windowMs: 15 * 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
 
 // POST /api/auth/register
-app.post("/api/auth/register", authLimiter, express.json({ limit: "5kb" }), (req, res) => {
+app.post("/api/auth/register", authLimiter, express.json({ limit: "5kb" }), async (req, res) => {
   const { username, password, avatar } = req.body || {};
   if (!username || !password || typeof username !== "string" || typeof password !== "string")
     return res.status(400).json({ error: "სახელი და პაროლი სავალდებულოა" });
@@ -3409,7 +3462,7 @@ app.post("/api/auth/register", authLimiter, express.json({ limit: "5kb" }), (req
 
   const user = {
     username: clean,
-    passwordHash: authHashPassword(password),
+    passwordHash: await authHashPassword(password),
     createdAt: new Date().toISOString(),
     friends: [],
     pendingRequests: [],
@@ -3480,14 +3533,14 @@ app.post("/api/auth/bio", express.json({ limit: "1kb" }), (req, res) => {
 });
 
 // POST /api/auth/login
-app.post("/api/auth/login", authLimiter, express.json({ limit: "5kb" }), (req, res) => {
+app.post("/api/auth/login", authLimiter, express.json({ limit: "5kb" }), async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password)
     return res.status(400).json({ error: "სახელი და პაროლი სავალდებულოა" });
 
   const lc = String(username).toLowerCase().trim();
   const user = registeredUsers.get(lc);
-  if (!user || !authVerifyPassword(password, user.passwordHash))
+  if (!user || !(await authVerifyPassword(password, user.passwordHash)))
     return res.status(401).json({ error: "არასწორი სახელი ან პაროლი" });
 
   const token = authToken();
