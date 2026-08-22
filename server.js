@@ -279,12 +279,12 @@ function sensitiveUrlLogger(req, res, next) {
   next();
 }
 
-// Owner-only middleware — the owner IP always gets in; anyone else must have
-// logged in to the admin panel with the admin key first (see ADMIN_KEY /
-// adminSessions below), which sets a session cookie.
+// Owner-only middleware — admin panel access now ALWAYS requires the admin
+// key (via a valid session cookie set after a correct key login). The old
+// "owner IP always gets in free" bypass is removed here on purpose — even
+// your own IP has to log in with the key.
 function ownerOnly(req, res, next) {
-  const ip = getClientIP(req);
-  if (OWNER_IPS.has(ip) || hasValidAdminSession(req)) {
+  if (hasValidAdminSession(req)) {
     next();
     return;
   }
@@ -1434,12 +1434,11 @@ app.post(ROUTE.unblockUA, ownerOnly, (req, res) => {
   res.json({ ok: true, ua, wasBanned: existed });
 });
 
-// GET <panel route>  — visual admin panel; shows a key-login screen first
-// unless the request is already from the owner IP or has a valid admin
-// session cookie from a previous successful login.
+// GET <panel route>  — visual admin panel; ALWAYS shows the key-login screen
+// first unless there's a valid admin session cookie from a previous
+// successful login. No IP bypass — the key is required from anywhere.
 app.get(ROUTE.panel, (req, res) => {
-  const ip = getClientIP(req);
-  if (!OWNER_IPS.has(ip) && !hasValidAdminSession(req)) {
+  if (!hasValidAdminSession(req)) {
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(adminLoginPageHtml());
     return;
