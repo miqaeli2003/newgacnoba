@@ -3272,7 +3272,7 @@ const DEFAULT_AVATAR = AVAILABLE_AVATARS[0];
 
 const USERS_FILE        = path.join(DATA_PATH, "registered_users.json");
 const PRIV_MSGS_FILE    = path.join(DATA_PATH, "private_messages.json");
-const PRIVATE_MSG_TTL   = 12 * 60 * 60 * 1000; // 12 h — auto-delete
+const PRIVATE_MSG_TTL   = 3 * 60 * 60 * 1000; // 3 h — auto-delete
 const AUTH_TOKEN_TTL    = 7  * 24 * 60 * 60 * 1000; // 7 days
 
 // ── In-memory stores ─────────────────────────────────────────────────────────
