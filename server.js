@@ -987,11 +987,25 @@ const FLOOD_WINDOW_MS   = 10_000;  // sliding window used for rate limiting
 const FLOOD_MAX_PER_IP  = 150;     // requests/10s from one IP before it's throttled
 const FLOOD_LOG_FILE    = path.join(DATA_PATH, "traffic-flood-log.jsonl"); // JSON-lines, append-only
 
+// Bucket every request path into a small fixed set of categories (NOT the
+// raw path) so memory stays bounded no matter how many distinct URLs get
+// hit. This is what answers "was it real page traffic or API abuse?" after
+// the fact, without storing full URLs for every single request.
+function categorizePath(p) {
+  if (p.startsWith("/socket.io")) return "socket.io";
+  if (p.startsWith("/api/"))      return "api";
+  if (Object.values(ROUTE).some(r => p.startsWith(r))) return "admin";
+  if (/\.(js|css|png|jpe?g|gif|svg|ico|woff2?|ttf|map)$/i.test(p)) return "asset";
+  return "page";
+}
+
 let floodWindowStart = Date.now();
 let floodTotalReqs   = 0;
-const floodIpCounts  = new Map(); // ip → count in current window
+const floodIpCounts     = new Map(); // ip → total count in current window
+const floodIpCategories = new Map(); // ip → { category → count } in current window
+const floodCategoryTotals = new Map(); // category → total count in current window (all IPs)
 
-function floodTick(ip) {
+function floodTick(ip, reqPath) {
   const now = Date.now();
   if (now - floodWindowStart >= FLOOD_WINDOW_MS) {
     // window rolled over — write it to disk before resetting
@@ -999,12 +1013,19 @@ function floodTick(ip) {
       const topIps = [...floodIpCounts.entries()]
         .sort((a, b) => b[1] - a[1])
         .slice(0, 15)
-        .map(([ip, count]) => ({ ip, count }));
+        .map(([ip, count]) => ({
+          ip,
+          count,
+          byCategory: floodIpCategories.get(ip)
+            ? Object.fromEntries(floodIpCategories.get(ip))
+            : {},
+        }));
       const line = JSON.stringify({
-        time:      new Date(floodWindowStart).toISOString(),
-        windowSec: Math.round((now - floodWindowStart) / 1000),
-        totalReqs: floodTotalReqs,
-        uniqueIps: floodIpCounts.size,
+        time:            new Date(floodWindowStart).toISOString(),
+        windowSec:       Math.round((now - floodWindowStart) / 1000),
+        totalReqs:       floodTotalReqs,
+        uniqueIps:       floodIpCounts.size,
+        categoryTotals:  Object.fromEntries(floodCategoryTotals),
         topIps,
       });
       try {
@@ -1019,16 +1040,25 @@ function floodTick(ip) {
     floodWindowStart = now;
     floodTotalReqs = 0;
     floodIpCounts.clear();
+    floodIpCategories.clear();
+    floodCategoryTotals.clear();
   }
   floodTotalReqs++;
   const c = (floodIpCounts.get(ip) || 0) + 1;
   floodIpCounts.set(ip, c);
+
+  const category = categorizePath(reqPath);
+  floodCategoryTotals.set(category, (floodCategoryTotals.get(category) || 0) + 1);
+  if (!floodIpCategories.has(ip)) floodIpCategories.set(ip, new Map());
+  const catMap = floodIpCategories.get(ip);
+  catMap.set(category, (catMap.get(category) || 0) + 1);
+
   return c;
 }
 
 app.use((req, res, next) => {
   const ip = getClientIP(req);
-  const countThisWindow = floodTick(ip);
+  const countThisWindow = floodTick(ip, req.path || "/");
   if (countThisWindow > FLOOD_MAX_PER_IP) {
     // Cheap rejection — no route handler, no DB/socket work, just enough to
     // keep the event loop free for the health check.
@@ -1136,7 +1166,9 @@ app.use(express.static(path.join(__dirname)));
 
 // (captcha gate was previously here — moved above static)
 
-const gifHttpLimiter = rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false });
+// GIF search hits Giphy's API (external quota) and each result carries
+// thumbnail bandwidth — tightened from 120/min to 40/min per IP.
+const gifHttpLimiter = rateLimit({ windowMs: 60_000, max: 40, standardHeaders: true, legacyHeaders: false });
 
 app.get("/api/gifs", gifHttpLimiter, async (req, res) => {
   const q = (req.query.q || "").trim().slice(0, 100);
@@ -1216,7 +1248,9 @@ const MUSIC_LIST_RESOLVED = MUSIC_LIST
 // API v3 quota (10,000 units/day) only allows ~100 search calls/day.
 const musicSearchCache       = new Map(); // query (lowercased, or "__browse__") → { results, ts }
 const MUSIC_SEARCH_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
-const musicSearchLimiter     = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
+// Music search hits the YouTube Data API (external quota, costs real $/limits
+// per Google) — tightened from 30/min to 15/min per IP.
+const musicSearchLimiter     = rateLimit({ windowMs: 60_000, max: 15, standardHeaders: true, legacyHeaders: false });
 
 app.get("/api/music-search", musicSearchLimiter, async (req, res) => {
   const q = (req.query.q || "").trim().slice(0, 100);
@@ -1916,6 +1950,30 @@ function extractYouTubeId(input) {
   return null;
 }
 
+// ── Per-socket media rate limiter ─────────────────────────────────────────────
+// Photos and GIFs are the biggest bandwidth cost in this app (a single photo
+// can be up to ~4MB base64). Cloudflare's HTTP rate limiting CAN'T reach these
+// — they're sent as Socket.io/WebSocket messages, not separate HTTP requests —
+// so a client (malicious or just a buggy script) could otherwise blast photos
+// as fast as the socket allows with nothing to stop it. This is a small
+// sliding-window limiter keyed per-socket, checked before any relay work.
+const mediaRateState = new WeakMap(); // socket → { key → [timestamps] }
+
+function mediaRateLimited(socket, key, maxPerWindow, windowMs) {
+  const now = Date.now();
+  if (!mediaRateState.has(socket)) mediaRateState.set(socket, new Map());
+  const perSocket = mediaRateState.get(socket);
+  let timestamps = perSocket.get(key) || [];
+  timestamps = timestamps.filter(t => now - t < windowMs);
+  if (timestamps.length >= maxPerWindow) {
+    perSocket.set(key, timestamps); // keep pruned list even on reject
+    return true; // rate limited
+  }
+  timestamps.push(now);
+  perSocket.set(key, timestamps);
+  return false;
+}
+
 // ── Socket handlers ───────────────────────────────────────────────────────────
 io.on("connection", (socket) => {
   // ── Capture real IP (works behind proxies like nginx/Render/Railway) ────────
@@ -2302,6 +2360,8 @@ io.on("connection", (socket) => {
     if (!socket.partner || typeof data?.url !== "string") return;
     if (!/^https:\/\/(?:[a-z0-9-]+\.)?giphy\.com\//i.test(data.url)) return;
     if (socket.partner._isGhost) return; // partner mid-reconnect
+    // Max 8 GIFs per 10s — plenty for real chatting, cuts off spam/scripts
+    if (mediaRateLimited(socket, "gif", 8, 10_000)) return;
     socket.partner.emit("gif", { url: data.url, preview: data.preview });
   });
 
@@ -2312,6 +2372,9 @@ io.on("connection", (socket) => {
     // Validate it's a real image data URL and not too large (~3MB base64 ≈ 4MB string)
     if (!data.dataUrl.startsWith("data:image/")) return;
     if (data.dataUrl.length > 4 * 1024 * 1024) return;
+    // Max 5 photos per 15s per socket — photos are the heaviest payload here,
+    // so this gets the tightest limit of any media type.
+    if (mediaRateLimited(socket, "photo", 5, 15_000)) return;
     socket.partner.emit("photo", { dataUrl: data.dataUrl });
   });
 
@@ -2651,6 +2714,9 @@ io.on("connection", (socket) => {
   // Available to every user — guest or registered.
   socket.on("music:request", ({ url }) => {
     if (!socket.partner || socket.partner._isGhost) return;
+    // Max 10 music invites per 30s — invites themselves are tiny, but this
+    // stops a script from spamming YouTube-load invites at a partner.
+    if (mediaRateLimited(socket, "musicRequest", 10, 30_000)) return;
 
     const videoId = extractYouTubeId(url);
     if (!videoId) {
@@ -3992,6 +4058,7 @@ io.on("connection", (socket) => {
     if (!socket._regUser || !toUsername || typeof dataUrl !== "string") return;
     if (!dataUrl.startsWith("data:image/")) return;
     if (dataUrl.length > 4 * 1024 * 1024) return; // same 4MB cap as random-chat photo
+    if (mediaRateLimited(socket, "friendPhoto", 5, 15_000)) return;
     const toLc   = String(toUsername).toLowerCase().trim();
     const myUser = registeredUsers.get(socket._regUser.usernameLower);
     if (!myUser || !(myUser.friends || []).includes(toLc)) return;
@@ -4005,6 +4072,7 @@ io.on("connection", (socket) => {
   // ── friendChat:gif — relay GIF URL to friend ─────────────────────────────
   socket.on("friendChat:gif", ({ toUsername, url }) => {
     if (!socket._regUser || !toUsername || !url) return;
+    if (mediaRateLimited(socket, "friendGif", 8, 10_000)) return;
     const toLc   = String(toUsername).toLowerCase().trim();
     const myUser = registeredUsers.get(socket._regUser.usernameLower);
     if (!myUser || !(myUser.friends || []).includes(toLc)) return;
