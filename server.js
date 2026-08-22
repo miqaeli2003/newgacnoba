@@ -6,9 +6,10 @@ const fs         = require("fs");
 
 // ── Persistent data directory ───────────────────────────────────────────────
 // On Render, mount a Disk at this path (Dashboard → your service → Disks →
-// Add Disk → mount path /var/data) so these files survive redeploys/restarts.
-// Locally (no disk mounted) it just falls back to the project folder.
-const DATA_DIR = process.env.DATA_DIR || "/var/data";
+// Add Disk → mount path /var/data/new-gacnoba) so these files survive
+// redeploys/restarts. Locally (no disk mounted) it just falls back to the
+// project folder.
+const DATA_DIR = process.env.DATA_DIR || "/var/data/new-gacnoba";
 try {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 } catch (e) {
@@ -237,6 +238,7 @@ const ROUTE = {
   blockedUAs:   "/h6rm1qf4wt7", // JSON: list currently-blocked user-agents
   blockUA:      "/w9hq3yd6mp0", // POST: block a user-agent (kicks matching live sockets)
   unblockUA:    "/j2vc5ns8ek3", // POST: remove a user-agent block
+  trafficLog:   "/z8nk3wq7yb2", // JSON: traffic-flood spike log (crash post-mortem)
 };
 
 // ── Sensitive-URL visitor log ─────────────────────────────────────────────────
@@ -963,7 +965,91 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── Site-wide visitor log — records IP + User-Agent for real page visits ──────
+// ── Traffic-flood detector & auto-mitigation ───────────────────────────────────
+// Built after the Aug 22 incident: a burst of ~400k requests / 58GB in under
+// an hour pegged the 0.5 CPU limit, which made the process too slow to answer
+// Render's internal health-check port in time → "i/o timeout" → repeated
+// instance kills/restarts (that's what all the "Instance failed: mdqt5" /
+// "dial tcp ...:10000: i/o timeout" log lines were).
+//
+// This middleware is intentionally CHEAP (a Map lookup + counter, no disk I/O
+// on the hot path) so it can't itself become the bottleneck. It does two
+// things:
+//   1. Per-IP short-window rate limiting — an IP sending an abusive number of
+//      requests gets an instant 429 instead of being allowed to burn CPU on
+//      full route handling.
+//   2. Periodic (every 10s) snapshot of the top offending IPs written to a
+//      small rotating file on disk, so after a crash you can open
+//      traffic-flood-log.json and immediately see who/what caused it —
+//      instead of having to reconstruct it from Render's dashboard graphs.
+const FLOOD_WINDOW_MS     = 10_000;   // sliding window used for rate limiting
+const FLOOD_MAX_PER_IP    = 150;      // requests/10s from one IP before it's throttled
+const FLOOD_LOG_FILE      = path.join(DATA_PATH, "traffic-flood-log.json");
+const FLOOD_SNAPSHOT_EVERY_MS = 10_000;
+
+let floodWindowStart = Date.now();
+let floodTotalReqs   = 0;
+const floodIpCounts  = new Map(); // ip → count in current window
+const floodEvents    = [];        // history of {time, totalReqs, topIps[]} snapshots
+const MAX_FLOOD_EVENTS = 500;
+
+function floodTick(ip) {
+  const now = Date.now();
+  if (now - floodWindowStart >= FLOOD_WINDOW_MS) {
+    // window rolled over — snapshot before resetting
+    if (floodTotalReqs > 0) {
+      const topIps = [...floodIpCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([ip, count]) => ({ ip, count }));
+      floodEvents.push({
+        time: new Date(floodWindowStart).toISOString(),
+        windowSec: Math.round((now - floodWindowStart) / 1000),
+        totalReqs: floodTotalReqs,
+        topIps,
+      });
+      if (floodEvents.length > MAX_FLOOD_EVENTS) floodEvents.shift();
+
+      // Only bother writing to disk when something unusual happened —
+      // avoids constant disk I/O during normal, low-traffic windows.
+      const isSpike = floodTotalReqs > 500 || (topIps[0] && topIps[0].count > 100);
+      if (isSpike) {
+        try {
+          const existing = fs.existsSync(FLOOD_LOG_FILE)
+            ? JSON.parse(fs.readFileSync(FLOOD_LOG_FILE, "utf8"))
+            : [];
+          existing.push(floodEvents[floodEvents.length - 1]);
+          if (existing.length > MAX_FLOOD_EVENTS) existing.splice(0, existing.length - MAX_FLOOD_EVENTS);
+          fs.writeFileSync(FLOOD_LOG_FILE, JSON.stringify(existing, null, 2));
+          console.warn(`[FLOOD] Spike window: ${floodTotalReqs} reqs, top IP ${topIps[0]?.ip} (${topIps[0]?.count})`);
+        } catch (e) {
+          console.error("[FLOOD] Failed to write flood log:", e.message);
+        }
+      }
+    }
+    floodWindowStart = now;
+    floodTotalReqs = 0;
+    floodIpCounts.clear();
+  }
+  floodTotalReqs++;
+  const c = (floodIpCounts.get(ip) || 0) + 1;
+  floodIpCounts.set(ip, c);
+  return c;
+}
+
+app.use((req, res, next) => {
+  const ip = getClientIP(req);
+  const countThisWindow = floodTick(ip);
+  if (countThisWindow > FLOOD_MAX_PER_IP) {
+    // Cheap rejection — no route handler, no DB/socket work, just enough to
+    // keep the event loop free for the health check.
+    res.status(429).end();
+    return;
+  }
+  next();
+});
+
+
 // (see shouldLogSiteVisit/recordSiteVisit above — skips assets/API/socket.io)
 app.use((req, res, next) => {
   if (shouldLogSiteVisit(req)) recordSiteVisit(req);
@@ -1280,6 +1366,29 @@ app.get(ROUTE.bans, ownerOnly, (req, res) => {
   res.json({ count: bannedIPs.size, ips: [...bannedIPs] });
 });
 
+// GET <trafficLog route>  — traffic-flood spike history, for diagnosing
+// crashes/restarts after the fact. Combines the on-disk log (survives
+// restarts) with whatever's still only in memory from the current process.
+app.get(ROUTE.trafficLog, ownerOnly, (req, res) => {
+  let onDisk = [];
+  try {
+    if (fs.existsSync(FLOOD_LOG_FILE)) {
+      onDisk = JSON.parse(fs.readFileSync(FLOOD_LOG_FILE, "utf8"));
+    }
+  } catch (e) { /* ignore corrupt/missing file */ }
+
+  // Merge on-disk + in-memory (dedupe by "time"), most recent first
+  const byTime = new Map();
+  [...onDisk, ...floodEvents].forEach(ev => byTime.set(ev.time, ev));
+  const merged = [...byTime.values()].sort((a, b) => new Date(b.time) - new Date(a.time));
+
+  res.json({
+    count: merged.length,
+    currentWindow: { totalReqs: floodTotalReqs, ips: floodIpCounts.size },
+    events: merged.slice(0, 200),
+  });
+});
+
 // GET <reported route>  — list EVERY IP that has at least one report on file
 // (not just the ones that hit the 5-report auto-ban). Each entry says
 // whether it's currently auto-banned (from hitting the threshold) and/or
@@ -1479,6 +1588,11 @@ tr:hover td{background:rgba(255,255,255,.03)}
   <div id="blockedUAs">Loading...</div>
 </div>
 
+<div class="section">
+  <h2>📈 Traffic Flood Log (crash post-mortem)</h2>
+  <div id="trafficLog">Loading...</div>
+</div>
+
 <script>
 const R = ${JSON.stringify(ROUTE)};
 
@@ -1657,6 +1771,23 @@ async function loadAll() {
       </div>\`).join("");
     }
   } catch(e) { document.getElementById("blockedUAs").textContent = "Error"; }
+
+  try {
+    const d = await api("GET", R.trafficLog);
+    const el = document.getElementById("trafficLog");
+    const cw = d.currentWindow || {};
+    const cwHtml = \`<p style="color:#72767d;font-size:.82em;margin-bottom:10px">Current 10s window: \${cw.totalReqs||0} requests from \${cw.ips||0} IPs</p>\`;
+    if (!d.events || !d.events.length) {
+      el.innerHTML = cwHtml + '<p style="color:#72767d;font-size:.9em">No spikes logged yet</p>';
+    } else {
+      el.innerHTML = cwHtml + '<table><tr><th>Time</th><th>Requests</th><th>Top IPs</th></tr>' +
+        d.events.map(ev => \`<tr>
+          <td style="color:#dcddde;white-space:nowrap">\${esc(new Date(ev.time).toLocaleString())}</td>
+          <td><span style="color:#f23f42;font-weight:700">\${ev.totalReqs}</span> <span style="color:#72767d">/ \${ev.windowSec}s</span></td>
+          <td>\${(ev.topIps||[]).map(t => \`<span class="ip" style="font-size:.82em">\${esc(t.ip)}</span> <span class="badge">\${t.count}</span> <button class="ban-btn" style="float:none;padding:3px 8px;margin:2px 0 6px 4px" onclick="banIP('\${esc(t.ip)}')">Block</button><br>\`).join("")}</td>
+        </tr>\`).join("") + "</table>";
+    }
+  } catch(e) { document.getElementById("trafficLog").textContent = "Error"; }
 }
 
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
