@@ -460,6 +460,13 @@
       object-fit: cover;
     }
     .fc-gif-item:hover { opacity: 0.8; }
+    .gif-placeholder {
+      grid-column: 1 / -1;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85em;
+      padding: 24px 0;
+    }
 
     /* ── Reply preview bar (above input) ── */
     #fc-reply-preview {
@@ -1306,7 +1313,19 @@
       transports: ["websocket", "polling"],
     });
 
-    setupMediaGameSocketListeners();
+    /* Incoming photo/GIF from friend (feature exists independently of games) */
+    socket.on("friendChat:photo", ({ fromUsername, dataUrl, timestamp }) => {
+      if (!fromUsername || fromUsername.toLowerCase() !== friendName.toLowerCase()) return;
+      hideTyping();
+      appendMessage({ from: fromUsername, type: "photo", dataUrl, ts: timestamp });
+      incUnread();
+    });
+    socket.on("friendChat:gif", ({ fromUsername, url, timestamp }) => {
+      if (!fromUsername || fromUsername.toLowerCase() !== friendName.toLowerCase()) return;
+      hideTyping();
+      appendMessage({ from: fromUsername, type: "gif", url, ts: timestamp });
+      incUnread();
+    });
 
     socket.on("connect", () => {
       socket.emit("auth:login", { token });
@@ -1503,6 +1522,84 @@
       });
     });
   }
+
+  /* ── GIF picker ──────────────────────────────────────────────── */
+  const elGifBtn     = $("fc-gif-btn");
+  const elGifPicker  = $("fc-gif-picker");
+  const elGifSearch  = $("fc-gif-search");
+  const elGifResults = $("fc-gif-results");
+  let gifFetchController = null;
+  let gifSearchTimer     = null;
+
+  function openGifPicker() {
+    if (!elGifPicker) return;
+    elGifPicker.style.display = "flex";
+    elGifPicker.getBoundingClientRect(); // force reflow before transition
+    elGifPicker.classList.add("open");
+    if (elGifSearch) { elGifSearch.value = ""; elGifSearch.focus(); }
+    fetchGifs("");
+  }
+  function closeGifPicker() {
+    if (!elGifPicker) return;
+    elGifPicker.classList.remove("open");
+    setTimeout(() => { if (!elGifPicker.classList.contains("open")) elGifPicker.style.display = "none"; }, 250);
+  }
+
+  async function fetchGifs(query) {
+    if (!elGifResults) return;
+    if (gifFetchController) gifFetchController.abort();
+    gifFetchController = new AbortController();
+    elGifResults.innerHTML = '<div class="gif-placeholder">Loading...</div>';
+    try {
+      const url = query ? `/api/gifs?q=${encodeURIComponent(query)}` : "/api/gifs";
+      const res  = await fetch(url, { signal: gifFetchController.signal });
+      const data = await res.json();
+      renderGifResults(data.results || []);
+    } catch (err) {
+      if (err.name !== "AbortError") {
+        elGifResults.innerHTML = '<div class="gif-placeholder">Failed to load GIFs 😢</div>';
+      }
+    } finally {
+      gifFetchController = null;
+    }
+  }
+
+  function renderGifResults(results) {
+    if (!elGifResults) return;
+    if (!results.length) {
+      elGifResults.innerHTML = '<div class="gif-placeholder">No GIFs found</div>';
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    results.forEach(result => {
+      const media      = result.media && result.media[0];
+      const previewUrl = media?.tinygif?.url || media?.gif?.url;
+      const fullUrl    = media?.gif?.url;
+      if (!previewUrl || !fullUrl) return;
+      const img = document.createElement("img");
+      img.src       = previewUrl;
+      img.className = "fc-gif-item";
+      img.loading   = "lazy";
+      img.decoding  = "async";
+      img.addEventListener("click", () => sendFCGif(fullUrl));
+      frag.appendChild(img);
+    });
+    elGifResults.innerHTML = "";
+    elGifResults.appendChild(frag);
+  }
+
+  function sendFCGif(url) {
+    if (!socket?.connected) return;
+    socket.emit("friendChat:gif", { toUsername: friendName, url });
+    appendMessage({ from: myUsername, type: "gif", url, ts: new Date().toISOString() });
+    closeGifPicker();
+  }
+
+  if (elGifBtn)    elGifBtn.addEventListener("click", openGifPicker);
+  if (elGifSearch) elGifSearch.addEventListener("input", () => {
+    clearTimeout(gifSearchTimer);
+    gifSearchTimer = setTimeout(() => fetchGifs(elGifSearch.value.trim()), 350);
+  });
 
   /* ── Start ───────────────────────────────────────────────────── */
   init();
