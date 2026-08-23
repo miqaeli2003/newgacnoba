@@ -646,25 +646,32 @@ const REPORT_BAN_DURATION_MS = 24 * 60 * 60 * 1000;
 const REPORT_THRESHOLD       = 5;
 const reportStrikes = new Map(); // ip → { count, bannedUntil, reporters: Set, firstReportAt }
 
-function recordReport(reporterSocketId, targetIP, reason, reporterName) {
+function recordReport(reporterSocketId, targetIP, reason, reporterName, targetName) {
   if (!targetIP || targetIP === 'unknown') return false;
   const now   = Date.now();
-  let entry   = reportStrikes.get(targetIP) || { count: 0, bannedUntil: null, reporters: new Set(), firstReportAt: null, reasons: [] };
+  let entry   = reportStrikes.get(targetIP) || { count: 0, bannedUntil: null, reporters: new Set(), firstReportAt: null, reasons: [], names: new Set() };
   if (entry.bannedUntil && now < entry.bannedUntil) return true; // already banned
   // After 24h without hitting threshold, reset count to 3 (not 0) — history still matters
   if (entry.firstReportAt && (now - entry.firstReportAt) >= REPORT_BAN_DURATION_MS) {
     const resetTo = Math.min(entry.count, 3);
     console.warn(`[REPORT-RESET] IP ${targetIP} — 24h passed, resetting ${entry.count} → ${resetTo} reports`);
-    entry = { count: resetTo, bannedUntil: null, reporters: new Set(), firstReportAt: resetTo > 0 ? now : null, reasons: entry.reasons.slice(-resetTo) };
+    entry = { count: resetTo, bannedUntil: null, reporters: new Set(), firstReportAt: resetTo > 0 ? now : null, reasons: entry.reasons.slice(-resetTo), names: entry.names || new Set() };
   }
   // One report per socket id to prevent spam
   if (entry.reporters.has(reporterSocketId)) return false;
   entry.reporters.add(reporterSocketId);
   entry.count++;
   if (entry.count === 1) entry.firstReportAt = now; // start the 24h window
+  // Names change between random-chat sessions, so we keep every distinct name
+  // seen for this IP — the admin panel shows all of them (most recent last).
+  if (targetName) {
+    if (!entry.names) entry.names = new Set();
+    entry.names.add(targetName);
+  }
   entry.reasons.push({
     reason:   (reason || "").trim().slice(0, 200) || "(no reason provided)",
     by:       reporterName || "unknown",
+    against:  targetName || "unknown",
     timestamp: new Date().toISOString(),
   });
   if (entry.count >= REPORT_THRESHOLD) {
@@ -1440,6 +1447,7 @@ app.get(ROUTE.reported, ownerOnly, (req, res) => {
       autoBanned:     autoBanActive,
       remainingHrs,
       permaBanned:    bannedIPs.has(ip),
+      names:          entry.names ? [...entry.names] : [],
       reasons:        entry.reasons || [],
       firstReportAt:  entry.firstReportAt ? new Date(entry.firstReportAt).toISOString() : null,
     });
@@ -1679,7 +1687,7 @@ async function manualBlockUA() {
 
 function reasonsHtml(reasons) {
   if (!reasons || !reasons.length) return '<span style="color:#72767d">—</span>';
-  return '<ul class="reason-list">' + reasons.map(r => \`<li>\${esc(r.reason)}<br><span class="meta">by \${esc(r.by)} · \${new Date(r.timestamp).toLocaleString()}</span></li>\`).join("") + '</ul>';
+  return '<ul class="reason-list">' + reasons.map(r => \`<li>\${esc(r.reason)}<br><span class="meta">against \${esc(r.against || "unknown")} · by \${esc(r.by)} · \${new Date(r.timestamp).toLocaleString()}</span></li>\`).join("") + '</ul>';
 }
 
 async function manualBan() {
@@ -1746,7 +1754,7 @@ async function loadAll() {
     const el = document.getElementById("reported");
     if (!d.reported || !d.reported.length) { el.innerHTML = '<p style="color:#72767d;font-size:.9em">No reports on file</p>'; }
     else {
-      el.innerHTML = '<table><tr><th>IP</th><th>Reports</th><th>Reasons</th><th>Status</th><th></th></tr>' +
+      el.innerHTML = '<table><tr><th>IP</th><th>Name(s)</th><th>Reports</th><th>Reasons</th><th>Status</th><th></th></tr>' +
         d.reported.map(r => {
           let statusHtml;
           if (r.permaBanned) statusHtml = '<span class="badge" style="background:rgba(242,63,66,.2);color:#f23f42">🔒 banned forever</span>';
@@ -1763,8 +1771,13 @@ async function loadAll() {
             actionsHtml += \`<button class="unban-btn" onclick="unbanReportedIP('\${esc(r.ip)}')">Clear strikes</button>\`;
           }
 
+          const namesHtml = (r.names && r.names.length)
+            ? r.names.map(n => \`<span class="ip" style="font-size:.85em;display:block">\${esc(n)}</span>\`).join("")
+            : '<span style="color:#72767d">unknown</span>';
+
           return \`<tr>
             <td style="font-family:monospace;color:#fff">\${esc(r.ip)}</td>
+            <td>\${namesHtml}</td>
             <td><span style="color:#f23f42;font-weight:700">\${r.count}</span></td>
             <td>\${reasonsHtml(r.reasons)}</td>
             <td>\${statusHtml}</td>
@@ -2480,7 +2493,7 @@ io.on("connection", (socket) => {
     reportLog.push(entry);
     console.log("REPORT:", JSON.stringify(entry));
 
-    const justBanned = recordReport(socket.id, targetIP, cleanReason, socket.userName);
+    const justBanned = recordReport(socket.id, targetIP, cleanReason, socket.userName, targetName);
     if (justBanned) {
       // Kick the reported partner if still connected
       const target = socket.partner || (targetSocketId ? io.sockets.sockets.get(targetSocketId) : null);
