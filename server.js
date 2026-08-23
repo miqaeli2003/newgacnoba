@@ -2270,6 +2270,16 @@ io.on("connection", (socket) => {
     partnerSocket.lastPartnerSocketId = socket.id;
     socket.hasReportedLast         = false;
     partnerSocket.hasReportedLast  = false;
+    // Immutable per-pairing snapshot — deliberately never overwritten or
+    // cleared by anything else (block/skip/disconnect) until the NEXT
+    // pairing happens. This is what reportUser reads from as its fallback,
+    // instead of the mutable lastPartnerName field, which several other
+    // handlers (blockUser, findPartner, etc.) legitimately clear as part of
+    // their own logic — using it as a report fallback was the root cause of
+    // reports sometimes showing "unknown" or a leftover name from an
+    // entirely different, earlier partner.
+    socket._reportSnapshot = { name: partnerSocket.userName, ip: partnerSocket.clientIP || "", socketId: partnerSocket.id };
+    partnerSocket._reportSnapshot = { name: socket.userName, ip: socket.clientIP || "", socketId: socket.id };
 
     const sharedTags = (socket.interests || []).filter(t => (partnerSocket.interests || []).includes(t));
 
@@ -2462,12 +2472,16 @@ io.on("connection", (socket) => {
 
   // ── Report ───────────────────────────────────────────────────────────────
   socket.on("reportUser", ({ reason }) => {
-    // Allow reporting both: current partner OR the partner who just left.
-    // NOTE: blockUser (often emitted together) clears lastPartnerName first but
-    // keeps lastPartnerIP alive for 2s, so we can still look up the target.
-    const targetIP         = socket.partner ? socket.partner.clientIP : socket.lastPartnerIP;
-    const targetSocketId   = socket.partner ? socket.partner.id       : socket.lastPartnerSocketId;
-    const targetName       = socket.partner ? socket.partner.userName : (socket.lastPartnerName || socket._lastReportedName || "");
+    // Resolution order: current live partner (most accurate) → the
+    // immutable snapshot taken when this pairing started (survives
+    // block/skip clearing lastPartnerName). We deliberately do NOT fall
+    // back to any value left over from a PREVIOUS report this session —
+    // that was the cause of reports sometimes showing an unrelated
+    // earlier partner's name.
+    const snap              = socket._reportSnapshot || {};
+    const targetIP          = socket.partner ? socket.partner.clientIP : (socket.lastPartnerIP || snap.ip || "");
+    const targetSocketId    = socket.partner ? socket.partner.id       : (socket.lastPartnerSocketId || snap.socketId || "");
+    const targetName        = socket.partner ? socket.partner.userName : (socket.lastPartnerName || snap.name || "");
 
     if (!targetIP) return; // nothing to report
 
@@ -2478,8 +2492,6 @@ io.on("connection", (socket) => {
     // Prevent double-reporting the same partner
     if (socket.hasReportedLast) return;
     socket.hasReportedLast = true;
-    // Remember name for the log even if blockUser cleared lastPartnerName already
-    if (targetName) socket._lastReportedName = targetName;
 
     const entry = {
       reportedId:   targetSocketId,
