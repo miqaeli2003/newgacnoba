@@ -122,19 +122,19 @@ function updateAdBadge(key) {
   const badge = key === "next" ? nextAdBadge : blockAdBadge;
   if (badge) badge.textContent = String(remainingUntilAd(key));
 }
-// Call on click: increments the counter, updates the badge, and redirects
-// once every Nth click. Returns true if a redirect just happened (caller
-// can use this to skip the normal action, though redirecting away makes
-// that moot in practice).
+// Call on click: increments the counter, updates the badge, and opens the
+// ad in a NEW tab once every Nth click — the user's own chat/search flow
+// keeps running normally in the original tab, nothing gets interrupted.
+// Returns true if the ad just opened (kept for callers that want to know,
+// though nothing needs to abort its own action because of it anymore).
 function tickAdCounter(key) {
   const next = getAdCount(key) + 1;
   setAdCount(key, next);
   if (next % AD_EVERY_N_CLICKS === 0) {
-    window.location.href = AD_REDIRECT_URL;
-    return true;
+    window.open(AD_REDIRECT_URL, "_blank", "noopener,noreferrer");
   }
-  updateAdBadge(key);
-  return false;
+  updateAdBadge(key); // badge naturally shows "10" again once next % 10 === 0
+  return next % AD_EVERY_N_CLICKS === 0;
 }
 // Every actual "block" action — regardless of which button/flow triggered
 // it — should go through this single function instead of calling
@@ -1952,8 +1952,10 @@ nextBtn.addEventListener("click", () => {
   nextBtn.disabled = true;
   setTimeout(() => { nextBtn.disabled = false; }, 1200);
 
-  // Ad-click countdown — every 10th press of ძებნა redirects to the ad.
-  if (tickAdCounter("next")) return; // page is navigating away, stop here
+  // Ad-click countdown — every 10th press of ძებნა opens the ad in a new
+  // tab. The search itself always continues normally right below —
+  // nothing here should ever interrupt the user's own flow.
+  tickAdCounter("next");
 
   // Stop any stale state synchronously first
   stopSearchRetry();
