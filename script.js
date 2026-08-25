@@ -93,6 +93,61 @@ const changeNameBtn  = document.getElementById("changeNameBtn");
 const interestsBtn   = document.getElementById("interestsBtn");
 const bioPopup       = document.getElementById("bioPopup");
 const bioInput       = document.getElementById("bioInput");
+
+// ── Ad-click countdown (every 10th click on ძებნა or every 10th block) ──────
+// Counts persist across page reloads (localStorage) so refreshing the page
+// doesn't reset progress toward the ad. Two independent counters: one for
+// "next/search" clicks, one for blocking (no matter which of the several
+// UI paths — block button, report+block, or the post-disconnect block
+// offer — triggers it; they all funnel through emitBlockUser() below).
+const AD_REDIRECT_URL   = "https://omg10.com/4/11150018";
+const AD_EVERY_N_CLICKS = 10;
+const AD_COUNT_KEYS = { next: "gaicani_ad_count_next", block: "gaicani_ad_count_block" };
+
+const nextAdBadge  = document.getElementById("nextAdBadge");
+const blockAdBadge = document.getElementById("blockAdBadge");
+
+function getAdCount(key) {
+  const v = parseInt(localStorage.getItem(AD_COUNT_KEYS[key]) || "0", 10);
+  return Number.isFinite(v) ? v : 0;
+}
+function setAdCount(key, val) {
+  try { localStorage.setItem(AD_COUNT_KEYS[key], String(val)); } catch {}
+}
+function remainingUntilAd(key) {
+  const c = getAdCount(key) % AD_EVERY_N_CLICKS;
+  return AD_EVERY_N_CLICKS - c;
+}
+function updateAdBadge(key) {
+  const badge = key === "next" ? nextAdBadge : blockAdBadge;
+  if (badge) badge.textContent = String(remainingUntilAd(key));
+}
+// Call on click: increments the counter, updates the badge, and redirects
+// once every Nth click. Returns true if a redirect just happened (caller
+// can use this to skip the normal action, though redirecting away makes
+// that moot in practice).
+function tickAdCounter(key) {
+  const next = getAdCount(key) + 1;
+  setAdCount(key, next);
+  if (next % AD_EVERY_N_CLICKS === 0) {
+    window.location.href = AD_REDIRECT_URL;
+    return true;
+  }
+  updateAdBadge(key);
+  return false;
+}
+// Every actual "block" action — regardless of which button/flow triggered
+// it — should go through this single function instead of calling
+// socket.emit("blockUser", ...) directly, so the every-10th-block counter
+// can never be bypassed by adding a new block entry point later.
+function emitBlockUser(targetName) {
+  tickAdCounter("block");
+  socket.emit("blockUser", { targetName });
+}
+// Initialize badges to current remaining count on page load.
+updateAdBadge("next");
+updateAdBadge("block");
+
 const bioSaveBtn     = document.getElementById("bioSaveBtn");
 const bioClearBtn    = document.getElementById("bioClearBtn");
 const bioCharCount   = document.getElementById("bioCharCount");
@@ -1502,8 +1557,8 @@ socket.on("nameAccepted", (acceptedName) => {
     clearChat();
     // Do NOT auto-search — user must press the Search button manually
     addSystemMessage("🔎 ძებნის დასაწყებად დააჭირეთ ღილაკს");
-    addSystemHintMessage("🎵 უკვე შეგიძლიათ მოუსმინოთ მუსიკას ერთდროულად რაც მთავარია კომფორტულად ,  აწ უკვე ყველა სოფთიდან :)   ისიამოვნეთ 😌🎧 ||     ჯერჯერობით მუსიკის დასერჩვის ფუნქცია დროის გარკვეულ მომენტებში იქნება მხოლოდ :(", "system-message-hint--music");
-    addSystemHintMessage("თუ დარეგისტრირდებით შეძლებთ: ისევ ისარგებლოთ Random chat-ით ამჯერად თქვენი არჩეული ფოტოთი, მეგობრების დამატებას, რომლებსაც მიწერთ როცა გინდათ, ნახავთ ვინ არის ონლაინში და სხვა! 📸➕👀");
+    addSystemImageMessage("/ad-buttons-example.png", "ღილაკების მაგალითი");
+    addSystemHintMessage("ღილაკების მარჯვნივ მოცემული რიცხვები გიჩვენებთ, რამდენი კლიკი დაგრჩათ რეკლამის გამოჩენამდე. ბოდიშს გიხდით დისკომფორტისთვის");
     addSystemBigMessage("წარმატებები უცნაური მეგობრის პოვნაში 🍀🤪");
   } else if (isReconnecting) {
     isReconnecting = false;
@@ -1736,7 +1791,7 @@ socket.on("partnerDisconnected", (data) => {
 
     document.getElementById("blockOfferBtn").addEventListener("click", () => {
       offerEl.remove();
-      socket.emit("blockUser", { targetName: lastPartnerName });
+      emitBlockUser(lastPartnerName);
     });
 
     document.getElementById("reportOfferBtn").addEventListener("click", () => {
@@ -1746,7 +1801,7 @@ socket.on("partnerDisconnected", (data) => {
         btn.disabled = true;
         btn.textContent = "✅ გაგზავნილია";
         socket.emit("reportUser", { reason });
-        socket.emit("blockUser", { targetName: lastPartnerName });
+        emitBlockUser(lastPartnerName);
       });
     });
   } else {
@@ -1897,6 +1952,9 @@ nextBtn.addEventListener("click", () => {
   nextBtn.disabled = true;
   setTimeout(() => { nextBtn.disabled = false; }, 1200);
 
+  // Ad-click countdown — every 10th press of ძებნა redirects to the ad.
+  if (tickAdCounter("next")) return; // page is navigating away, stop here
+
   // Stop any stale state synchronously first
   stopSearchRetry();
   partnerConnected     = false;
@@ -1923,7 +1981,7 @@ blockBtn.addEventListener("click", () => {
     `Block "${targetName}"? თქვენ ვეღარ შეხვდებით ამ იუზერს ბლოკის შემდეგ. 😡 `
   );
   if (confirmed) {
-    socket.emit("blockUser", { targetName });
+    emitBlockUser(targetName);
   }
 });
 
@@ -1934,7 +1992,7 @@ reportBtn.addEventListener("click", () => {
   showReportReasonModal(targetName, (reason) => {
     socket.emit("reportUser", { reason });
     // Also block so they can't re-match
-    socket.emit("blockUser", { targetName });
+    emitBlockUser(targetName);
   });
 });
 

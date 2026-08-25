@@ -198,6 +198,35 @@ html, body {
   cursor: not-allowed;
 }
 
+/* ── Ad-countdown badges ──────────────────────────────────────────────────
+   Small counter shown on the search (ძებნა) and block (ბლოკი) buttons —
+   counts down to the next ad redirect (every 10th click on each). */
+.block-button,
+.next-button {
+  position: relative;
+}
+.ad-countdown-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #f23f42;
+  color: #fff;
+  font-size: 0.68em;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+  pointer-events: none;
+  z-index: 2;
+}
+.next-button .ad-countdown-badge {
+  background: #5865f2;
+}
+
 /* icon spans — shown only on mobile via media query */
 .btn-icon  { display: none; }
 .btn-label { display: inline; }
