@@ -101,7 +101,7 @@ const bioInput       = document.getElementById("bioInput");
 // UI paths — block button, report+block, or the post-disconnect block
 // offer — triggers it; they all funnel through emitBlockUser() below).
 const AD_REDIRECT_URL   = "https://omg10.com/4/11150018";
-const AD_EVERY_N_CLICKS = 10;
+const AD_EVERY_N_CLICKS = 5;
 const AD_COUNT_KEYS = { next: "gaicani_ad_count_next", block: "gaicani_ad_count_block" };
 
 const nextAdBadge  = document.getElementById("nextAdBadge");
