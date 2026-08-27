@@ -29,6 +29,31 @@ const app    = express();
 app.set("trust proxy", 1); // behind Render's proxy — needed for express-rate-limit / IP detection
 const server = http.createServer(app);
 
+// ── Block direct access via the public *.onrender.com URL ──────────────────
+// Cloudflare only protects traffic to your real domain (gaicani.online) —
+// it has no idea Render also exposes the app directly at
+// <service>.onrender.com. Anyone (or any bot/attacker) hitting that URL
+// bypasses Cloudflare's flood/bot protection completely and lands straight
+// on this tiny instance. This closes that hole by rejecting any request
+// whose Host header is an onrender.com domain.
+//
+// Deliberately NOT a strict allowlist of only "gaicani.online" — Render's
+// own internal health-check dials the app via an internal IP (see the
+// original "dial tcp 10.x.x.x:PORT" crash logs), which very likely does not
+// send a Host header matching your domain either. A strict allowlist could
+// accidentally reject that internal check and cause exactly the kind of
+// crash-loop this server had before — a narrow "block onrender.com
+// specifically" rule avoids that risk entirely.
+app.use((req, res, next) => {
+  const host = (req.headers.host || "").toLowerCase();
+  if (host.endsWith(".onrender.com")) {
+    console.warn(`[BYPASS-BLOCKED] Direct onrender.com access rejected — host="${host}" ip="${getClientIP(req)}" path="${req.path}"`);
+    res.status(403).end();
+    return;
+  }
+  next();
+});
+
 // ── Global crash guards ─────────────────────────────────────────────────────
 // Without these, a SINGLE unhandled promise rejection anywhere in the app
 // (a fetch() that throws, a missed .catch(), etc.) terminates the entire
@@ -1084,17 +1109,41 @@ function floodTick(ip, reqPath) {
   return c;
 }
 
+// Tracks how many consecutive flood-windows in a row an IP has gone over
+// the limit. An IP that floods 3 windows running (30+ seconds of sustained
+// abuse) gets auto-banned outright — no reason a real browser/user ever
+// legitimately sends 150+ req/10s for half a minute straight. (Banned IPs
+// are already rejected earlier in the middleware chain — see the ban-check
+// above — so once this fires, the attacker stops reaching this point at all.)
+const floodOffenseStreak = new Map(); // ip → consecutive over-limit windows
+const FLOOD_AUTOBAN_STREAK = 3;
+
 app.use((req, res, next) => {
   const ip = getClientIP(req);
   const countThisWindow = floodTick(ip, req.path || "/");
   if (countThisWindow > FLOOD_MAX_PER_IP) {
+    const streak = (floodOffenseStreak.get(ip) || 0) + 1;
+    floodOffenseStreak.set(ip, streak);
+    if (streak >= FLOOD_AUTOBAN_STREAK) {
+      bannedIPs.add(ip);
+      saveBannedIPs();
+      console.warn(`[FLOOD-AUTOBAN] ${ip} banned after ${streak} consecutive flood windows`);
+    }
     // Cheap rejection — no route handler, no DB/socket work, just enough to
     // keep the event loop free for the health check.
     res.status(429).end();
     return;
+  } else {
+    floodOffenseStreak.delete(ip); // reset streak once they're back under the limit
   }
   next();
 });
+
+// Periodically forget offense streaks for IPs that haven't been seen in a
+// while, so this map can't grow unbounded over a long-running process.
+setInterval(() => {
+  if (floodOffenseStreak.size > 5000) floodOffenseStreak.clear();
+}, 30 * 60_000);
 
 
 // (see shouldLogSiteVisit/recordSiteVisit above — skips assets/API/socket.io)
@@ -1130,17 +1179,30 @@ html,body{min-height:100%;background:#1e1f22;display:flex;align-items:center;jus
 </html>`;
 }
 
-// ── Captcha gate — only on the main page, BEFORE static so it intercepts / ───
+// ── Geo-gate — covers the WHOLE site, not just "/" ────────────────────────────
+// Originally this only checked req.path === "/", which left a real gap:
+// anyone worldwide could load /dashboard.html, /friend-chat.html, or hit any
+// /api/* endpoint directly, completely skipping the block. This now applies
+// to every GET/POST request except the admin panel (ROUTE.* paths), which
+// intentionally has its own key-login gate designed to work from any IP —
+// geo-gating it too would lock the owner out while traveling.
 app.use(async (req, res, next) => {
-  // Only gate the main page
-  if (req.method !== "GET" || req.path !== "/") return next();
+  // Admin panel & its API routes are never geo-gated — they have their own
+  // key-login system (see ADMIN_KEY / hasValidAdminSession) that's meant to
+  // work from anywhere.
+  if (Object.values(ROUTE).some(r => req.path.startsWith(r))) return next();
+
+  // Only gate GET (pages/assets) and POST (API calls like login/register/
+  // gif-search/etc.) — nothing else meaningfully hits this app.
+  if (req.method !== "GET" && req.method !== "POST") return next();
 
   const ip = (req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.socket?.remoteAddress || "");
 
   // Owner always passes
   if (OWNER_IPS.has(ip)) return next();
 
-  // Already passed the geo-check (cookie set on a prior GE visit)
+  // Already passed the geo-check (cookie set on a prior GE visit) — avoids
+  // re-running a geo lookup on every single asset/API request.
   if (hasCaptchaCookie(req)) return next();
 
   // Geo-gate: only Georgian IPs may access the site. Everyone else gets a
@@ -1923,6 +1985,55 @@ function generateMathQuestion() {
   return { display, answer };
 }
 
+// ── Truth or Dare prompts (Georgian, PG-13 flirty/fun) ─────────────────────
+// Mix of light/normal questions and a few "spicier" flirty ones — kept
+// appropriate for a text-only chat between strangers (no explicit content,
+// no physical/offline dares — everything is doable as a chat message).
+const TRUTH_PROMPTS = [
+  "რომელია ყველაზე უხერხული სიტუაცია, რომელშიც ოდესმე მოხვედრილხარ?",
+  "ვინმეს ტყუილად უთქვამს „მიყვარხარ“?",
+  "რა არის შენი ყველაზე დიდი შიში ურთიერთობაში?",
+  "გიყურებია ოდესმე ყოფილის სოც. ქსელი შუა ღამით? 👀",
+  "რომელია ყველაზე უცნაური რამ, რაც სიზმარში გინახავს?",
+  "თუ დღეს ვინმეს პაემანზე მიპატიჟებდი, ვინ იქნებოდა ის (ცნობილი პიროვნება)?",
+  "რა ტყუილი გითქვამს მშობლებისთვის მოზარდობაში?",
+  "რომელი ემოჯი აღწერს საუკეთესოდ შენს დღევანდელ განწყობას?",
+  "გქონია ოდესმე crush მასწავლებელზე? 😅",
+  "რა არის შენი „green flag“ პარტნიორში?",
+  "რომელი სიმღერის მოსმენა გერიდება სხვის თანდასწრებით?",
+  "რამდენჯერ გითხოვია ვინმესთვის ნომერი?",
+  "რა არის შენი ყველაზე უცნაური „ick“ — რაც მაშინვე გაგერიდებს ადამიანისგან?",
+  "დათანხმდებოდი ერთდღიან ურთიერთობაზე ახლა ვისთანაც ესაუბრები? 😏",
+  "რომელია შენი ერთი საიდუმლო, რომელიც არავინ იცის?",
+  "დაუწერე ოდესმე ვინმეს ტექსტი, რომელიც შემდეგ სინანულით წაშალე?",
+  "რა არის შენი „turn on“ საუბარში?",
+  "ვისზე გაქვს crush ახლა, ან ბოლოს ვისზე გქონდა?",
+  "რომელი ცუდი ჩვევა გაქვს, რომელსაც არავის უმხელ?",
+  "რომელია ყველაზე გიჟური რამ, რაზეც ოდესმე ფიქრობდი, მაგრამ არასდროს გაუმხელია?",
+];
+const DARE_PROMPTS = [
+  "დაწერე პარტნიორს ულამაზესი კომპლიმენტი, რაც კი შეგიძლია.",
+  "გამოაგზავნე 5 ემოჯი, რომლებიც აღწერენ შენს ხასიათს.",
+  "მოიგონე მეტსახელი პარტნიორისთვის და მიმართე ასე საუბრის ბოლომდე.",
+  "დაწერე ერთი წინადადება მხოლოდ ემოჯებით — პარტნიორმა უნდა გამოიცნოს.",
+  "აღწერე შენი „perfect date“ სამი სიტყვით.",
+  "გაუკეთე კომპლიმენტი საკუთარ თავს — რაც არ უნდა უცნაურად ჟღერდეს.",
+  "დაწერე ფლირტ-შეტყობინება, თითქოს ეს პირველი პაემანია 😏",
+  "მოიგონე ერთი „ყალბი“ ფაქტი შენს შესახებ — პარტნიორმა უნდა გამოიცნოს სიმართლეა თუ არა.",
+  "დაწერე ორსტრიქონიანი ლექსი შენს პარტნიორზე.",
+  "გაუმხილე პარტნიორს ერთი „საიდუმლო“ ტალანტი.",
+  "დაწერე შენი საუკეთესო pickup line.",
+  "აღწერე საკუთარი თავი მხოლოდ სამი ზედსართავით.",
+  "თქვი, რომელი ცნობილი ადამიანის მოწონებას ბედავ აღიარებას.",
+  "გამოაგზავნე 😂 მინიმუმ 10-ჯერ ზედიზედ.",
+  "მოთხარი პატარა ისტორია სამ წინადადებაში — შენ და პარტნიორი თავგადასავალში ხართ.",
+  "აღწერე შენი „იდეალური“ პარტნიორი ერთ წინადადებაში.",
+  "გაუმხილე კომპლიმენტი, რომელსაც არასდროს გეუბნებიან, მაგრამ გინდა გაიგონო.",
+  "გაუმხილე პარტნიორს, რას გრძნობ ამ საუბრის მიმართ ახლა 😄",
+  "დაწერე „ფლირტული“ სახელი პარტნიორისთვის და ახსენი, რატომ ეს.",
+  "დაწერე ერთწინადადებიანი კომპლიმენტი, რომელიც პარტნიორს დღეს გაუღიმებს.",
+];
+
 function checkTTTWinner(board) {
   const LINES = [
     [0,1,2],[3,4,5],[6,7,8],
@@ -2650,6 +2761,8 @@ io.on("connection", (socket) => {
       state = { choices: {} };
     } else if (gameType === "math") {
       state = { question: generateMathQuestion(), answered: false };
+    } else if (gameType === "truthordare") {
+      state = { chosen: false, choice: null, prompt: null };
     } else return;
 
     const game = { id: gameId, type: gameType, players, state };
@@ -2657,7 +2770,12 @@ io.on("connection", (socket) => {
     gameBySocket.set(toId,      gameId);
     gameBySocket.set(socket.id, gameId);
 
-    const roles = { [toId]: "X", [socket.id]: "O" };
+    // Truth-or-Dare: the ACCEPTER is the one who picks truth/dare (per spec —
+    // requester sends the invite, accepter chooses). Everything else keeps
+    // the existing X/O role labels (only meaningful for ttt anyway).
+    const roles = gameType === "truthordare"
+      ? { [toId]: "requester", [socket.id]: "chooser" }
+      : { [toId]: "X", [socket.id]: "O" };
     players.forEach(pid => {
       const s = io.sockets.sockets.get(pid);
       if (s) s.emit("game:start", {
@@ -2753,12 +2871,34 @@ io.on("connection", (socket) => {
       } else {
         socket.emit("game:update", { wrong: true });
       }
+
+    // ── Truth or Dare ────────────────────────────────────────────
+    } else if (game.type === "truthordare") {
+      // Only the "chooser" (the one who accepted the invite) may choose.
+      const chooserId = p2Id;
+      if (socket.id !== chooserId) return;
+      if (game.state.chosen) return;
+
+      const { choice } = data;
+      if (choice !== "truth" && choice !== "dare") return;
+
+      const list   = choice === "truth" ? TRUTH_PROMPTS : DARE_PROMPTS;
+      const prompt = list[rand(0, list.length - 1)];
+
+      game.state.chosen = true;
+      game.state.choice = choice;
+      game.state.prompt = prompt;
+
+      const update = { choice, prompt };
+      socket.emit("game:update", update);
+      if (partner) partner.emit("game:update", update);
+      cleanupGame(game); // one round — "🔄 ხელახლა" (rematch) starts a fresh invite
     }
   });
 
   // Rematch request
   socket.on("game:rematch", ({ gameType, toId }) => {
-    if (!["ttt", "rps", "math"].includes(gameType)) return;
+    if (!["ttt", "rps", "math", "truthordare"].includes(gameType)) return;
     const target = io.sockets.sockets.get(toId);
     if (target && !target._isGhost) target.emit("game:invite", { gameType, fromId: socket.id, isRematch: true });
   });
